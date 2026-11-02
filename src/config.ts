@@ -31,7 +31,7 @@ function choice<T extends string>(
   if (value === undefined) return fallback
   if ((allowed as readonly string[]).includes(value)) return value as T
   console.warn(
-    `[jarvis] ${name}="${value}" is not one of ${allowed.join(' | ')} — using "${fallback}".`,
+    `[apolo] ${name}="${value}" is not one of ${allowed.join(' | ')} — using "${fallback}".`,
   )
   return fallback
 }
@@ -42,7 +42,7 @@ function flag(name: string, raw: unknown, fallback: boolean): boolean {
   if (value === undefined) return fallback
   if (value === 'true' || value === '1') return true
   if (value === 'false' || value === '0') return false
-  console.warn(`[jarvis] ${name}="${value}" is not true or false — using ${fallback}.`)
+  console.warn(`[apolo] ${name}="${value}" is not true or false — using ${fallback}.`)
   return fallback
 }
 

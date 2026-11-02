@@ -8,7 +8,7 @@ import { useStore } from '../store'
  * Four beats, in order, cyan on black:
  *   1. an angular status bar — "INITIATING SYSTEM" — over a scrolling boot log,
  *      with a segmented bar filling left to right;
- *   2. concentric reticle rings assembling inward until "J.A.R.V.I.S" resolves
+ *   2. concentric reticle rings assembling inward until "A.P.O.L.O" resolves
  *      at the centre;
  *   3. the suit schematic — a wireframe figure with component call-outs;
  *   4. the triangular arc reactor lighting from a dim outline to full glow,
@@ -21,7 +21,11 @@ import { useStore } from '../store'
 
 /** The stage boundaries, in milliseconds from power-on. `done` is when the
  *  overlay dissolves; App owns the actual hand-off, this is only for pacing. */
-const T = { rings: 2600, suit: 5200, reactor: 7200 }
+const T = { rings: 1400, suit: 2800, reactor: 3800 }
+
+/** Duração total da partida, até a interface ao vivo assumir. Encurtada em
+ *  02/11/2026: sem a trilha de abertura, os 9,2 s originais pareciam lentidão. */
+export const BOOT_MS = 5000
 
 const LOG = [
   'MOUNT F:/BACKUP/GHOST (HIDDEN)',
@@ -146,7 +150,7 @@ function Rings({ reduced }: { reduced: boolean }) {
         animate={{ opacity: 1, letterSpacing: '0.42em' }}
         transition={{ duration: 0.7, delay: 0.5, ease }}
       >
-        J.A.R.V.I.S
+        A.P.O.L.O
       </motion.text>
     </svg>
   )

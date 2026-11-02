@@ -54,7 +54,7 @@ export type Blade = {
 
 export type Turn = {
   id: string
-  role: 'user' | 'jarvis'
+  role: 'user' | 'apolo'
   text: string
   /** Tool names invoked while producing this turn, for the HUD readout. */
   tools?: string[]
@@ -357,7 +357,7 @@ export const useStore = create<State>((set) => ({
     set((s) => {
       const turns = [...s.turns]
       const last = turns[turns.length - 1]
-      if (!last || last.role !== 'jarvis') return {}
+      if (!last || last.role !== 'apolo') return {}
       turns[turns.length - 1] = { ...last, text: last.text + text }
       return { turns }
     }),

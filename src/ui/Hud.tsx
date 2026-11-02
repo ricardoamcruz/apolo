@@ -8,14 +8,14 @@ import { Pointer } from './Pointer'
 import { GestureGuide } from './GestureGuide'
 
 const statusText: Record<Phase, string> = {
-  offline: 'OFFLINE',
-  boot: 'INITIALISING',
-  dormant: 'STANDBY — SAY “HEY JARVIS”',
-  waking: 'ONLINE',
-  listening: 'LISTENING',
-  thinking: 'PROCESSING',
-  tooling: 'ACCESSING SYSTEMS',
-  speaking: 'RESPONDING',
+  offline: 'DESCONECTADO',
+  boot: 'INICIALIZANDO',
+  dormant: 'EM ESPERA — DIGA “APOLO”',
+  waking: 'ATIVO',
+  listening: 'OUVINDO',
+  thinking: 'PROCESSANDO',
+  tooling: 'ACESSANDO SISTEMAS',
+  speaking: 'RESPONDENDO',
 }
 
 function Corner({ at }: { at: 'tl' | 'tr' | 'bl' | 'br' }) {
@@ -190,8 +190,8 @@ export function Hud() {
       <header className="hud-top">
         {ui.chrome.brand && (
           <div className="brand">
-            <span className="brand-mark">J.A.R.V.I.S.</span>
-            <span className="brand-sub">Just A Rather Very Intelligent System</span>
+            <span className="brand-mark">A.P.O.L.O.</span>
+            <span className="brand-sub">Assistente Preditivo Operacional Logístico e Otimizado</span>
           </div>
         )}
 
@@ -273,12 +273,12 @@ export function Hud() {
                 exit={{ opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 320, damping: 32 }}
               >
-                <span className="log-who">{t.role === 'user' ? 'YOU' : 'JARVIS'}</span>
+                <span className="log-who">{t.role === 'user' ? 'VOCÊ' : 'APOLO'}</span>
                 {/* Only his half decodes. What the user said was never
                     transmitted from anywhere — dressing it up as machine
                     output would be a lie about where the words came from. */}
                 <span className="log-text">
-                  {t.role === 'jarvis' ? <DecodeText text={t.text} /> : t.text}
+                  {t.role === 'apolo' ? <DecodeText text={t.text} /> : t.text}
                 </span>
               </motion.div>
             ))}
@@ -312,11 +312,11 @@ export function Hud() {
 
       <footer className="hud-bottom">
         <span className="hint">
-          say <b>“hey jarvis”</b> · <kbd>Space</kbd> to talk · <kbd>G</kbd> hands
+          diga <b>“apolo”</b> · <kbd>Espaço</kbd> para falar · <kbd>G</kbd> mãos
           {voice && (
             <>
               {' · '}
-              <kbd>V</kbd> voice: {voice.replace(/\(.*?\)/g, '').trim()}
+              <kbd>V</kbd> voz: {voice.replace(/\(.*?\)/g, '').trim()}
             </>
           )}
         </span>
@@ -332,7 +332,7 @@ export function Hud() {
       <Pointer />
       {(gestures || looking) && (
         <div className="hands-live">
-          {looking ? `LOOKING — ${looking.toUpperCase()}` : 'CAMERA ON · G TO STOP'}
+          {looking ? `OLHANDO — ${looking.toUpperCase()}` : 'CÂMERA LIGADA · G PARA PARAR'}
         </div>
       )}
       <GestureGuide live={gestures} />

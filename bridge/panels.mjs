@@ -184,7 +184,7 @@ const schema = {
     ),
 }
 
-const DESCRIPTION = `Put something on the JARVIS heads-up display.
+const DESCRIPTION = `Put something on the A.P.O.L.O. heads-up display.
 
 You are designing the panel, not filling in a template — compose the markup for
 the content at hand and choose the animation, position and colour that suit it.
@@ -319,10 +319,10 @@ argument. You know those things. Overrule it whenever you have reason to.`
  */
 export function displayServer(emit, emitBlade) {
   return createSdkMcpServer({
-    name: 'jarvis',
+    name: 'apolo',
     version: '1.0.0',
     instructions:
-      'The JARVIS heads-up display. Use `display` to put content on screen ' +
+      'The A.P.O.L.O. heads-up display. Use `display` to put content on screen ' +
       'alongside what you say.',
     // Never defer this behind tool search — if the model has to go looking for
     // it, it won't occur to it to show anything.
@@ -340,7 +340,7 @@ export function displayServer(emit, emitBlade) {
         // the child element rather than the parent.
         const text = String(args.html ?? '').replace(/<[^>]*>/g, '').trim()
         if (!text && !/<(img|video|iframe|source)\b/i.test(args.html ?? '')) {
-          console.warn('[jarvis] display called with an empty body:', args.title)
+          console.warn('[apolo] display called with an empty body:', args.title)
           return {
             isError: true,
             content: [

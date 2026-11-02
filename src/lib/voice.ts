@@ -65,20 +65,18 @@ export type Voice = {
 const WAKE_DEBOUNCE = 1500
 
 /**
- * His name, and the only wake phrase.
+ * O nome dele, e a única frase de ativação.
  *
- * The optional prefix is genuinely optional: addressing him by name alone is
- * correct, and during an answer "Jarvis" on its own is the natural way to cut
- * in. The negative lookahead keeps possessives ("Jarvis's job") from waking him.
+ * O prefixo é opcional: chamar só pelo nome é o uso normal, e durante uma
+ * resposta "Apolo" sozinho é o jeito natural de interromper.
  *
- * The alternates are not padding. "Jarvis" is not in a general dictation
- * model's high-frequency vocabulary, and Chrome routinely returns Travis,
- * Jervis, Jarvys or Java's for a perfectly clear utterance — every one of which
- * used to be silently discarded, so the wake word "just didn't work" with no
- * indication why. Better a rare false wake than a name that does not answer.
+ * As variantes não são enfeite. O reconhecimento do Chrome em pt-BR devolve
+ * "Apolo" também como "Apollo" ou "a polo"; descartar essas formas faria a
+ * ativação "simplesmente não funcionar", sem nenhuma pista do porquê. Melhor
+ * uma ativação falsa rara do que um nome que não responde.
  */
 const WAKE =
-  /\b(?:hey|hi|ok|okay|yo)?\s*(?:jarvis|jarvys|jervis|jarvis's|travis|jarviss|java's|jarv)\b(?!'s)/i
+  /(?:^|[^\p{L}])(?:(?:ei|oi|olá|ola|ok|okay|ô|e aí)[\s,]+)?(?:apolo|apollo|a polo|apólo)(?![\p{L}])/iu
 
 /** Everything after the wake phrase, which is usually the actual command. */
 function afterWake(text: string): string {
@@ -760,7 +758,7 @@ function startBrowserVoice(h: VoiceHandlers): Voice {
     rec = new Ctor()
     rec.continuous = true
     rec.interimResults = true
-    rec.lang = 'en-GB'
+    rec.lang = 'pt-BR'
     rec.onstart = () => {
       running = true
       diag.running = true

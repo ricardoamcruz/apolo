@@ -2,7 +2,7 @@
  * Score.
  *
  * Three cues, all local files under public/audio/:
- *   boot-music — the JARVIS start-up sound, once, as the reactor comes up
+ *   boot-music — a apresentação falada do A.P.O.L.O., uma vez, quando o reator liga
  *   ambient    — the opening music, once, alongside it
  *   work       — an industrial cue that loops while a tool is running
  *
@@ -11,9 +11,7 @@
  * is one you end up muting, and a muted assistant loses the sounds that
  * actually carry meaning — the wake tone, the tool tick, the completion chime.
  *
- * All of it is Kevin MacLeod (incompetech.com), CC BY 4.0 — free to use with
- * attribution and safe on a monetised channel, unlike the actual film score,
- * which would be claimed within a day of upload.
+ * Origem e licença de cada arquivo: public/audio/CREDITS.md.
  *
  * Everything degrades quietly: if a file is missing the cue simply doesn't
  * play, and the synthesised bed in sfx.ts covers the ambient case.
@@ -47,9 +45,9 @@ let enabled = false
 /** Resting levels. Music sits well under the voice — it is atmosphere, not a
  *  soundtrack, and JARVIS has to stay intelligible over it. */
 const LEVEL: Record<Cue, number> = {
-  // The boot cue is the JARVIS start-up sound itself, not background swell, so
-  // it sits forward — it is meant to be heard as the reactor comes up, the way
-  // the film plays it. The ambient bed underneath stays a whisper.
+  // A deixa de partida é a apresentação falada, não música de fundo, então fica
+  // à frente — é para ser ouvida enquanto o reator liga. A trilha ambiente por
+  // baixo continua um sussurro.
   'boot-music': 0.85,
   /**
    * Under the intro, not alongside it.

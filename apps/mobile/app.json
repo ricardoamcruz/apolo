@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "A.P.O.L.O",
+    "slug": "apolo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ricardocruz.apolo",
+      "appleTeamId": "9F2MVYQ9SF"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.ricardocruz.apolo"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

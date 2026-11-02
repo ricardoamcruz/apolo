@@ -336,10 +336,10 @@ const GOLDEN_ANGLE = 137.507764
  */
 export function uiServer(emit) {
   return createSdkMcpServer({
-    name: 'jarvis_ui',
+    name: 'apolo_ui',
     version: '1.0.0',
     instructions:
-      'JARVIS\'s control of his own interface — colour, reactor, orbiting ' +
+      'A.P.O.L.O.\'s control of its own interface — colour, reactor, orbiting ' +
       'images, chrome, effects. Change it when the change carries meaning, ' +
       'and put it back afterwards with ui_reset.',
     // Same reasoning as the display server: behind tool search it would never

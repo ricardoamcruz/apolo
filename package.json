@@ -1,8 +1,8 @@
 {
-  "name": "jarvis",
+  "name": "apolo",
   "private": true,
   "version": "0.0.0",
-  "description": "A browser voice assistant with an Iron Man holographic interface, driven by Claude Code through a small Node bridge.",
+  "description": "A.P.O.L.O. — assistente pessoal por voz, com core pequeno e módulos plugáveis (fork do JARVIS).",
   "license": "MIT",
   "type": "module",
   "engines": {

@@ -7,9 +7,20 @@ audience can see it (a description box is fine).
 
 | File | Track | Used for |
 |---|---|---|
-| `boot-music.mp3` | *Impact Prelude* | The swell when the reactor comes up |
 | `ambient.mp3` | *Ossuary 6 – Air* | Low bed looping under the interface |
 | `work.mp3` | *Mechanolith* | Rises while a tool is running |
+
+## Nota do A.P.O.L.O. (02/11/2026)
+
+A tabela acima estava errada para `boot-music.mp3`: o arquivo herdado do fork
+não era *Impact Prelude*, e sim a fala "Allow me to introduce myself. I am
+JARVIS…" do filme *Homem de Ferro* (provável conteúdo protegido da
+Marvel/Disney). Foi removido em 02/11/2026. A apresentação agora é falada pela voz do sistema
+(`INTRO` em `src/App.tsx`); a intro musical personalizada é o RF-55.
+
+A origem de `ambient.mp3` também não está confirmada: o histórico do fork diz
+que foi uma "gravação fornecida" que substituiu a original. Verificar antes de
+qualquer uso público.
 
 ## Attribution to paste into a video description
 

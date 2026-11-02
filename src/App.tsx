@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Scene } from './scene/Scene'
 import { Hud } from './ui/Hud'
-import { Boot } from './ui/Boot'
+import { Boot, BOOT_MS } from './ui/Boot'
 import { Ignition } from './ui/Ignition'
 import { Diagnostics } from './ui/Diagnostics'
 import { useStore } from './store'
@@ -61,13 +61,17 @@ const newId = () =>
   globalThis.crypto?.randomUUID?.() ??
   `id${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 
-/** The same mishearings voice.ts accepts for the wake word — otherwise a turn
- *  that woke him as "travis" gets that word sent on to the model as a question. */
-const NAME = '(?:jarvis|jarvys|jervis|travis|jarviss|java\'s|jarv)'
-/** A bare vocative — "Jarvis", "hey jarvis" — with nothing asked. */
-const BARE_NAME = new RegExp(`^(?:hey|hi|ok|okay|yo)?\\s*${NAME}[\\s,.!?]*$`, 'i')
-/** A leading vocative on a real command: "Jarvis, what's the weather". */
-const LEADING_NAME = new RegExp(`^(?:hey|hi|ok|okay|yo)?\\s*${NAME}\\b[\\s,.:!?-]*`, 'i')
+/** As mesmas variantes que voice.ts aceita para a ativação; sem isso, um turno
+ *  ativado como "apollo" mandaria essa palavra ao modelo como se fosse pergunta. */
+const NAME = '(?:apolo|apollo|a polo|apólo)'
+const PREFIX = '(?:(?:ei|oi|olá|ola|ok|okay|ô|e aí)[\\s,]+)?'
+/** Só o vocativo — "Apolo", "ei Apolo" — sem pedido nenhum. */
+const BARE_NAME = new RegExp(`^${PREFIX}${NAME}[\\s,.!?]*$`, 'iu')
+/** Vocativo no início de um pedido de verdade: "Apolo, como está o tempo". */
+const LEADING_NAME = new RegExp(`^${PREFIX}${NAME}(?![\\p{L}])[\\s,.:!?-]*`, 'iu')
+
+/** Dita uma vez ao ligar, pela voz do sistema. */
+const INTRO = 'Apolo online. Todos os sistemas operacionais.'
 
 export default function App() {
   const store = useStore
@@ -157,7 +161,7 @@ export default function App() {
             // clear the readout while a slow tool was still running.
             store.getState().setActiveTool(null)
             music.working(false)
-            store.getState().pushTurn({ id: turnId, role: 'jarvis', text: '' })
+            store.getState().pushTurn({ id: turnId, role: 'apolo', text: '' })
           }
           store.getState().appendToLastTurn(delta)
           spk.push(delta)
@@ -203,7 +207,7 @@ export default function App() {
       sfx.play('error')
       store
         .getState()
-        .setError(err instanceof Error ? err.message : 'Something went wrong.')
+        .setError(err instanceof Error ? err.message : 'Algo deu errado.')
     } finally {
       if (!stale()) {
         speaker.current = null
@@ -334,14 +338,14 @@ export default function App() {
       // for the rest of the page, recoverable only by reloading. Reset it and
       // put the button back so the user can simply press it again.
       booting.current = false
-      console.error('[jarvis] power-up failed:', err)
+      console.error('[apolo] power-up failed:', err)
       store.getState().setPhase('offline')
       store
         .getState()
         .setError(
           err instanceof Error
-            ? `Power-up failed: ${err.message}`
-            : 'Power-up failed. Click to try again.',
+            ? `Falha ao iniciar: ${err.message}`
+            : 'Falha ao iniciar. Clique para tentar de novo.',
         )
     }
   }
@@ -356,8 +360,14 @@ export default function App() {
     // The score. Must be started from inside this click handler for the same
     // reason as the rest of the audio.
     music.enable()
-    music.playBoot()
-    music.startAmbient()
+
+    // Por enquanto a partida é só a voz, sem trilha. A intro personalizada (um
+    // trecho de rock das playlists do Ricardo, só depois de muitas horas fora)
+    // está planejada para depois — ver RF-55 em docs/01-requisitos.md.
+    const intro = createSpeaker()
+    speaker.current = intro
+    intro.say(INTRO)
+    void intro.end()
 
     s.setPhase('boot')
 
@@ -390,9 +400,9 @@ export default function App() {
         store.getState().setLooking(null)
         return {
           error:
-            'There is no recent footage — the camera has to be open on screen ' +
-            'for me to remember what just happened. Ask me to open the camera, ' +
-            'and I can watch from then on.',
+            'Não há imagens recentes — a câmera precisa estar aberta na tela ' +
+            'para eu lembrar o que acabou de acontecer. Peça para abrir a câmera ' +
+            'e passo a acompanhar a partir daí.',
         }
       }
 
@@ -405,15 +415,15 @@ export default function App() {
         if (req.mode === 'look') return camera.grabFrame()
         if (req.when === 'past') {
           const grid = camera.recentGrid(req.seconds, 9)
-          return grid ?? { error: 'There is not enough recent footage to review.' }
+          return grid ?? { error: 'Não há imagens recentes suficientes para revisar.' }
         }
         return await camera.watchAhead(req.seconds, 9)
       } catch (err) {
         return {
           error:
             (err as DOMException)?.name === 'NotAllowedError'
-              ? 'The camera is not permitted, so I cannot see anything.'
-              : `The camera could not be read: ${(err as Error)?.message ?? err}`,
+              ? 'A câmera não foi permitida, então não consigo ver nada.'
+              : `Não foi possível ler a câmera: ${(err as Error)?.message ?? err}`,
         }
       } finally {
         if (held) camera.releaseCamera()
@@ -446,7 +456,7 @@ export default function App() {
           s.clearScreen(a.what ?? 'all')
           break
         default:
-          console.warn('[jarvis] unknown ui op:', op, args)
+          console.warn('[apolo] unknown ui op:', op, args)
       }
     })
     // In bridge mode the conversation lives in the agent session, which is tied
@@ -454,11 +464,11 @@ export default function App() {
     // on screen still shows it. Better to say so than to let him quietly forget.
     watchConnection((state) => {
       if (state === 'lost') {
-        store.getState().setError('Bridge connection lost — reconnecting.')
+        store.getState().setError('Conexão com o cérebro perdida — reconectando.')
       } else if (state === 'reconnected') {
         store
           .getState()
-          .setError('Bridge reconnected. The previous conversation was not kept.')
+          .setError('Cérebro reconectado. A conversa anterior não foi mantida.')
       }
     })
     const warming = warm().catch((err: Error) => s.setError(err.message))
@@ -487,11 +497,9 @@ export default function App() {
       }, 200)
     }
 
-    // Long enough for the four-beat start-up sequence in Boot.tsx to play —
-    // status bar, rings, suit schematic, reactor power-up — before the live
-    // interface takes over. Kept a touch under the boot cue so the music is
-    // still rising as the reactor lands.
-    await new Promise((r) => setTimeout(r, 9200)) // boot sequence
+    // Tempo para as quatro etapas da partida em Boot.tsx — barra de status,
+    // anéis, esquema, reator — antes de a interface ao vivo assumir.
+    await new Promise((r) => setTimeout(r, BOOT_MS))
     await warming
     store.getState().setConnected(connectedLabels())
     store.getState().setVoice(currentVoiceName())
@@ -504,7 +512,7 @@ export default function App() {
       await startAnalyser()
     } catch {
       console.warn(
-        '[jarvis] no microphone stream — the reactor will not pulse with your ' +
+        '[apolo] no microphone stream — the reactor will not pulse with your ' +
           'voice. Speech recognition is unaffected.',
       )
     }
@@ -596,7 +604,7 @@ export default function App() {
         silence()
         const demo = createSpeaker()
         speaker.current = demo
-        demo.say(`Voice set to ${name.replace(/\(.*?\)/g, '').trim()}. At your service, sir.`)
+        demo.say(`Voz alterada para ${name.replace(/\(.*?\)/g, '').trim()}. À disposição.`)
         void demo.end()
         return
       }
@@ -621,8 +629,8 @@ export default function App() {
                 .getState()
                 .setError(
                   err?.name === 'NotAllowedError'
-                    ? 'Camera access denied — gesture control is unavailable.'
-                    : `Gesture control failed to start: ${err?.message ?? err}`,
+                    ? 'Acesso à câmera negado — controle por gestos indisponível.'
+                    : `O controle por gestos não iniciou: ${err?.message ?? err}`,
                 )
             })
         }
@@ -638,10 +646,10 @@ export default function App() {
         silence()
         const t = createSpeaker()
         speaker.current = t
-        t.say('Audio test. If you can hear this, speech output is working, sir.')
+        t.say('Teste de áudio. Se você está ouvindo isto, a fala está funcionando.')
         void t.end().then(() => {
           const d = (window as unknown as Record<string, Record<string, unknown>>).__tts
-          console.info('[jarvis] audio test →', d)
+          console.info('[apolo] audio test →', d)
           if (d && d.started === 0 && d.rescued === 0) {
             store.getState().setError(
               `No sound produced. engine=${d.engine} voice=${d.voice} error=${d.lastError || 'none'}`,

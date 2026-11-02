@@ -12,16 +12,13 @@ import { useStore } from '../store'
  * Each line is phrased the way you'd actually say it, not as a feature name.
  */
 const EXAMPLES = [
-  'what happened in AI this week',
-  'generate an image of the Mark Seven suit',
-  'take a screenshot of my phone',
-  "what's on my calendar tomorrow",
-  'search for the best coffee near me',
-  'read me the top story on Hacker News',
-  'open my GitHub notifications',
-  "summarise what's in my inbox",
-  'find me a loading animation',
-  "what's the weather looking like",
+  'o que aconteceu com IA esta semana',
+  'o que tenho na agenda amanhã',
+  'procure a melhor cafeteria perto de mim',
+  'leia a principal notícia do dia',
+  'abra minhas notificações do GitHub',
+  'resuma o que chegou no meu e-mail',
+  'como está o tempo hoje',
 ]
 
 const ROTATE_MS = 4200
@@ -42,7 +39,7 @@ export function Suggestions() {
 
   return (
     <div className="suggest">
-      <span className="suggest-lead">try</span>
+      <span className="suggest-lead">experimente</span>
       <AnimatePresence mode="wait">
         <motion.span
           key={i}
@@ -52,7 +49,7 @@ export function Suggestions() {
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.35 }}
         >
-          “hey jarvis, {EXAMPLES[i]}”
+          “apolo, {EXAMPLES[i]}”
         </motion.span>
       </AnimatePresence>
     </div>

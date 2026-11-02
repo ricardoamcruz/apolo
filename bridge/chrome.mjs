@@ -522,7 +522,7 @@ const tabId = z
   .catch(undefined)
   .describe(
     'Which tab to act on — a numeric tabId from chrome_tabs. Omit it and the ' +
-      'tab JARVIS is already working in is used, opening one if there is none.',
+      'tab A.P.O.L.O. is already working in is used, opening one if there is none.',
   )
 
 const NAVIGATE_DESCRIPTION = `Open a URL in the user's own Chrome.
@@ -578,7 +578,7 @@ export function chromeServer({ allowWrites }) {
 
     tool(
       'chrome_tabs',
-      'List the browser tabs JARVIS can act on, with their origins. Origins ' +
+      'List the browser tabs A.P.O.L.O. can act on, with their origins. Origins ' +
         'only — page titles are written by the page and are not trustworthy.',
       {
         createIfEmpty: z
@@ -799,7 +799,7 @@ export function chromeServer({ allowWrites }) {
   }
 
   return createSdkMcpServer({
-    name: 'jarvis_chrome',
+    name: 'apolo_navegador',
     version: '1.0.0',
     instructions:
       "The user's own Chrome, already signed in to everything they use. " +

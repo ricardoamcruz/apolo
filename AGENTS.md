@@ -23,14 +23,18 @@ detalhe está em `docs/`.
 
 ## Estado atual
 
-- **Fase 0 — Fundação.** O código ainda é o JARVIS original (fork). Nada do core
-  do A.P.O.L.O foi implementado. Ver `docs/05-roadmap.md`.
-- **Ambiente mobile (01/11/2026):** Node v26 via nvm ✓ · Xcode 26.4.1 em
-  `~/Downloads/Xcode.app`, licença aceita ✓ · projeto `apps/mobile` criado (Expo
-  SDK 58, RN 0.88) ✓ · **CocoaPods pendente** — Homebrew não suporta Intel +
-  macOS 26 (compila LLVM por horas; sempre responder `n`). Script:
-  `scripts/setup-mobile.command` (usa o Ruby portátil do Homebrew). Android
-  ainda não testado (falta Android Studio).
+- **Fase 0 — Fundação: concluída** (02/11/2026), exceto o Android, adiado.
+  Próxima: **Fase 1 — Core**. Ver `docs/05-roadmap.md`.
+- O código ainda é o fork do JARVIS (`bridge/`, `src/`), já renomeado para
+  A.P.O.L.O. e em pt-BR (persona, ativação "Apolo", voz masculina do sistema).
+  O core (`core/`) ainda não existe. Variáveis de ambiente seguem `JARVIS_*`.
+- **App mobile:** `apps/mobile` (Expo SDK 58, RN 0.88), app "olá" validado no
+  iPhone (bundle `com.ricardocruz.apolo`, Personal Team `9F2MVYQ9SF`). Ainda não
+  conversa com o core: depende do gateway com token (Fase 1). CocoaPods usa o
+  Ruby portátil do Homebrew (`scripts/setup-mobile.command`); no Homebrew,
+  Intel + macOS 26 compila LLVM por horas — sempre responder `n`.
+- **Voz própria:** pendente; o usuário quer usar o "Voice Studio" (ferramenta a
+  confirmar). ADR nova quando definida.
 - Escopo atual: **apenas o core e os pontos de extensão**. Módulos de domínio
   (e-mail, agenda, finanças, automação residencial) vêm depois.
 
@@ -53,6 +57,13 @@ detalhe está em `docs/`.
    um único usuário conectado ou o sistema de arquivos do Mac.
 8. **Mudanças pequenas e verificáveis.** Rode `npm run lint` e `npm run build`
    antes de considerar uma tarefa concluída.
+
+## Git
+
+- Toda branch nova parte da `main` atualizada (`git switch main && git pull`),
+  nunca de outra branch — para evitar conflitos.
+- Nada é commitado direto na `main`: o trabalho entra por pull request,
+  revisado pelo Ricardo.
 
 ## Mantenha esta documentação viva
 

@@ -10,8 +10,8 @@ import { GestureGuide } from './GestureGuide'
 const statusText: Record<Phase, string> = {
   offline: 'DESCONECTADO',
   boot: 'INICIALIZANDO',
-  dormant: 'EM ESPERA — DIGA “APOLO”',
-  waking: 'ATIVO',
+  dormant: 'EM ESPERA — ESPAÇO OU PALMAS',
+  waking: 'ATIVANDO',
   listening: 'OUVINDO',
   thinking: 'PROCESSANDO',
   tooling: 'ACESSANDO SISTEMAS',
@@ -210,8 +210,8 @@ export function Hud() {
       {/* Left rail: which integrations are live */}
       {ui.chrome.systems && (
         <aside className="rail rail-left">
-          <div className="rail-title">SYSTEMS</div>
-          {connected.length === 0 && <div className="rail-item dim">none linked</div>}
+          <div className="rail-title">SISTEMAS</div>
+          {connected.length === 0 && <div className="rail-item dim">nenhum conectado</div>}
           {connected.map((c) => (
             <div key={c} className="rail-item">
               <span className="tick" />
@@ -227,7 +227,7 @@ export function Hud() {
 
       {/* Right rail: live telemetry, mostly for flavour */}
       <aside className="rail rail-right">
-        <div className="rail-title">SIGNAL</div>
+        <div className="rail-title">SINAL</div>
         <div className="meter">
           <div className="meter-fill" style={{ height: `${level * 100}%` }} />
         </div>
@@ -253,7 +253,7 @@ export function Hud() {
           >
             <span className="tool-kicker">
               <span className="spinner" />
-              accessing
+              acessando
             </span>
             <span className="tool-name">{activeTool.replace(/[_-]/g, ' ')}</span>
           </motion.div>
@@ -312,13 +312,18 @@ export function Hud() {
 
       <footer className="hud-bottom">
         <span className="hint">
-          diga <b>“apolo”</b> · <kbd>Espaço</kbd> para falar · <kbd>G</kbd> mãos
-          {voice && (
+          {phase === 'dormant' ? (
             <>
-              {' · '}
-              <kbd>V</kbd> voz: {voice.replace(/\(.*?\)/g, '').trim()}
+              <kbd>Espaço</kbd> ou palmas para acordar
+            </>
+          ) : (
+            <>
+              fale à vontade · <kbd>Espaço</kbd> interrompe · <kbd>Esc</kbd> espera
             </>
           )}
+          {' · '}
+          <kbd>G</kbd> mãos · <kbd>D</kbd> diagnóstico
+          {voice && <> · voz: {voice}</>}
         </span>
       </footer>
 

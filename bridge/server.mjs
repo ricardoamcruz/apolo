@@ -1,9 +1,11 @@
 /**
- * JARVIS local bridge.
+ * Ponte local do A.P.O.L.O.
  *
- * Runs the Claude Agent SDK — Claude Code as a library — and exposes one turn
- * of conversation over a WebSocket. The browser stays the face and the voice;
- * this process is the brain and the hands.
+ * Duas funções. Emite a chave temporária da sessão de voz em tempo real da
+ * OpenAI (ver bridge/realtime.mjs e docs/adr/0009) e roda o agente de tarefas:
+ * o Claude Agent SDK — o Claude Code como biblioteca — exposto por WebSocket. A
+ * voz conversa; quando precisa agir, chama a ferramenta `executar_tarefa`, que
+ * chega aqui.
  *
  * Two things this buys over calling the Claude API from the browser:
  *   1. No API key. It authenticates exactly the way `claude` does, off your
@@ -27,6 +29,17 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { openRemote, proxyError, vetTarget, PROXY_UA } from './net.mjs'
 import { probeUrl, renderPage } from './page.mjs'
+import { createRealtimeSession, realtimeKey, REALTIME_MODEL } from './realtime.mjs'
+import { fileURLToPath } from 'node:url'
+
+// O .env.local também vale para a ponte, para a chave da OpenAI ficar só aqui
+// (o Vite só repassa ao navegador o que começa com VITE_). Variáveis já
+// definidas no terminal têm prioridade.
+try {
+  process.loadEnvFile(fileURLToPath(new URL('../.env.local', import.meta.url)))
+} catch {
+  /* sem .env.local: tudo bem */
+}
 
 const PORT = Number(process.env.JARVIS_BRIDGE_PORT ?? 8787)
 
@@ -37,7 +50,7 @@ const PORT = Number(process.env.JARVIS_BRIDGE_PORT ?? 8787)
  * its own error to the browser.
  */
 process.on('unhandledRejection', (err) => {
-  console.error('[apolo] unhandled rejection:', err)
+  console.error('[apolo] rejeição não tratada:', err)
 })
 
 /**
@@ -291,11 +304,19 @@ function decideTool(name) {
 }
 
 const SYSTEM_PROMPT = `Você é o A.P.O.L.O., Assistente Preditivo Operacional Logístico e Otimizado,
-assistente pessoal do Ricardo. Você está falando em voz alta com uma pessoa.
+assistente pessoal do Ricardo — mais precisamente, o agente de tarefas dele.
+
+COMO VOCÊ É USADO. A conversa por voz é feita por outro modelo, em tempo real.
+Quando ele precisa de algo que exige agir ou buscar informação, ele repassa o
+pedido para você. O seu texto final volta para ele, que fala o resultado em voz
+alta. Por isso: faça a tarefa, mostre na tela o que for visual, e termine com um
+resultado curto em texto corrido (uma a três frases) contendo os fatos que a
+voz precisa dizer. Nada de perguntas retóricas, nada de saudação.
 
 IDIOMA. Fale sempre em português do Brasil, natural e correto, mesmo que o
 pedido venha em outra língua ou que a fonte consultada esteja em inglês. Nomes
-próprios e termos técnicos consagrados ficam como são.
+próprios e termos técnicos consagrados ficam como são. Tudo o que aparece na
+tela — títulos de painel, rótulos, legendas, notas — também vai em português.
 
 TAMANHO. Duas frases é o teto numa conversa; a mediana fica abaixo de doze
 palavras. Cada palavra é lida em voz alta e a pessoa espera em silêncio enquanto
@@ -438,26 +459,6 @@ Usando ferramentas:
   isso.
 - Se você não sabe, diga que não sabe.`
 
-/**
- * ElevenLabs credentials, borrowed from the MCP server config.
- *
- * If you've set up the elevenlabs MCP server, the key is already on this
- * machine — no reason to make you paste it into a second .env file. The browser
- * never sees it: it POSTs text to /tts here and gets audio back.
- */
-function elevenKey() {
-  if (process.env.ELEVENLABS_API_KEY) return process.env.ELEVENLABS_API_KEY
-  try {
-    const cfg = JSON.parse(
-      readFileSync(join(homedir(), '.claude.json'), 'utf8'),
-    )
-    return cfg.mcpServers?.elevenlabs?.env?.ELEVENLABS_API_KEY ?? null
-  } catch {
-    return null
-  }
-}
-
-const VOICE_ID = process.env.JARVIS_VOICE_ID ?? 'JBFqnCBsd6RMkjVDRZzb'
 
 /**
  * Where /file is permitted to read from, and how big a read may get.
@@ -623,7 +624,7 @@ async function proxyRemote(req, res, cors, { kinds, maxBytes, timeoutMs, ranged 
     if (sent > maxBytes) {
       // Headers went out long ago, so a truncated body is the only way left to
       // say no. The player sees a short read; we see this line in the log.
-      console.warn(`[apolo] proxy cut ${target.href} at ${maxBytes} bytes`)
+      console.warn(`[apolo] proxy cortou ${target.href} em ${maxBytes} bytes`)
       upstream.destroy()
       res.destroy()
       return
@@ -665,7 +666,7 @@ const http = await import('node:http')
 const handleRequest = async (req, res) => {
   const origin = req.headers.origin
   if (origin && !originAllowed(origin)) {
-    console.warn(`[apolo] refused http request from origin ${origin}`)
+    console.warn(`[apolo] requisição recusada da origem ${origin}`)
     res.writeHead(403, { vary: 'origin' })
     return res.end('forbidden')
   }
@@ -677,14 +678,24 @@ const handleRequest = async (req, res) => {
   }
 
   if (req.method === 'GET' && req.url === '/health') {
-    // The browser reads this once at boot to decide which voice engine to use.
-    // Both premium paths ride the same ElevenLabs key, so both flags track it:
-    // with a key the app transcribes with Scribe and speaks with ElevenLabs;
-    // without one it falls back to the browser's own recogniser and voice, so a
-    // student with nothing configured still has a working assistant.
-    const eleven = Boolean(elevenKey())
     res.writeHead(200, { ...cors, 'content-type': 'application/json' })
-    return res.end(JSON.stringify({ ok: true, tts: eleven, stt: eleven }))
+    return res.end(
+      JSON.stringify({ ok: true, realtime: Boolean(realtimeKey()), modelo: REALTIME_MODEL }),
+    )
+  }
+
+  // A chave temporária da sessão de voz. O navegador abre a conexão WebRTC
+  // direto com a OpenAI usando ela; a chave permanente nunca sai daqui.
+  if (req.method === 'POST' && req.url === '/realtime/sessao') {
+    try {
+      const session = await createRealtimeSession()
+      res.writeHead(200, { ...cors, 'content-type': 'application/json', 'cache-control': 'no-store' })
+      return res.end(JSON.stringify(session))
+    } catch (err) {
+      console.error('[apolo] sessão de voz:', err.message)
+      res.writeHead(err.status ?? 502, { ...cors, 'content-type': 'text/plain; charset=utf-8' })
+      return res.end(err.message)
+    }
   }
 
   // Serve local image files to the page. Screenshots and generated art land on
@@ -799,165 +810,10 @@ const handleRequest = async (req, res) => {
            body{margin:0;padding:26px;background:transparent;color:#7fb6bf;
                 font:400 13px/1.6 ui-monospace,monospace}
            b{color:#cfe9ee;font-weight:500;display:block;margin-bottom:6px}
-         </style><b>This page could not be opened.</b>${
-           String(err?.message ?? 'unknown error').replace(/[<&]/g, '')
+         </style><b>Não foi possível abrir esta página.</b>${
+           String(err?.message ?? 'erro desconhecido').replace(/[<&]/g, '')
          }`,
       )
-    }
-  }
-
-  if (req.method === 'POST' && req.url === '/tts') {
-    const key = elevenKey()
-    if (!key) {
-      res.writeHead(503, cors)
-      return res.end('no elevenlabs key')
-    }
-    // A spoken line is a few hundred bytes. Anything approaching this is not a
-    // sentence, and buffering it unbounded would let one request eat the heap.
-    let body = ''
-    let overflowed = false
-    for await (const chunk of req) {
-      body += chunk
-      if (body.length > 64 * 1024) {
-        overflowed = true
-        break
-      }
-    }
-    if (overflowed) {
-      req.destroy()
-      res.writeHead(400, cors)
-      return res.end('body too large')
-    }
-    // Inside a try: this handler is async with nothing catching its rejection,
-    // so a malformed body used to take the entire bridge down with it.
-    let text
-    try {
-      ;({ text } = JSON.parse(body || '{}'))
-    } catch {
-      res.writeHead(400, cors)
-      return res.end('bad json')
-    }
-    if (!text) {
-      res.writeHead(400, cors)
-      return res.end('no text')
-    }
-    try {
-      const upstream = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream` +
-          // 22kHz mono is half the bytes of 44kHz and indistinguishable through
-          // a laptop speaker; optimize_streaming_latency=3 trades a little
-          // prosody for a much earlier first byte.
-          `?output_format=mp3_22050_32&optimize_streaming_latency=3`,
-        {
-          method: 'POST',
-          headers: { 'xi-api-key': key, 'content-type': 'application/json' },
-          body: JSON.stringify({
-            text,
-            // Flash is the low-latency model — a conversation needs speed more
-            // than it needs the last few percent of quality.
-            model_id: 'eleven_flash_v2_5',
-            voice_settings: {
-              stability: 0.4,
-              similarity_boost: 0.75,
-              speed: 1.05,
-            },
-          }),
-        },
-      )
-      if (!upstream.ok) {
-        res.writeHead(upstream.status, cors)
-        return res.end(await upstream.text())
-      }
-
-      // Pipe it through rather than buffering. Waiting for the whole file here
-      // would throw away everything the streaming endpoint just bought us.
-      res.writeHead(200, {
-        ...cors,
-        'content-type': 'audio/mpeg',
-        'cache-control': 'no-cache',
-      })
-      for await (const chunk of upstream.body) res.write(Buffer.from(chunk))
-      return res.end()
-    } catch (err) {
-      res.writeHead(502, cors)
-      return res.end(String(err?.message ?? err))
-    }
-  }
-
-  // Speech to text. The browser captures one spoken segment as a compressed
-  // audio blob and posts the raw bytes here; the bridge hands them to
-  // ElevenLabs Scribe and returns the transcript. This is what replaced the
-  // browser's own SpeechRecognition — that API dies silently under always-on
-  // use, and a server-side transcriber cannot. Detecting that the user is
-  // speaking at all is done locally with voice-activity detection, which never
-  // touches this endpoint; this is only for the words.
-  if (req.method === 'POST' && req.url === '/stt') {
-    const key = elevenKey()
-    if (!key) {
-      res.writeHead(503, cors)
-      return res.end('no elevenlabs key')
-    }
-
-    const type = req.headers['content-type'] || 'audio/webm'
-    const chunks = []
-    let size = 0
-    let overflowed = false
-    // A few seconds of Opus is well under a megabyte; 25 MB is a generous
-    // ceiling that still refuses a runaway stream before it eats the heap.
-    for await (const chunk of req) {
-      chunks.push(chunk)
-      size += chunk.length
-      if (size > 25 * 1024 * 1024) {
-        overflowed = true
-        break
-      }
-    }
-    if (overflowed) {
-      req.destroy()
-      res.writeHead(413, cors)
-      return res.end('audio too large')
-    }
-    // Silence, or a click. Nothing to transcribe, and calling out to the API
-    // for it would only add latency to a non-answer.
-    if (size < 1200) {
-      res.writeHead(200, { ...cors, 'content-type': 'application/json' })
-      return res.end(JSON.stringify({ text: '' }))
-    }
-
-    try {
-      // The filename extension is the only hint Scribe gets about the codec, so
-      // derive it from the content-type the MediaRecorder reported rather than
-      // hard-coding one.
-      const ext = type.includes('ogg')
-        ? 'ogg'
-        : type.includes('mp4') || type.includes('mpeg')
-          ? 'mp4'
-          : type.includes('wav')
-            ? 'wav'
-            : 'webm'
-      const form = new FormData()
-      form.append('model_id', 'scribe_v1')
-      form.append(
-        'file',
-        new Blob([Buffer.concat(chunks)], { type }),
-        `speech.${ext}`,
-      )
-
-      const upstream = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
-        method: 'POST',
-        headers: { 'xi-api-key': key },
-        body: form,
-      })
-      if (!upstream.ok) {
-        res.writeHead(upstream.status, cors)
-        return res.end(await upstream.text())
-      }
-      const data = await upstream.json()
-      res.writeHead(200, { ...cors, 'content-type': 'application/json' })
-      return res.end(JSON.stringify({ text: (data.text ?? '').trim() }))
-    } catch (err) {
-      res.writeHead(502, cors)
-      return res.end(String(err?.message ?? err))
     }
   }
 
@@ -970,7 +826,7 @@ const server = http.createServer((req, res) => {
   // unhandled rejection and leave the browser waiting on a socket that is
   // never going to answer.
   handleRequest(req, res).catch((err) => {
-    console.error('[apolo] request failed:', err)
+    console.error('[apolo] requisição falhou:', err)
     if (!res.headersSent) res.writeHead(500)
     res.end()
   })
@@ -985,13 +841,13 @@ const wss = new WebSocketServer({
   verifyClient: ({ origin, req }, done) => {
     const path = (req.url ?? '/').split('?')[0]
     if (path !== '/' && path !== '/ws') {
-      console.warn(`[apolo] rejected websocket on path ${path}`)
+      console.warn(`[apolo] websocket recusado no caminho ${path}`)
       return done(false, 403, 'Forbidden')
     }
     if (!originAllowed(origin)) {
       console.warn(
-        `[apolo] rejected websocket from origin ${origin ?? '(none)'}` +
-          ' — set JARVIS_ALLOWED_ORIGINS to permit it',
+        `[apolo] websocket recusado da origem ${origin ?? '(nenhuma)'}` +
+          ' — ajuste JARVIS_ALLOWED_ORIGINS para permitir',
       )
       return done(false, 403, 'Forbidden')
     }
@@ -1000,14 +856,16 @@ const wss = new WebSocketServer({
 })
 server.listen(PORT)
 
-console.log(`[apolo] bridge listening on ws://localhost:${PORT}`)
+console.log(`[apolo] ponte ouvindo em ws://localhost:${PORT}`)
 console.log(
-  `[apolo] speech ${elevenKey() ? 'via ElevenLabs (key from MCP config)' : 'using browser fallback voice'}`,
+  realtimeKey()
+    ? `[apolo] voz em tempo real: ${REALTIME_MODEL}`
+    : '[apolo] voz em tempo real DESLIGADA — falta OPENAI_API_KEY no .env.local',
 )
-console.log(`[apolo] model ${MODEL} · effort ${EFFORT}`)
+console.log(`[apolo] agente de tarefas: ${MODEL} · esforço ${EFFORT}`)
 console.log(
-  `[apolo] writes ${ALLOW_WRITES ? 'ENABLED' : 'disabled'}` +
-    (ALLOW_WRITES ? '' : ' — set JARVIS_ALLOW_WRITES=1 to permit shell/file/device actions'),
+  `[apolo] ações com efeito ${ALLOW_WRITES ? 'LIBERADAS' : 'bloqueadas'}` +
+    (ALLOW_WRITES ? '' : ' — use npm start -- --writes para liberar'),
 )
 // Asynchronous, so it lands a beat after the rest of the banner. Worth printing
 // at all because an extension that is simply not running is indistinguishable
@@ -1016,15 +874,15 @@ console.log(
 void chromeAvailable().then((ok) => {
   console.log(
     ok
-      ? `[apolo] browser control ready${ALLOW_WRITES ? '' : ' (reading only — clicking and typing need JARVIS_ALLOW_WRITES=1)'}`
-      : '[apolo] browser control unavailable — open Chrome with the Claude extension enabled',
+      ? `[apolo] controle do navegador pronto${ALLOW_WRITES ? '' : ' (só leitura — clicar e digitar exigem --writes)'}`
+      : '[apolo] controle do navegador indisponível — abra o Chrome com a extensão do Claude ativa',
   )
 })
 
 console.log(
-  '[apolo] accepting local dev origins' +
-    (EXTRA_ORIGINS.size ? ` plus ${[...EXTRA_ORIGINS].join(', ')}` : '') +
-    (ALLOW_NO_ORIGIN ? ' and clients that send no origin' : ''),
+  '[apolo] aceitando origens locais de desenvolvimento' +
+    (EXTRA_ORIGINS.size ? ` e ${[...EXTRA_ORIGINS].join(', ')}` : '') +
+    (ALLOW_NO_ORIGIN ? ' e clientes sem origem' : ''),
 )
 
 /**
@@ -1032,15 +890,15 @@ console.log(
  * whatever reaches the client is liable to be spoken.
  */
 const RESULT_FAILURES = {
-  error_during_execution: 'The turn failed part way through.',
-  error_max_turns: 'The turn ran too long and was stopped.',
-  error_max_budget_usd: 'The budget for this turn ran out.',
-  error_max_structured_output_retries: 'The answer could not be assembled.',
-  default: 'The turn ended without an answer.',
+  error_during_execution: 'A tarefa falhou no meio do caminho.',
+  error_max_turns: 'A tarefa demorou demais e foi interrompida.',
+  error_max_budget_usd: 'O orçamento desta tarefa acabou.',
+  error_max_structured_output_retries: 'Não foi possível montar a resposta.',
+  default: 'A tarefa terminou sem resposta.',
 }
 
 wss.on('connection', (socket) => {
-  console.log('[apolo] client connected')
+  console.log('[apolo] interface conectada')
 
   // Answer the HUD straight away rather than making it wait for the agent's
   // first turn. Refined later by the real init message.
@@ -1263,7 +1121,7 @@ wss.on('connection', (socket) => {
       // reliable; an absence of a call here is not proof nothing ran.
       canUseTool: async (toolName) => {
         const ok = decideTool(toolName)
-        console.log(`[apolo] tool ${toolName} -> ${ok ? 'allow' : 'deny'}`)
+        console.log(`[apolo] ferramenta ${toolName} -> ${ok ? 'permitida' : 'negada'}`)
         return ok
           ? { behavior: 'allow' }
           : {
@@ -1350,7 +1208,7 @@ wss.on('connection', (socket) => {
               })
             } else {
               console.error(
-                `[apolo] turn failed: ${msg.subtype}`,
+                `[apolo] tarefa falhou: ${msg.subtype}`,
                 msg.errors ?? '',
               )
               sendTurn({
@@ -1376,13 +1234,13 @@ wss.on('connection', (socket) => {
                 .filter((s) => s.status !== 'needs-auth' && s.status !== 'failed')
                 .map((s) => s.name)
               send({ type: 'ready', servers: usable })
-              console.log(`[apolo] ${usable.length} MCP servers available`)
+              console.log(`[apolo] ${usable.length} servidores MCP disponíveis`)
             }
             break
         }
       }
     } catch (err) {
-      console.error('[apolo] session error:', err)
+      console.error('[apolo] erro na sessão:', err)
       send({ type: 'error', message: String(err?.message ?? err) })
       // The stream is finished either way — nothing will ever be read from it
       // again. Leaving the socket open would leave the client believing it has
@@ -1455,7 +1313,7 @@ wss.on('connection', (socket) => {
   })
 
   socket.on('close', () => {
-    console.log('[apolo] client disconnected')
+    console.log('[apolo] interface desconectada')
     closed = true
     deliver?.(null)
     session.close?.()

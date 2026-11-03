@@ -353,7 +353,7 @@ function toReader(html, pageUrl, bridgeOrigin) {
 <div class="rd-src">${escape(host)}</div>
 <h1 class="rd-title">${escape(title)}</h1>
 ${leadImg}
-${blocks.join('\n') || '<p class="rd-p">Nothing readable could be extracted from this page.</p>'}
+${blocks.join('\n') || '<p class="rd-p">Não foi possível extrair texto legível desta página.</p>'}
 </body></html>`
 }
 
@@ -397,7 +397,7 @@ export async function renderPage(url, mode, bridgeOrigin) {
     timeoutMs: PAGE_TIMEOUT_MS,
   })
   if (!/^text\/html|^application\/xhtml/.test(page.type)) {
-    throw proxyError(415, `not a web page (got ${page.type || 'nothing'})`)
+    throw proxyError(415, `não é uma página web (veio ${page.type || 'nada'})`)
   }
 
   const live = mode === 'live'

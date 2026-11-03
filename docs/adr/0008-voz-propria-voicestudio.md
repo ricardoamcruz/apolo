@@ -1,6 +1,6 @@
 # ADR 0008 — Voz própria pelo VoiceStudio, em frases pré-gravadas
 
-- **Status:** aceita
+- **Status:** substituída por 0009 (03/11/2026)
 - **Data:** 2026-11-03
 
 ## Contexto

@@ -1,6 +1,6 @@
 # ADR 0004 — Voz gratuita e local por padrão
 
-- **Status:** aceita (02/11/2026, revisada)
+- **Status:** substituída por 0009 (03/11/2026)
 - **Data:** 2026-11-01
 
 ## Contexto

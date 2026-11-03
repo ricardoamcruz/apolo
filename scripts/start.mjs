@@ -38,9 +38,9 @@ function vendorWasm() {
   try {
     mkdirSync(to, { recursive: true })
     cpSync(from, to, { recursive: true })
-    console.log('  vendored the hand-tracking runtime into public/mediapipe.')
+    console.log('  runtime de rastreamento das mãos copiado para public/mediapipe.')
   } catch (err) {
-    console.warn(`  could not vendor the hand-tracking runtime: ${err.message}`)
+    console.warn(`  não foi possível copiar o runtime das mãos: ${err.message}`)
   }
 }
 
@@ -68,7 +68,7 @@ function run(name, command, args, colour, env) {
   child.on('exit', (code) => {
     // If either half dies the other is useless, so take the whole thing down
     // rather than leave a half-running app that looks alive but cannot answer.
-    console.log(`\x1b[${colour}m${name}\x1b[0m exited (${code}); stopping the rest.`)
+    console.log(`\x1b[${colour}m${name}\x1b[0m encerrou (${code}); parando o resto.`)
     shutdown(code ?? 0)
   })
   children.push(child)
@@ -108,7 +108,7 @@ const port = process.env.PORT
 const bridgeEnv = writes ? { JARVIS_ALLOW_WRITES: '1' } : {}
 if (port) {
   bridgeEnv.JARVIS_ALLOWED_ORIGINS = `http://localhost:${port},http://127.0.0.1:${port}`
-  console.log(`  serving the face on port ${port}; the bridge will accept it.\n`)
+  console.log(`  interface na porta ${port}; a ponte vai aceitá-la.\n`)
 }
 
 vendorWasm()
@@ -121,5 +121,6 @@ run('face', process.execPath, ['node_modules/vite/bin/vite.js'], '35', {})
 
 console.log(
   '\nQuando o servidor de desenvolvimento estiver pronto, abra no Chrome o endereço\n' +
-    'que ele mostrar, clique em INICIAR e diga "Apolo". Ctrl-C encerra tudo.\n',
+    'que ele mostrar, clique em INICIAR (ou bata palmas) e fale normalmente.\n' +
+    'Ctrl-C encerra tudo.\n',
 )

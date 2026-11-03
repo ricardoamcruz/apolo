@@ -179,7 +179,7 @@ const Body = memo(function Body({ blade }: { blade: Blade }) {
 
   if (blade.kind === 'embed' && blade.url) {
     const embed = embedUrl(blade.url)
-    if (!embed) return <p className="bl-note">That video link could not be played.</p>
+    if (!embed) return <p className="bl-note">Não foi possível reproduzir este vídeo.</p>
     return (
       <iframe
         className="bl-frame"
@@ -232,7 +232,7 @@ const Body = memo(function Body({ blade }: { blade: Blade }) {
     )
   }
 
-  return <p className="bl-note">Nothing to show.</p>
+  return <p className="bl-note">Nada para mostrar.</p>
 })
 
 /* -------------------------------------------------------------------- card */
@@ -569,7 +569,7 @@ function Card({
         </div>
 
         {/* Resize grip. Absent while expanded, where the size is the point. */}
-        {!expanded && <span className="bl-grip" onPointerDown={onGrip} title="Drag to resize" />}
+        {!expanded && <span className="bl-grip" onPointerDown={onGrip} title="Arraste para redimensionar" />}
       </motion.section>
     </motion.div>
   )

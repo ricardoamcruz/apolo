@@ -5,104 +5,76 @@ import { Boot, BOOT_MS } from './ui/Boot'
 import { Ignition } from './ui/Ignition'
 import { Diagnostics } from './ui/Diagnostics'
 import { useStore } from './store'
-import { startVoice, type Voice, type VoiceMode } from './lib/voice'
-import { createSpeaker, cycleVoice, currentVoiceName } from './lib/tts'
 import * as sfx from './lib/sfx'
 import * as music from './lib/music'
 import * as hands from './lib/hands'
 import { listenForClap } from './lib/clap'
 import * as camera from './lib/camera'
-import * as kokoro from './lib/kokoro'
-import { TTS_ENGINE } from './config'
-import { forTool, attention, INTRO } from './lib/fillers'
 import {
   ask,
-  warm,
-  interrupt,
+  cancel as cancelTask,
+  warmBridge,
   watchServers,
   watchPanels,
   watchBlades,
   watchCapture,
   watchUi,
   watchConnection,
-  connectedLabels,
-  usingBridge,
-  type Msg,
-} from './lib/brain'
+  bridgeServers,
+} from './lib/bridge'
+import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
 import { startAnalyser, micLevel } from './lib/audio'
-import { probeCapabilities } from './lib/capabilities'
-import { env } from './config'
 
 /**
- * The conversation.
+ * A conversa, agora em speech-to-speech (docs/adr/0009).
  *
- * This used to be a sequential loop — greet, await a capture, await an answer,
- * repeat — with the microphone opened and closed around each step. That shape
- * cannot be interrupted: while it is awaiting the answer, nothing is listening,
- * so there is no way for the user to get a word in.
+ * Antes eram três etapas em fila — reconhecer a fala, mandar o texto ao Claude,
+ * sintetizar a resposta — e cada uma esperava a anterior terminar. Agora um
+ * único modelo de voz em tempo real ouve e responde direto em áudio. Este
+ * componente só traduz os eventos dessa sessão em fases da interface e executa
+ * as ferramentas que o modelo chama.
  *
- * It is an event machine now. The voice loop runs continuously and pushes
- * events at us; every one of them is legal in every phase. Saying anything at
- * all stops him talking, and whatever you say next becomes the new turn.
+ * O que exige agir no mundo (internet, e-mail, navegador, painéis) continua com
+ * o Claude, na ponte local: a voz chama `executar_tarefa` e fala o resultado.
  */
 
-/** How long to wait for someone to start speaking after he wakes. Generous:
- *  people say his name and *then* think about what they wanted. */
-const AWAIT_SPEECH_MS = 14000
+/** Sem ninguém falar por este tempo, ele entra em espera e o microfone fecha
+ *  (a sessão continua aberta, então voltar é instantâneo). */
+const IDLE_MS = 90_000
 
-/** After an answer, how long the mic stays open for a follow-up before he
- *  drops back to standby. Long enough that you don't have to say the name
- *  again to continue a thought. */
-const FOLLOW_UP_MS = 11000
-
-/** crypto.randomUUID needs a secure context, which a LAN address over plain
- *  http is not. Not worth failing a whole turn over an id. */
 const newId = () =>
   globalThis.crypto?.randomUUID?.() ??
   `id${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 
-/** As mesmas variantes que voice.ts aceita para a ativação; sem isso, um turno
- *  ativado como "apollo" mandaria essa palavra ao modelo como se fosse pergunta. */
-const NAME = '(?:apolo|apollo|a polo|apólo)'
-const PREFIX = '(?:(?:ei|oi|olá|ola|ok|okay|ô|e aí)[\\s,]+)?'
-/** Só o vocativo — "Apolo", "ei Apolo" — sem pedido nenhum. */
-const BARE_NAME = new RegExp(`^${PREFIX}${NAME}[\\s,.!?]*$`, 'iu')
-/** Vocativo no início de um pedido de verdade: "Apolo, como está o tempo". */
-const LEADING_NAME = new RegExp(`^${PREFIX}${NAME}(?![\\p{L}])[\\s,.:!?-]*`, 'iu')
+/** `mcp__apolo_navegador__chrome_open` -> `navegador · chrome open` */
+const prettyTool = (raw: string) => raw.replace(/_/g, ' ')
 
 export default function App() {
   const store = useStore
   const phase = useStore((s) => s.phase)
-  const history = useRef<Msg[]>([])
-  const speaker = useRef<ReturnType<typeof createSpeaker> | null>(null)
-  const voice = useRef<Voice | null>(null)
-
-  /**
-   * Monotonic turn counter. Every await in a turn checks it on the way out:
-   * if it has moved, that turn was superseded by a barge-in and must not touch
-   * the phase, the speaker, or the busy state on its way to the floor.
-   */
-  const turn = useRef(0)
+  const session = useRef<RealtimeSession | null>(null)
+  const connecting = useRef<Promise<RealtimeSession> | null>(null)
   const booting = useRef(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const voicePoll = useRef<ReturnType<typeof setInterval> | null>(null)
+  /** Há uma fala dele em andamento na transcrição (para anexar os trechos). */
+  const assistantOpen = useRef(false)
 
-  // -- helpers --------------------------------------------------------------
+  // -- espera ---------------------------------------------------------------
 
   const clearIdle = () => {
     if (idleTimer.current) clearTimeout(idleTimer.current)
     idleTimer.current = null
   }
 
-  const silence = () => {
-    speaker.current?.cancel()
-    speaker.current = null
+  const armIdle = () => {
+    clearIdle()
+    idleTimer.current = setTimeout(() => goDormant(), IDLE_MS)
   }
 
   const goDormant = () => {
     clearIdle()
-    silence()
-    turn.current++
+    session.current?.interrupt()
+    session.current?.setMicOn(false)
     const s = store.getState()
     s.setCaption('')
     s.setActiveTool(null)
@@ -112,230 +84,207 @@ export default function App() {
     s.setPhase('dormant')
   }
 
-  /** Open the mic and wait. `window` is how long before he gives up. */
-  const listen = (window: number) => {
-    clearIdle()
+  // -- ferramentas ------------------------------------------------------------
+
+  const runTool = async (name: string, args: Record<string, unknown>): Promise<ToolResult> => {
     const s = store.getState()
-    s.setCaption('')
-    s.setPhase('listening')
-    sfx.play('listen')
-    idleTimer.current = setTimeout(goDormant, window)
-  }
-
-  // -- one turn -------------------------------------------------------------
-
-  const respond = async (said: string): Promise<void> => {
-    const mine = ++turn.current
-    const stale = () => mine !== turn.current
-
     clearIdle()
-    const s = store.getState()
-    // Last turn's panels and blades go now, before the new answer starts
-    // putting its own up. Anything the model marked sticky survives.
-    s.clearPanels()
-    s.clearBlades()
-    s.setCaption('')
-    s.pushTurn({ id: newId(), role: 'user', text: said })
-    s.setPhase('thinking')
 
-    const spk = createSpeaker()
-    speaker.current = spk
-    sfx.duck(true)
-    music.duck(true)
-
-    const turnId = newId()
-    let started = false
-    let filled = false
-
-    try {
-      const { text } = await ask(said, history.current, {
-        onText: (delta) => {
-          if (stale()) return
-          if (!started) {
-            started = true
-            store.getState().setPhase('speaking')
-            // The answer arriving is what ends the tool phase — a timer would
-            // clear the readout while a slow tool was still running.
-            store.getState().setActiveTool(null)
-            music.working(false)
-            store.getState().pushTurn({ id: turnId, role: 'apolo', text: '' })
-          }
-          store.getState().appendToLastTurn(delta)
-          spk.push(delta)
-        },
-        onTool: (name) => {
-          if (stale()) return
-          // Only claim the tooling phase while he has nothing to say yet.
-          // Setting it unconditionally pinned the machine in 'tooling' for the
-          // rest of any answer that called a tool after it started talking,
-          // which also broke the reactor's lip-sync for the remainder.
-          if (!started) store.getState().setPhase('tooling')
-          store.getState().setActiveTool(name)
-          sfx.play('tool')
-          music.working(true)
-          // Say something the moment work starts — a tool can take ten seconds
-          // and silence that long reads as a crash. Once per turn only; a
-          // chain of five tools shouldn't produce five apologies.
-          if (!filled && !started) {
-            filled = true
-            spk.say(forTool(name))
-          }
-        },
-      })
-
-      if (stale()) return
-
-      // The bridge keeps conversation state in its own session, so history is
-      // only threaded through on the direct path.
-      if (!usingBridge) {
-        history.current.push({ role: 'user', content: said })
-        history.current.push({ role: 'assistant', content: text || '…' })
-        if (history.current.length > 16) {
-          history.current = history.current.slice(-16)
+    if (name === 'executar_tarefa') {
+      const pedido = String(args.pedido ?? '').trim()
+      if (!pedido) return { output: 'Pedido vazio.' }
+      s.clearPanels()
+      s.clearBlades()
+      s.setPhase('tooling')
+      s.setActiveTool('agente de tarefas')
+      sfx.play('tool')
+      music.working(true)
+      try {
+        const { text } = await ask(pedido, {
+          onText: () => {},
+          onTool: (tool) => store.getState().setActiveTool(prettyTool(tool)),
+        })
+        return { output: text || 'Tarefa concluída, sem nada a relatar.' }
+      } catch (err) {
+        sfx.play('error')
+        return {
+          output: `A tarefa falhou: ${err instanceof Error ? err.message : String(err)}`,
         }
-      }
-
-      await spk.end()
-      if (stale()) return
-      sfx.play('done')
-    } catch (err) {
-      if (stale()) return
-      console.error(err)
-      sfx.play('error')
-      store
-        .getState()
-        .setError(err instanceof Error ? err.message : 'Algo deu errado.')
-    } finally {
-      if (!stale()) {
-        speaker.current = null
-        sfx.duck(false)
-        music.duck(false)
+      } finally {
         store.getState().setActiveTool(null)
         music.working(false)
-        // Stay open. Having to say his name again to add one more sentence is
-        // the difference between a conversation and a vending machine.
-        listen(FOLLOW_UP_MS)
+        if (store.getState().phase === 'tooling') store.getState().setPhase('thinking')
+        armIdle()
       }
     }
-  }
 
-  // -- voice events ---------------------------------------------------------
-
-  /** What the voice loop should do with what it hears, derived from phase. */
-  const mode = (): VoiceMode => {
-    switch (store.getState().phase) {
-      case 'offline':
-      case 'boot':
-        return 'deaf'
-      case 'dormant':
-        return 'wake'
-      case 'waking':
-      case 'listening':
-        return 'command'
-      default:
-        return 'guard' // thinking, tooling, speaking
+    if (name === 'olhar_camera') {
+      s.setLooking(String(args.motivo ?? 'dando uma olhada'))
+      let held = false
+      try {
+        await camera.holdCamera()
+        held = true
+        const frame = camera.grabFrame()
+        return {
+          output: 'A foto da câmera foi anexada logo abaixo. Responda com base nela.',
+          image: `data:${frame.mimeType};base64,${frame.data}`,
+        }
+      } catch (err) {
+        return {
+          output:
+            (err as DOMException)?.name === 'NotAllowedError'
+              ? 'A câmera não foi permitida, então não consigo ver nada.'
+              : `Não foi possível ler a câmera: ${(err as Error)?.message ?? err}`,
+        }
+      } finally {
+        if (held) camera.releaseCamera()
+        store.getState().setLooking(null)
+        armIdle()
+      }
     }
+
+    if (name === 'ajustar_interface') {
+      const feito: string[] = []
+      if (args.restaurar) {
+        s.resetUi()
+        feito.push('interface restaurada')
+      }
+      if (typeof args.cor === 'string' && /^#?[0-9a-f]{3,8}$/i.test(args.cor)) {
+        const cor = args.cor.startsWith('#') ? args.cor : `#${args.cor}`
+        s.applyUi({ accent: cor })
+        feito.push(`cor ${cor}`)
+      }
+      if (typeof args.efeito === 'string') {
+        s.fireEffect(args.efeito as never)
+        feito.push(`efeito ${args.efeito}`)
+      }
+      if (args.limpar_tela) {
+        s.clearScreen('all')
+        feito.push('tela limpa')
+      }
+      armIdle()
+      return { output: feito.length ? `Feito: ${feito.join(', ')}.` : 'Nada foi alterado.' }
+    }
+
+    if (name === 'dormir') {
+      // Deixa a despedida terminar de tocar antes de fechar o microfone.
+      setTimeout(goDormant, 2500)
+      return { output: 'Em espera.', silent: true }
+    }
+
+    return { output: `Ferramenta desconhecida: ${name}.` }
   }
 
-  const onWake = (trailing: string) => {
-    const phase = store.getState().phase
-    if (phase === 'offline' || phase === 'boot') return
+  // -- sessão de voz ----------------------------------------------------------
 
-    store.getState().setError(null)
+  const openSession = (): Promise<RealtimeSession> => {
+    if (session.current) return Promise.resolve(session.current)
+    if (connecting.current) return connecting.current
+
+    connecting.current = connectRealtime({
+      onSpeechStart: () => {
+        clearIdle()
+        const s = store.getState()
+        if (s.phase === 'dormant' || s.phase === 'offline' || s.phase === 'boot') return
+        s.setError(null)
+        assistantOpen.current = false
+        sfx.duck(true)
+        music.duck(true)
+        if (s.phase !== 'tooling') s.setPhase('listening')
+      },
+      onSpeechStop: () => {
+        const s = store.getState()
+        if (s.phase === 'listening') s.setPhase('thinking')
+      },
+      onUserPartial: (text) => store.getState().setCaption(text),
+      onUserText: (text) => {
+        const s = store.getState()
+        s.setCaption('')
+        s.pushTurn({ id: newId(), role: 'user', text })
+      },
+      onAssistantStart: () => {
+        assistantOpen.current = true
+        store.getState().pushTurn({ id: newId(), role: 'apolo', text: '' })
+      },
+      onAssistantDelta: (delta) => {
+        if (!assistantOpen.current) {
+          assistantOpen.current = true
+          store.getState().pushTurn({ id: newId(), role: 'apolo', text: '' })
+        }
+        store.getState().appendToLastTurn(delta)
+      },
+      onSpeakingStart: () => {
+        clearIdle()
+        const s = store.getState()
+        sfx.duck(true)
+        music.duck(true)
+        if (s.phase !== 'dormant' && s.phase !== 'tooling') s.setPhase('speaking')
+      },
+      onSpeakingStop: () => {
+        assistantOpen.current = false
+        sfx.duck(false)
+        music.duck(false)
+        const s = store.getState()
+        if (s.phase === 'speaking' || s.phase === 'thinking') {
+          s.setPhase('listening')
+          armIdle()
+        }
+      },
+      onToolCall: runTool,
+      onError: (message) => {
+        console.warn('[apolo]', message)
+        store.getState().setError(message)
+      },
+      onClosed: () => {
+        session.current = null
+        const s = store.getState()
+        if (s.phase !== 'offline' && s.phase !== 'boot') {
+          clearIdle()
+          s.setPhase('dormant')
+          s.setError('A sessão de voz foi encerrada. Ela recomeça quando você me chamar.')
+        }
+      },
+    })
+      .then((rt) => {
+        session.current = rt
+        store.getState().setVoice(rt.model)
+        return rt
+      })
+      .finally(() => {
+        connecting.current = null
+      })
+    return connecting.current
+  }
+
+  /** Acorda: abre o microfone (e a sessão, se ela tiver caído). */
+  const wake = async () => {
+    const s = store.getState()
+    if (s.phase === 'offline' || s.phase === 'boot') return
+    s.setError(null)
     sfx.play('wake')
-
-    // "Jarvis, what's happening in AI this week" in one breath. Waiting for a
-    // greeting he didn't need is the most common way an assistant wastes time.
-    if (trailing) {
-      void respond(trailing)
-      return
+    try {
+      const rt = await openSession()
+      rt.setMicOn(true)
+      store.getState().setPhase('listening')
+      sfx.play('listen')
+      armIdle()
+    } catch (err) {
+      sfx.play('error')
+      store.getState().setPhase('dormant')
+      store.getState().setError(err instanceof Error ? err.message : String(err))
     }
-
-    store.getState().setPhase('waking')
-
-    // Answer to his name. Deliberately NOT awaited any more: the microphone is
-    // already open and the echo filter knows his voice, so the user can talk
-    // straight over the greeting instead of waiting it out.
-    const greeting = createSpeaker()
-    speaker.current = greeting
-    greeting.say(attention())
-    void greeting.end()
-
-    listen(AWAIT_SPEECH_MS)
   }
 
-  /**
-   * Someone started talking. This is the whole point of the rewrite: he stops,
-   * immediately, whatever he was doing.
-   */
-  const onSpeechStart = () => {
-    clearIdle()
-    const phase = store.getState().phase
-    if (phase === 'offline' || phase === 'boot' || phase === 'dormant') return
-
-    const wasBusy =
-      phase === 'thinking' || phase === 'tooling' || phase === 'speaking'
-
-    silence()
-    if (wasBusy) {
-      // Abandon the answer in flight. The turn counter moves in respond()'s
-      // replacement; bumping it here covers the case where nothing replaces it.
-      turn.current++
-      interrupt()
-      store.getState().setActiveTool(null)
-      music.working(false)
-      sfx.duck(false)
-      music.duck(false)
-    }
-    store.getState().setPhase('listening')
-  }
-
-  const onUtterance = (text: string) => {
-    const phase = store.getState().phase
-    if (phase === 'offline' || phase === 'boot' || phase === 'dormant') return
-
-    // People keep using his name as a vocative once they're already talking to
-    // him. Strip it rather than sending "jarvis" to the model as a question.
-    if (BARE_NAME.test(text)) {
-      listen(AWAIT_SPEECH_MS)
-      return
-    }
-    const said = text.replace(LEADING_NAME, '').trim()
-    if (!said) {
-      listen(AWAIT_SPEECH_MS)
-      return
-    }
-
-    void respond(said)
-  }
-
-  const onPartial = (text: string) => {
-    store.getState().setCaption(text)
-  }
-
-  const onVoiceError = (message: string) => {
-    store.getState().setError(message)
-  }
-
-  // -- power on -------------------------------------------------------------
+  // -- partida ----------------------------------------------------------------
 
   const powerOn = async () => {
-    // The ignition button and the space bar can both land here, and the phase
-    // only moves after the first await — so without this a double press boots
-    // twice, arming two voice loops and two download polls.
     if (booting.current) return
     booting.current = true
-
     try {
       await ignite()
     } catch (err) {
-      // The guard must not outlive a failed boot. Audio unlock can be refused,
-      // the microphone prompt dismissed, the bridge unreachable at the wrong
-      // moment — and with the flag still latched the ignition button was dead
-      // for the rest of the page, recoverable only by reloading. Reset it and
-      // put the button back so the user can simply press it again.
       booting.current = false
-      console.error('[apolo] power-up failed:', err)
+      console.error('[apolo] falha ao iniciar:', err)
       store.getState().setPhase('offline')
       store
         .getState()
@@ -350,61 +299,36 @@ export default function App() {
   const ignite = async () => {
     const s = store.getState()
 
-    // Must happen inside the click handler — browsers won't start an
-    // AudioContext or speech synthesis without a user gesture.
+    // Precisa acontecer dentro do clique: o navegador só libera áudio depois
+    // de uma interação.
     await sfx.unlockAudio()
     sfx.play('boot')
-    // The score. Must be started from inside this click handler for the same
-    // reason as the rest of the audio.
     music.enable()
-
-    // Por enquanto a partida é só a voz, sem trilha. A intro personalizada (um
-    // trecho de rock das playlists do Ricardo, só depois de muitas horas fora)
-    // está planejada para depois — ver RF-55 em docs/01-requisitos.md.
-    const intro = createSpeaker()
-    speaker.current = intro
-    intro.say(INTRO)
-    void intro.end()
-
     s.setPhase('boot')
 
     watchServers((servers) => store.getState().setConnected(servers))
     watchPanels((panel) => store.getState().pushPanel(panel))
     watchBlades((blade) => store.getState().pushBlade(blade))
 
-    /**
-     * JARVIS asking to see something.
-     *
-     * Announced on screen for as long as it takes, with whatever he said he was
-     * looking for. The camera's own light is on too, but a hardware light that
-     * appears with no explanation is exactly the thing that makes people
-     * distrust an assistant — so the interface says it before they have to ask.
-     */
+    // O agente de tarefas pedindo para ver algo pela câmera.
     watchCapture(async (req) => {
       const note =
         req.mode === 'watch'
           ? req.when === 'past'
-            ? req.reason || 'reviewing the last few seconds'
-            : `${req.reason || 'watching'} · ${req.seconds}s`
-          : req.reason || 'taking a look'
+            ? req.reason || 'revendo os últimos segundos'
+            : `${req.reason || 'observando'} · ${req.seconds}s`
+          : req.reason || 'dando uma olhada'
       store.getState().setLooking(note)
 
-      // The past is only available if something has been remembering it, and
-      // that only happens while the camera is on screen. Answering plainly
-      // beats opening the camera and recording the next few seconds instead,
-      // which is a different question from the one that was asked.
       if (req.mode === 'watch' && req.when === 'past' && camera.bufferedSeconds() < 1) {
         store.getState().setLooking(null)
         return {
           error:
             'Não há imagens recentes — a câmera precisa estar aberta na tela ' +
-            'para eu lembrar o que acabou de acontecer. Peça para abrir a câmera ' +
-            'e passo a acompanhar a partir daí.',
+            'para eu lembrar o que acabou de acontecer.',
         }
       }
 
-      // Held for the whole capture. Without this the stream can be torn down by
-      // whoever else was using it half way through a six-second watch.
       let held = false
       try {
         await camera.holdCamera()
@@ -428,9 +352,7 @@ export default function App() {
       }
     })
 
-    // The interface is JARVIS's to drive. These arrive out of band, pushed
-    // mid-turn the way panels are, so a command can retint the reactor or put
-    // something into orbit while he is still speaking the sentence about it.
+    // A interface é dele para mexer (ferramentas ui_* do agente de tarefas).
     watchUi((op, args) => {
       const s = store.getState()
       const a = (args ?? {}) as Record<string, never>
@@ -453,105 +375,58 @@ export default function App() {
           s.clearScreen(a.what ?? 'all')
           break
         default:
-          console.warn('[apolo] unknown ui op:', op, args)
+          console.warn('[apolo] operação de interface desconhecida:', op, args)
       }
     })
-    // In bridge mode the conversation lives in the agent session, which is tied
-    // to the socket — so a drop silently wipes his memory while the transcript
-    // on screen still shows it. Better to say so than to let him quietly forget.
+
     watchConnection((state) => {
       if (state === 'lost') {
-        store.getState().setError('Conexão com o cérebro perdida — reconectando.')
+        store.getState().setError('Conexão com o agente de tarefas perdida — reconectando.')
       } else if (state === 'reconnected') {
-        store
-          .getState()
-          .setError('Cérebro reconectado. A conversa anterior não foi mantida.')
+        store.getState().setError(null)
       }
     })
-    const warming = warm().catch((err: Error) => s.setError(err.message))
 
-    if (!usingBridge && !env.anthropicKey) {
-      s.setError(
-        'No Anthropic API key — copy .env.example to .env.local and set VITE_ANTHROPIC_API_KEY.',
-      )
-    }
-
-    // Pull the neural voice down during the boot sequence so the first
-    // "Hey Jarvis" isn't waiting on an 86MB download. Deliberately not awaited
-    // — if it's slow, JARVIS comes up on the system voice and swaps over the
-    // moment the model is ready.
-    if (TTS_ENGINE === 'kokoro') {
-      void kokoro.load()
-      voicePoll.current = setInterval(() => {
-        const p = kokoro.loadProgress()
-        if (kokoro.isReady() || kokoro.isUnavailable()) {
-          store.getState().setBootNote('')
-          if (voicePoll.current) clearInterval(voicePoll.current)
-          voicePoll.current = null
-        } else if (p > 0 && p < 1) {
-          store.getState().setBootNote(`voice ${Math.round(p * 100)}%`)
-        }
-      }, 200)
-    }
-
-    // Tempo para as quatro etapas da partida em Boot.tsx — barra de status,
-    // anéis, esquema, reator — antes de a interface ao vivo assumir.
-    await new Promise((r) => setTimeout(r, BOOT_MS))
-    await warming
-    store.getState().setConnected(connectedLabels())
-    store.getState().setVoice(currentVoiceName())
-
-    // The analyser is what makes the reactor pulse with your voice. It needs a
-    // getUserMedia stream; speech recognition does not, and gets its own. So a
-    // failure here costs the animation and nothing else — saying "voice input
-    // is unavailable" was both alarming and untrue.
+    // Tudo em paralelo com a animação de partida: a ponte, o medidor do
+    // microfone e a sessão de voz.
+    const bridgeUp = warmBridge().catch((err: Error) => s.setError(err.message))
     try {
       await startAnalyser()
     } catch {
-      console.warn(
-        '[apolo] no microphone stream — the reactor will not pulse with your ' +
-          'voice. Speech recognition is unaffected.',
-      )
+      throw new Error('o microfone não foi permitido. Libere o acesso e tente de novo.')
+    }
+    const voiceUp = openSession()
+
+    await new Promise((r) => setTimeout(r, BOOT_MS))
+    await bridgeUp
+    store.getState().setConnected(bridgeServers())
+
+    let rt: RealtimeSession
+    try {
+      rt = await voiceUp
+    } catch (err) {
+      store.getState().setPhase('dormant')
+      store.getState().setError(err instanceof Error ? err.message : String(err))
+      sfx.play('error')
+      return
     }
 
-    // Ask the bridge which speech engines exist before the loop starts, so the
-    // first turn already uses ElevenLabs when a key is present and the browser
-    // fallback when it is not — no flag, no reload.
-    await probeCapabilities()
-
-    // One voice loop, started once, running until the page closes.
-    voice.current = await startVoice({
-      mode,
-      onWake,
-      onSpeechStart,
-      onPartial,
-      onUtterance,
-      onError: onVoiceError,
-    })
-
-    store.getState().setPhase('dormant')
+    store.getState().setPhase('listening')
+    armIdle()
+    rt.prompt('Cumprimente o Ricardo em uma frase curta, em português, e diga que está pronto.')
   }
 
-  // -- clap to start --------------------------------------------------------
+  // -- palmas -----------------------------------------------------------------
 
-  /**
-   * A clap brings him up, as an alternative to the button.
-   *
-   * Only while the ignition screen is showing, and torn down the moment he
-   * boots — the microphone is about to belong to the voice loop, and two
-   * analysers arguing over the same stream is how you get an assistant that
-   * hears half of what you say.
-   *
-   * Deliberately silent about failure. If the microphone is refused, or has not
-   * been granted yet, the button is still right there; announcing an error
-   * about a feature nobody asked for would be worse than quietly doing without.
-   */
+  /** Uma palma liga a interface (antes da partida) ou o acorda da espera. */
   useEffect(() => {
-    if (phase !== 'offline') return
+    if (phase !== 'offline' && phase !== 'dormant') return
     let live: { stop: () => void } | null = null
     let gone = false
     void listenForClap(() => {
-      if (!gone) void powerOn()
+      if (gone) return
+      if (store.getState().phase === 'offline') void powerOn()
+      else void wake()
     }).then((l) => {
       if (gone) l.stop()
       else live = l
@@ -563,19 +438,14 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase])
 
-  // -- level pump + keys ----------------------------------------------------
+  // -- nível + teclas ---------------------------------------------------------
 
   useEffect(() => {
     let raf = 0
-
     const pump = () => {
       const st = store.getState()
-      // While speaking, follow JARVIS's own output rather than the mic, so the
-      // orb lip-syncs instead of reacting to room noise.
       const lvl =
-        st.phase === 'speaking' && speaker.current
-          ? speaker.current.level()
-          : micLevel()
+        st.phase === 'speaking' && session.current ? session.current.level() : micLevel()
       st.setLevel(lvl)
       raf = requestAnimationFrame(pump)
     }
@@ -584,32 +454,10 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      const bare = !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey
 
-      // V auditions the next British voice installed on this machine. Which
-      // ones exist varies per Mac, so hearing them beats trusting a ranking.
-      // Bare V only — ⌘V and ⌃V are paste, and swallowing those was rude.
-      if (
-        e.key === 'v' &&
-        !e.repeat &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey
-      ) {
-        e.preventDefault()
-        const name = cycleVoice()
-        store.getState().setVoice(name)
-        silence()
-        const demo = createSpeaker()
-        speaker.current = demo
-        demo.say(`Voz alterada para ${name.replace(/\(.*?\)/g, '').trim()}. À disposição.`)
-        void demo.end()
-        return
-      }
-
-      // G puts the camera on and starts tracking hands. Off by default and
-      // never implicit: a webcam that turns itself on because an interface
-      // thought it might be useful is not a trade anyone agreed to.
-      if (e.key === 'g' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // G liga a câmera e o controle por gestos. Nunca implícito.
+      if (e.key === 'g' && bare) {
         e.preventDefault()
         const on = store.getState().gestures
         if (on) {
@@ -634,56 +482,21 @@ export default function App() {
         return
       }
 
-      // T speaks a fixed line, bypassing the wake word, the recogniser and the
-      // model entirely. When "I can't hear him" is the report, this is the one
-      // keypress that separates a broken voice engine from a broken voice loop
-      // — and it prints the verdict rather than making you infer it.
-      if (e.key === 't' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        e.preventDefault()
-        silence()
-        const t = createSpeaker()
-        speaker.current = t
-        t.say('Teste de áudio. Se você está ouvindo isto, a fala está funcionando.')
-        void t.end().then(() => {
-          const d = (window as unknown as Record<string, Record<string, unknown>>).__tts
-          console.info('[apolo] audio test →', d)
-          if (d && d.started === 0 && d.rescued === 0) {
-            store.getState().setError(
-              `No sound produced. engine=${d.engine} voice=${d.voice} error=${d.lastError || 'none'}`,
-            )
-          }
-        })
-        return
-      }
-
-      // Escape stands the whole thing down — the one thing the old build had
-      // no key for at all.
+      // Esc põe em espera e cancela uma tarefa em andamento.
       if (e.key === 'Escape') {
         e.preventDefault()
-        if (store.getState().phase !== 'offline') goDormant()
+        const p = store.getState().phase
+        if (p === 'tooling') cancelTask()
+        if (p !== 'offline' && p !== 'boot') goDormant()
         return
       }
 
-      // Space starts a turn without the wake word. Worth using while filming so
-      // a missed wake word doesn't cost a take.
       if (e.code !== 'Space' || e.repeat) return
       e.preventDefault()
-
-      const phase = store.getState().phase
-      if (phase === 'offline') {
-        void powerOn()
-      } else if (phase === 'boot') {
-        /* ignore — the boot sequence owns the phase until it finishes */
-      } else if (
-        phase === 'thinking' ||
-        phase === 'tooling' ||
-        phase === 'speaking'
-      ) {
-        onSpeechStart()
-        listen(AWAIT_SPEECH_MS)
-      } else {
-        onWake('')
-      }
+      const p = store.getState().phase
+      if (p === 'offline') void powerOn()
+      else if (p === 'dormant') void wake()
+      else if (p === 'speaking') session.current?.interrupt()
     }
     window.addEventListener('keydown', onKey)
 
@@ -691,10 +504,7 @@ export default function App() {
       cancelAnimationFrame(raf)
       window.removeEventListener('keydown', onKey)
       clearIdle()
-      if (voicePoll.current) clearInterval(voicePoll.current)
-      voice.current?.stop()
-      speaker.current?.cancel()
-      // The camera must not outlive the page that turned it on.
+      session.current?.close()
       hands.disableHands()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

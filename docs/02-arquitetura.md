@@ -87,13 +87,19 @@ Política inicial do roteador: **Claude** para conversa e ações; **Gemini**
 (gratuito) como fallback e para tarefas baratas/volumosas (resumos, triagem);
 **Grok** opcional (exige créditos pagos).
 
-## Voz (ADR 0004)
+## Voz (ADR 0009)
 
-| Função | Padrão (gratuito) | Alternativas |
-|---|---|---|
-| STT (ouvir) | `SpeechRecognition` do Chrome (pt-BR) | whisper.cpp local (modelos já em `~/.whisper-models`) |
-| TTS (falar) | Kokoro no navegador, voz `pm_alex` (pt-BR) | voz do sistema; ElevenLabs só como opcional |
-| Ativação | atalho (Espaço) | palavra "Apolo" com detector local (a definir) |
+Speech-to-speech com a OpenAI Realtime (`gpt-realtime-2.1`): um modelo só ouve,
+raciocina e responde em áudio, por WebRTC aberto pelo navegador. A ponte emite a
+chave temporária (`POST /realtime/sessao`) e define personalidade, voz e
+ferramentas (`bridge/realtime.mjs`). O que exige agir no mundo vai ao Claude
+pela ferramenta `executar_tarefa`.
+
+| Função | Como |
+|---|---|
+| Ouvir + entender + falar | sessão Realtime (`src/lib/realtime.ts`) |
+| Agir (web, e-mail, navegador, painéis) | agente de tarefas Claude, na ponte |
+| Ativação | ligado após INICIAR; espera após 90 s; Espaço ou palmas acordam |
 
 ## Protocolo de canal (RNF-11)
 

@@ -94,19 +94,22 @@ RULES
     while listening, not a document. Four thumbnails in a gallery, six at the
     outside; one video, never two.
 
+ALL VISIBLE TEXT IN PORTUGUESE (pt-BR): titles, labels, captions, notes and
+tags. The user reads Portuguese only. Proper names stay as they are.
+
 EXAMPLES
 
 Search results:
 <div class="hud-rows">
-  <div class="hud-row"><span class="hud-idx">01</span><span class="hud-main"><span class="hud-label">Anthropic ships Claude Opus 5</span><span class="hud-sub">A step change on agentic coding</span></span><span class="hud-tag">reuters</span></div>
-  <div class="hud-row"><span class="hud-idx">02</span><span class="hud-main"><span class="hud-label">OpenAI responds within the week</span></span><span class="hud-tag">verge</span></div>
+  <div class="hud-row"><span class="hud-idx">01</span><span class="hud-main"><span class="hud-label">Anthropic lança o Claude Opus 5</span><span class="hud-sub">Um salto em programação com agentes</span></span><span class="hud-tag">reuters</span></div>
+  <div class="hud-row"><span class="hud-idx">02</span><span class="hud-main"><span class="hud-label">OpenAI responde na mesma semana</span></span><span class="hud-tag">verge</span></div>
 </div>
 
 A single figure:
-<div><span class="hud-metric">1,284</span><span class="hud-unit">unread since monday</span></div>
+<div><span class="hud-metric">1,284</span><span class="hud-unit">não lidos desde segunda</span></div>
 
 An image:
-<div><img class="hud-img" src="file:///Users/you/shot.png"><span class="hud-caption">Home screen, 9:41</span></div>
+<div><img class="hud-img" src="file:///Users/you/shot.png"><span class="hud-caption">Tela inicial, 9:41</span></div>
 
 Image search results — the pictures ARE the answer, so lead with them:
 <div class="hud-figure">
@@ -116,18 +119,18 @@ Image search results — the pictures ARE the answer, so lead with them:
     <img class="hud-thumb" src="https://static.example.net/sr71-cockpit.jpg">
     <img class="hud-thumb" src="https://images.example.com/sr71-hangar.jpg">
   </div>
-  <span class="hud-caption">SR-71 Blackbird · four of two hundred results</span>
+  <span class="hud-caption">SR-71 Blackbird · quatro de duzentos resultados</span>
 </div>
 
 Headlines with their thumbnails:
 <div class="hud-rows">
-  <div class="hud-row"><img class="hud-thumb" src="https://cdn.example.com/launch.jpg"><span class="hud-main"><span class="hud-label">Starship clears the tower on the eleventh flight</span><span class="hud-sub">Booster caught, ship lost on re-entry</span></span><span class="hud-tag">reuters</span></div>
-  <div class="hud-row"><img class="hud-thumb" src="https://cdn.example.org/pad.jpg"><span class="hud-main"><span class="hud-label">Pad damage limited to the flame trench</span></span><span class="hud-tag">ars</span></div>
+  <div class="hud-row"><img class="hud-thumb" src="https://cdn.example.com/launch.jpg"><span class="hud-main"><span class="hud-label">Starship deixa a torre no 11º voo</span><span class="hud-sub">Propulsor recuperado, nave perdida na reentrada</span></span><span class="hud-tag">reuters</span></div>
+  <div class="hud-row"><img class="hud-thumb" src="https://cdn.example.org/pad.jpg"><span class="hud-main"><span class="hud-label">Danos na plataforma limitados à vala de chamas</span></span><span class="hud-tag">ars</span></div>
 </div>
 
 A video result — embedded and playable:
 <div class="hud-figure">
-  <div class="hud-embed"><iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" title="Flight 11, full replay" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+  <div class="hud-embed"><iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" title="Voo 11, reprise completa" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
   <span class="hud-caption">SpaceX · 4:32</span>
 </div>
 
@@ -135,13 +138,13 @@ A direct video file:
 <video class="hud-video" controls playsinline preload="metadata" poster="https://cdn.example.com/still.jpg"><source src="https://cdn.example.com/clip.mp4" type="video/mp4"></video>
 
 A short readout:
-<p class="hud-note">Three of the four services are nominal. <span class="hud-hot">Vercel is degraded</span> in eu-west.</p>
+<p class="hud-note">Três dos quatro serviços estão normais. <span class="hud-hot">A Vercel está degradada</span> em eu-west.</p>
 `.trim()
 
 const schema = {
   title: z
     .string()
-    .describe('Short heading for the panel, two to four words. e.g. "SEARCH RESULTS", "INBOX".'),
+    .describe('Short heading for the panel, two to four words, in Portuguese. e.g. "RESULTADOS", "CAIXA DE ENTRADA".'),
   html: z
     .string()
     .describe(
@@ -340,7 +343,7 @@ export function displayServer(emit, emitBlade) {
         // the child element rather than the parent.
         const text = String(args.html ?? '').replace(/<[^>]*>/g, '').trim()
         if (!text && !/<(img|video|iframe|source)\b/i.test(args.html ?? '')) {
-          console.warn('[apolo] display called with an empty body:', args.title)
+          console.warn('[apolo] painel chamado sem conteúdo:', args.title)
           return {
             isError: true,
             content: [

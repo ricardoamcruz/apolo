@@ -109,6 +109,27 @@ Escolha com `APOLO_VOZ_PROVEDOR`. Ferramentas da voz: `executar_tarefa`,
 | Agir (web, e-mail, navegador, painéis) | agente de tarefas Claude, na ponte |
 | Ativação | ligado após INICIAR; espera após 90 s; Espaço ou palmas acordam |
 
+## Autodesenvolvimento (ADR 0011)
+
+```
+voz/chat → proposta → confirmação humana → worktree + Claude Code → checagens
+         → supervisor troca a branch e reinicia a ponte → observa 60 s
+                                                        ├─ estável: fica
+                                                        └─ quebrou: rollback
+```
+
+| Peça | Arquivo |
+|---|---|
+| Regras do que pode mudar | `bridge/autodev/politica.mjs` |
+| Agente (único ponto que conhece o provedor) | `bridge/autodev/agente.mjs` |
+| Ciclo do trabalho e checagens | `bridge/autodev/index.mjs` |
+| Troca, observação e rollback | `scripts/supervisor.mjs` |
+| Rollback manual | `scripts/rollback.mjs` |
+| Chat e acompanhamento na tela | `src/ui/Autodev.tsx`, `src/lib/autodev.ts` |
+
+A ponte e o supervisor conversam pelo canal IPC do `npm start`. Fora dele, a
+alteração fica na branch e nada reinicia.
+
 ## Protocolo de canal (RNF-11)
 
 Web e app nativo usam o **mesmo** protocolo WebSocket do gateway, com

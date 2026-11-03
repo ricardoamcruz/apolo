@@ -12,6 +12,7 @@
 | 0008 | Voz própria pelo VoiceStudio, em frases pré-gravadas | substituída por 0009 |
 | 0009 | Voz em tempo real, speech-to-speech (OpenAI Realtime) | aceita |
 | 0010 | Gemini Live como provedor padrão da voz | aceita |
+| 0011 | Autodesenvolvimento com rollback automático | proposta |
 
 ## Em aberto
 

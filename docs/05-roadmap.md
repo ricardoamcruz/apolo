@@ -25,6 +25,7 @@ Marque `[x]` ao concluir e atualize o status em `01-requisitos.md`.
 - [ ] Painel de status (módulos, provedor, consumo)
 
 ## Fase 2 — Voz e celular
+- [ ] Autodesenvolvimento por voz e chat, com rollback automático (ADR 0011, RF-15) — **em andamento**: implementado e testado; falta validar por voz no navegador e aprovar a ADR
 - [x] Voz pt-BR gratuita em tempo real — speech-to-speech pelo Gemini Live, OpenAI como opção (ADR 0009 e 0010, 03/11/2026)
 - [ ] Palavra de ativação "Apolo" (hoje: Espaço ou palmas acordam)
 - [ ] Voz no app de celular usando o mesmo `POST /realtime/sessao` da ponte

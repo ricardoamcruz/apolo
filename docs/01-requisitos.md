@@ -22,6 +22,7 @@ Fase: ver `05-roadmap.md`.
 | RF-12 | **Painel de status**: módulos carregados, provedor de IA em uso, consumo/limites, erros | S | 1 | proposto |
 | RF-13 | **Registro de auditoria** de toda ação com efeito (quem pediu, qual módulo, resultado) | M | 1 | proposto |
 | RF-14 | **Configuração** por arquivo + variáveis de ambiente, com segredos fora do Git | M | 1 | proposto |
+| RF-15 | **Autodesenvolvimento**: por voz ou chat, alterar o próprio código com o Claude Code, seguir o roadmap, reiniciar e fazer rollback automático se quebrar (ADR 0011) | S | 2 | em andamento |
 
 ## Requisitos funcionais — módulos futuros (fora do escopo atual)
 

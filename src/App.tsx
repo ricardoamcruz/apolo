@@ -20,10 +20,13 @@ import {
   watchCapture,
   watchUi,
   watchConnection,
+  watchAutodev,
+  autodev,
   bridgeServers,
 } from './lib/bridge'
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
 import { startAnalyser, micLevel } from './lib/audio'
+import { ouviuConfirmacao, registrarFala } from './lib/autodev'
 
 /**
  * A conversa, agora em speech-to-speech (docs/adr/0009).
@@ -118,6 +121,21 @@ export default function App() {
       }
     }
 
+    if (name === 'desenvolvimento') {
+      const acao = String(args.acao ?? '')
+      armIdle()
+      // Quem confirma é a pessoa, na própria fala; o modelo só repassa.
+      if (acao === 'confirmar' && !(await ouviuConfirmacao(s.autodev?.criadoEm ?? Date.now()))) {
+        return {
+          output:
+            'A confirmação não foi ouvida do Ricardo. Peça que ele diga "confirmo" ou ' +
+            'clique em Confirmar na tela. Nada foi iniciado.',
+        }
+      }
+      const { mensagem } = await autodev(acao, { pedido: String(args.pedido ?? '') })
+      return { output: mensagem }
+    }
+
     if (name === 'olhar_camera') {
       s.setLooking(String(args.motivo ?? 'dando uma olhada'))
       let held = false
@@ -196,8 +214,12 @@ export default function App() {
         const s = store.getState()
         if (s.phase === 'listening') s.setPhase('thinking')
       },
-      onUserPartial: (text) => store.getState().setCaption(text),
+      onUserPartial: (text) => {
+        registrarFala(text)
+        store.getState().setCaption(text)
+      },
       onUserText: (text) => {
+        registrarFala(text)
         const s = store.getState()
         s.setCaption('')
         s.pushTurn({ id: newId(), role: 'user', text })
@@ -309,6 +331,21 @@ export default function App() {
     watchServers((servers) => store.getState().setConnected(servers))
     watchPanels((panel) => store.getState().pushPanel(panel))
     watchBlades((blade) => store.getState().pushBlade(blade))
+
+    // O trabalho leva minutos, então o resultado é anunciado quando chega. Só
+    // o que começou com esta página aberta: o estado salvo não é notícia.
+    let acompanhando = false
+    watchAutodev((estado) => {
+      store.getState().setAutodev(estado)
+      if (estado.fase !== 'ocioso' && estado.fase !== 'proposto') acompanhando = true
+      if (estado.fase === 'ocioso' && estado.resultado && acompanhando) {
+        acompanhando = false
+        session.current?.prompt(
+          `O autodesenvolvimento terminou. Informe o Ricardo em uma ou duas frases, sem ler ` +
+            `código nem nomes de branch: ${estado.resultado.mensagem}`,
+        )
+      }
+    })
 
     // O agente de tarefas pedindo para ver algo pela câmera.
     watchCapture(async (req) => {

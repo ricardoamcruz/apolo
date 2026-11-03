@@ -8,11 +8,16 @@
  *
  * Pass --writes to allow JARVIS to take real actions (drive the phone, the
  * browser, send things): `npm start -- --writes`.
+ *
+ * Passe --autodev para permitir que o A.P.O.L.O. altere o próprio código quando
+ * você pedir e confirmar (docs/adr/0011): `npm start -- --autodev`.
  */
 
 import { spawn, spawnSync } from 'node:child_process'
 import process from 'node:process'
 import { cpSync, existsSync, mkdirSync } from 'node:fs'
+import { criarSupervisor, saudeHttp } from './supervisor.mjs'
+import { PASTA_AUTODEV } from '../bridge/autodev/politica.mjs'
 
 /**
  * Put MediaPipe's WebAssembly where the page can actually load it.
@@ -45,6 +50,7 @@ function vendorWasm() {
 }
 
 const writes = process.argv.includes('--writes')
+const selfDev = process.argv.includes('--autodev')
 
 // A dim label per process, so the interleaved logs stay readable.
 const paint = (tag, colour) => (line) =>
@@ -57,15 +63,20 @@ const paint = (tag, colour) => (line) =>
 
 const children = []
 
-function run(name, command, args, colour, env) {
+function run(name, command, args, colour, env, stdio = ['ignore', 'pipe', 'pipe']) {
   const label = paint(name, colour)
   const child = spawn(command, args, {
     env: { ...process.env, ...env },
     shell: false,
+    stdio,
   })
   child.stdout.on('data', (d) => process.stdout.write(label(d) + '\n'))
   child.stderr.on('data', (d) => process.stderr.write(label(d) + '\n'))
   child.on('exit', (code) => {
+    children.splice(children.indexOf(child), 1)
+    if (child === bridge) bridge = null
+    // Saída pedida pelo supervisor, ou queda que ele está analisando.
+    if (child.planned || (name === 'bridge' && supervisor.ponteSaiu(code))) return
     // If either half dies the other is useless, so take the whole thing down
     // rather than leave a half-running app that looks alive but cannot answer.
     console.log(`\x1b[${colour}m${name}\x1b[0m encerrou (${code}); parando o resto.`)
@@ -105,7 +116,10 @@ process.on('SIGTERM', () => shutdown(0))
  * without widening what the bridge trusts by default.
  */
 const port = process.env.PORT
-const bridgeEnv = writes ? { JARVIS_ALLOW_WRITES: '1' } : {}
+const bridgeEnv = {
+  ...(writes ? { JARVIS_ALLOW_WRITES: '1' } : {}),
+  ...(selfDev ? { APOLO_AUTODEV: '1' } : {}),
+}
 if (port) {
   bridgeEnv.JARVIS_ALLOWED_ORIGINS = `http://localhost:${port},http://127.0.0.1:${port}`
   console.log(`  interface na porta ${port}; a ponte vai aceitá-la.\n`)
@@ -149,8 +163,64 @@ function stopStale() {
 stopStale()
 vendorWasm()
 
+/** A ponte em execução. Ela troca a cada autodesenvolvimento; o Vite fica. */
+let bridge = null
+
+function startBridge() {
+  // O canal 'ipc' é por onde a ponte pede a troca de versão ao supervisor.
+  bridge = run('bridge', 'node', ['bridge/server.mjs'], '36', bridgeEnv, [
+    'ignore',
+    'pipe',
+    'pipe',
+    'ipc',
+  ])
+  bridge.on('message', (msg) => {
+    if (msg?.type === 'autodev:aplicar') void supervisor.aplicar(msg)
+    if (msg?.type === 'autodev:reverter') void supervisor.reverter(msg)
+  })
+}
+
+function stopBridge() {
+  const child = bridge
+  if (!child) return Promise.resolve()
+  return new Promise((resolve) => {
+    child.planned = true
+    const force = setTimeout(() => child.kill('SIGKILL'), 5000)
+    child.once('exit', () => {
+      clearTimeout(force)
+      resolve()
+    })
+    child.kill('SIGTERM')
+  })
+}
+
+const supervisor = criarSupervisor({
+  repo: process.cwd(),
+  pasta: PASTA_AUTODEV,
+  ligar: startBridge,
+  desligar: stopBridge,
+  saude: () =>
+    saudeHttp({
+      portaPonte: Number(process.env.JARVIS_BRIDGE_PORT ?? 8787),
+      portaInterface: Number(port) || 5173,
+    }),
+  notificar: (resultado) => bridge?.send({ type: 'autodev:resultado', ...resultado }, () => {}),
+  log: (linha) => console.log(linha),
+})
+
+// Antes de subir qualquer coisa: uma troca interrompida volta para a versão boa.
+const interrompida = await supervisor.recuperar()
+
 console.log('\nA.P.O.L.O. iniciando — o cérebro e a interface.\n')
-run('bridge', 'node', ['bridge/server.mjs'], '36', bridgeEnv)
+startBridge()
+if (interrompida) {
+  bridge.send({
+    type: 'autodev:resultado',
+    id: interrompida.id,
+    tipo: 'revertido',
+    mensagem: 'Uma troca de versão foi interrompida; a versão anterior voltou ao ar.',
+  })
+}
 // npm is a shell script on most systems; call the vite binary directly so we do
 // not need shell:true (which would break the argument handling above).
 run('face', process.execPath, ['node_modules/vite/bin/vite.js'], '35', {})

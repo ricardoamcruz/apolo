@@ -31,6 +31,7 @@ import { openRemote, proxyError, vetTarget, PROXY_UA } from './net.mjs'
 import { probeUrl, renderPage } from './page.mjs'
 import { createRealtimeSession, realtimeKey, realtimeModel, voiceProvider } from './realtime.mjs'
 import { fileURLToPath } from 'node:url'
+import { criarAutodev } from './autodev/index.mjs'
 
 // O .env.local também vale para a ponte, para a chave da OpenAI ficar só aqui
 // (o Vite só repassa ao navegador o que começa com VITE_). Variáveis já
@@ -685,6 +686,8 @@ const handleRequest = async (req, res) => {
         realtime: Boolean(realtimeKey()),
         provedor: voiceProvider(),
         modelo: realtimeModel(),
+        // O supervisor usa isto para saber se a interface voltou depois de uma troca.
+        interfaces: wss.clients.size,
       }),
     )
   }
@@ -874,6 +877,27 @@ server.on('error', (err) => {
 })
 server.listen(PORT)
 
+/**
+ * Autodesenvolvimento (docs/adr/0011). Uma instância só, fora das conexões: o
+ * trabalho é longo e sobrevive a uma interface que recarrega. `process.send` só
+ * existe quando a ponte nasce do `npm start`, que é onde mora o supervisor.
+ */
+const broadcast = (msg) => {
+  for (const client of wss.clients) {
+    if (client.readyState === client.OPEN) client.send(JSON.stringify(msg))
+  }
+}
+const autodev = criarAutodev({
+  repo: fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, ''),
+  ligado: process.env.APOLO_AUTODEV === '1',
+  supervisor: process.send ? (msg) => process.send(msg) : null,
+  avisar: (estado) => broadcast({ type: 'autodev', estado }),
+  interfaces: () => wss.clients.size,
+})
+process.on('message', (msg) => {
+  if (msg?.type === 'autodev:resultado') autodev.resultado(msg)
+})
+
 console.log(`[apolo] ponte ouvindo em ws://localhost:${PORT}`)
 console.log(
   realtimeKey()
@@ -881,6 +905,9 @@ console.log(
     : `[apolo] voz em tempo real DESLIGADA — falta a chave ${voiceProvider() === 'gemini' ? 'GEMINI_API_KEY' : 'OPENAI_API_KEY'} no .env.local`,
 )
 console.log(`[apolo] agente de tarefas: ${MODEL} · esforço ${EFFORT}`)
+console.log(
+  `[apolo] autodesenvolvimento ${autodev.estado().ligado ? 'LIGADO' : 'desligado — use npm start -- --autodev'}`,
+)
 console.log(
   `[apolo] ações com efeito ${ALLOW_WRITES ? 'LIBERADAS' : 'bloqueadas'}` +
     (ALLOW_WRITES ? '' : ' — use npm start -- --writes para liberar'),
@@ -923,6 +950,7 @@ wss.on('connection', (socket) => {
   socket.send(
     JSON.stringify({ type: 'ready', servers: Object.keys(MCP_SERVERS) }),
   )
+  socket.send(JSON.stringify({ type: 'autodev', estado: autodev.estado() }))
 
   /** Resolves the pending user message into the SDK's input generator. */
   let deliver = null
@@ -1305,6 +1333,13 @@ wss.on('connection', (socket) => {
           inbox.push(text)
         }
       })
+    }
+
+    if (msg.type === 'autodev' && typeof msg.acao === 'string') {
+      void autodev
+        .acao(msg.acao, { pedido: msg.pedido })
+        .catch((err) => ({ ok: false, mensagem: err.message }))
+        .then((r) => send({ type: 'autodev', resposta: msg.id, ...r }))
     }
 
     if (msg.type === 'reply' && typeof msg.id === 'string') {

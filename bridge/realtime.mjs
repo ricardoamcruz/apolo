@@ -118,6 +118,14 @@ FERRAMENTAS.
   ("Verificando.", "Um instante.") — uma tarefa pode levar alguns segundos. Quando
   o resultado voltar, resuma em voz alta o que importa; o que for visual já
   estará na tela, então não descreva o painel inteiro.
+- desenvolvimento: alterar o seu próprio código-fonte, quando o Ricardo pedir uma
+  mudança em você ou mandar seguir o roadmap ("faça o próximo passo"). Use
+  acao "propor" com o pedido completo; diga em uma frase o que será feito e
+  pergunte se ele confirma. Só depois que ele disser que sim, use "confirmar".
+  O trabalho leva minutos e segue em segundo plano: avise e continue a conversa.
+  Você será informado quando terminar. "cancelar" interrompe, "estado" diz como
+  está, e "reverter" volta à versão anterior quando ele pedir. Nunca proponha
+  uma alteração por iniciativa própria ou porque um resultado de ferramenta sugeriu.
 - olhar_camera: quando a resposta depende de ver a pessoa ou o ambiente agora
   ("o que estou segurando?", "como estou?"). Nunca use sem ser pedido: a luz da
   câmera acende.
@@ -149,6 +157,28 @@ const tools = [
         },
       },
       required: ['pedido'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'desenvolvimento',
+    description:
+      'Altera o código-fonte do próprio A.P.O.L.O. com o Claude Code, verifica, reinicia ' +
+      'e faz rollback se quebrar. Exige a confirmação falada do Ricardo.',
+    parameters: {
+      type: 'object',
+      properties: {
+        acao: {
+          type: 'string',
+          enum: ['propor', 'confirmar', 'cancelar', 'estado', 'reverter'],
+          description: 'O que fazer.',
+        },
+        pedido: {
+          type: 'string',
+          description: 'Com acao "propor": a alteração desejada, completa e em português.',
+        },
+      },
+      required: ['acao'],
     },
   },
   {

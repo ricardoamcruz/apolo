@@ -1,5 +1,6 @@
 import type { Blade, Panel } from '../store'
 import { BRIDGE_WS_URL } from '../config'
+import type { AutodevEstado } from './autodev'
 
 /** O que um pedido ao agente de tarefas recebe enquanto ele trabalha. */
 export type AskHandlers = {
@@ -40,6 +41,10 @@ type Frame = {
   seconds?: number
   when?: string
   servers?: Array<string | { name?: string }>
+  estado?: AutodevEstado
+  resposta?: string
+  ok?: boolean
+  mensagem?: string
 }
 
 /** Every question gets an id so its answer can be told from anyone else's. */
@@ -103,6 +108,32 @@ export function watchBlades(fn: (blade: Blade) => void) {
 let onUi: ((op: string, args: any) => void) | null = null
 export function watchUi(fn: (op: string, args: any) => void) {
   onUi = fn
+}
+
+/** O andamento do autodesenvolvimento. O estado vem ao conectar e a cada mudança. */
+let onAutodev: ((estado: AutodevEstado) => void) | null = null
+export function watchAutodev(fn: (estado: AutodevEstado) => void) {
+  onAutodev = fn
+}
+
+export type AutodevResposta = { ok: boolean; mensagem: string }
+const respostas = new Map<string, (r: AutodevResposta) => void>()
+
+/** Uma ação do autodesenvolvimento: propor, confirmar, cancelar, reverter, estado. */
+export async function autodev(acao: string, extra?: { pedido?: string }): Promise<AutodevResposta> {
+  const ws = await connect()
+  const id = `d${++askSeq}`
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      respostas.delete(id)
+      resolve({ ok: false, mensagem: 'A ponte não respondeu.' })
+    }, 15000)
+    respostas.set(id, (r) => {
+      clearTimeout(timer)
+      resolve(r)
+    })
+    ws.send(JSON.stringify({ type: 'autodev', acao, id, ...extra }))
+  })
 }
 
 /**
@@ -207,6 +238,12 @@ function dispatch(ws: WebSocket) {
         })
           .then(reply)
           .catch((err) => reply({ error: String(err?.message ?? err) }))
+      }
+    } else if (msg.type === 'autodev') {
+      if (msg.estado) onAutodev?.(msg.estado)
+      if (msg.resposta) {
+        respostas.get(msg.resposta)?.({ ok: msg.ok === true, mensagem: msg.mensagem ?? '' })
+        respostas.delete(msg.resposta)
       }
     } else if (msg.type === 'ui' && msg.op) {
       // A `ui` frame with no args is normal — reset and clear take none — so an

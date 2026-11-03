@@ -931,9 +931,7 @@ kbd {
   display: grid;
   place-items: center;
 }
-.boot-rings,
-.boot-suit,
-.boot-reactor {
+.boot-rings {
   width: min(58vmin, 520px);
   height: min(58vmin, 520px);
   overflow: visible;
@@ -953,56 +951,6 @@ kbd {
   font-size: 20px;
   text-anchor: middle;
   dominant-baseline: middle;
-}
-
-.boot-wire {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 1.4;
-  opacity: 0.9;
-  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent));
-}
-.boot-wire-dim { opacity: 0.4; stroke-width: 1; }
-.boot-suit-fig { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 40%, transparent)); }
-.boot-tag {
-  fill: var(--accent);
-  opacity: 0.55;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-anchor: middle;
-}
-
-.boot-r-seg {
-  stroke: color-mix(in srgb, var(--accent) 30%, transparent);
-  stroke-width: 8;
-}
-.boot-r-on { stroke: #dffbff; filter: drop-shadow(0 0 8px var(--accent)); }
-.boot-r-ring {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 2;
-  opacity: calc(0.3 + var(--glow) * 0.6);
-}
-.boot-r-ring-in { stroke-width: 1.5; opacity: calc(0.2 + var(--glow) * 0.5); }
-.boot-r-tri {
-  fill: color-mix(in srgb, var(--accent) calc(var(--glow) * 45%), transparent);
-  stroke: #eafcff;
-  stroke-width: 3;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 0 calc(var(--glow) * 26px) var(--accent));
-}
-.boot-r-tri-in {
-  fill: color-mix(in srgb, #eafcff calc(var(--glow) * 60%), transparent);
-  stroke: none;
-}
-.boot-r-v {
-  fill: none;
-  stroke: #05161a;
-  stroke-width: 3.5;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  opacity: var(--glow);
 }
 
 @media (max-width: 900px) {
@@ -1895,4 +1843,88 @@ kbd {
   object-fit: cover;
   transform: scaleX(-1);
   background: #000;
+}
+
+/* --------------------------------------------------------- autodesenvolvimento */
+
+.autodev {
+  position: absolute;
+  left: 92px;
+  bottom: 96px;
+  width: min(340px, calc(100vw - 184px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: auto;
+  text-transform: none;
+  letter-spacing: 0.03em;
+  font-size: 12px;
+}
+
+.autodev-fase {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 9px;
+  letter-spacing: 0.28em;
+}
+
+.autodev-pedido {
+  max-height: 96px;
+  overflow: auto;
+  opacity: 0.85;
+}
+
+.autodev-etapa {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+.autodev-resultado {
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  opacity: 0.8;
+}
+
+.autodev-falhou,
+.autodev-revertido,
+.autodev-recusado {
+  color: #ff8a7a;
+}
+
+.autodev-acoes {
+  display: flex;
+  gap: 8px;
+}
+
+.autodev button,
+.autodev input {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  padding: 7px 10px;
+}
+
+.autodev button {
+  cursor: pointer;
+}
+
+.autodev button:hover,
+.autodev input:focus {
+  outline: none;
+  border-color: currentColor;
+}
+
+.autodev input {
+  width: 100%;
+}
+
+.autodev input::placeholder {
+  color: inherit;
+  opacity: 0.45;
 }

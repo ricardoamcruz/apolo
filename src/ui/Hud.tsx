@@ -6,6 +6,7 @@ import { BladeSweep, Blades } from './Blades'
 import { Effects } from './Effects'
 import { Pointer } from './Pointer'
 import { GestureGuide } from './GestureGuide'
+import { Autodev } from './Autodev'
 
 const statusText: Record<Phase, string> = {
   offline: 'DESCONECTADO',
@@ -307,6 +308,8 @@ export function Hud() {
       <Blades />
 
       {ui.chrome.suggestions && <Suggestions />}
+
+      <Autodev />
 
       {error && <div className="error">{error}</div>}
 

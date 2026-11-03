@@ -22,6 +22,12 @@ Fase: ver `05-roadmap.md`.
 | RF-12 | **Painel de status**: módulos carregados, provedor de IA em uso, consumo/limites, erros | S | 1 | proposto |
 | RF-13 | **Registro de auditoria** de toda ação com efeito (quem pediu, qual módulo, resultado) | M | 1 | proposto |
 | RF-14 | **Configuração** por arquivo + variáveis de ambiente, com segredos fora do Git | M | 1 | proposto |
+| RF-15 | **Autodesenvolvimento**: por voz ou chat, alterar o próprio código com o Claude Code, seguir o roadmap, reiniciar e fazer rollback automático se quebrar (ADR 0011) | S | 2 | em andamento |
+| RF-16 | **Limpar a tela por comando**: entender pedidos como "limpe a bagunça" como fechar os popups abertos | S | próxima versão | proposto |
+| RF-17 | **Sub-módulo git**: fazer commits e gerar pull requests para a própria `main`, passando pelo gate de permissões; o merge continua sendo revisado pelo Ricardo | S | próxima versão | proposto |
+| RF-18 | **Contexto compartilhado**: avaliar salvar informações importantes em uma branch local ou em um arquivo de contexto compartilhado, para uso futuro (relacionado a RF-06) | S | próxima versão | proposto |
+| RF-19 | **Controle do navegador**: detectar em qual navegador e sistema está rodando, abrir novas abas e transformar uma popup aberta em aba | S | próxima versão | proposto |
+| RF-20 | **Comandos por voz**: todo atalho de teclado da interface (`Espaço`, `Esc`, `G`, `D`, `[`, `]`, `E`, `X`) também acionável por voz, com ativação e desativação; entrar em espera ao fim de uma conversa sem se intrometer quando o Ricardo falar com outra pessoa; explicar e lembrar os comandos quando pedido. A câmera do modo mãos só liga por ordem explícita do Ricardo | S | próxima versão | proposto |
 
 ## Requisitos funcionais — módulos futuros (fora do escopo atual)
 

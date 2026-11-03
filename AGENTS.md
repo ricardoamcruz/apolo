@@ -25,6 +25,8 @@ detalhe está em `docs/`.
 
 - **Fase 0 — Fundação: concluída** (02/11/2026), exceto o Android, adiado.
   Próxima: **Fase 1 — Core**. Ver `docs/05-roadmap.md`.
+- **Próxima versão:** 6 pontos do backlog têm prioridade sobre a ordem das fases
+  (seção "Próxima versão" de `docs/05-roadmap.md`, RF-15 a RF-20).
 - O código ainda é o fork do JARVIS (`bridge/`, `src/`), já renomeado para
   A.P.O.L.O. e em pt-BR (persona, ativação "Apolo", voz masculina do sistema).
   O core (`core/`) ainda não existe. Variáveis de ambiente seguem `JARVIS_*`.
@@ -35,6 +37,11 @@ detalhe está em `docs/`.
   Intel + macOS 26 compila LLVM por horas — sempre responder `n`.
 - **Voz própria:** pendente; o usuário quer usar o "Voice Studio" (ferramenta a
   confirmar). ADR nova quando definida.
+- **Autodesenvolvimento (ADR 0011):** com `npm start -- --autodev`, o A.P.O.L.O.
+  altera o próprio código por voz ou chat, com confirmação, numa worktree em
+  `~/.apolo/autodev`, e reinicia com rollback automático. As branches ficam em
+  `autodev/<id>`; a cópia em execução pode estar numa delas. Arquivos sensíveis
+  (`bridge/autodev/politica.mjs`) nunca entram no ar sem revisão.
 - Escopo atual: **apenas o core e os pontos de extensão**. Módulos de domínio
   (e-mail, agenda, finanças, automação residencial) vêm depois.
 
@@ -86,6 +93,9 @@ npm run dev          # só a interface (Vite, http://localhost:5173)
 npm run lint         # oxlint
 npm run build        # checagem de tipos + build
 npm run setup        # confere Node, Claude Code e a chave da voz (Gemini ou OpenAI)
+npm start -- --autodev  # permite o autodesenvolvimento (ADR 0011)
+npm run rollback     # volta a última alteração do autodesenvolvimento (com tudo parado)
+npm run test:autodev # testes da política e do rollback
 ```
 
 ## Ambiente

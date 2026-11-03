@@ -25,6 +25,8 @@ detalhe está em `docs/`.
 
 - **Fase 0 — Fundação: concluída** (02/11/2026), exceto o Android, adiado.
   Próxima: **Fase 1 — Core**. Ver `docs/05-roadmap.md`.
+- **Próxima versão:** 5 pontos do backlog têm prioridade sobre a ordem das fases
+  (seção "Próxima versão" de `docs/05-roadmap.md`, RF-15 a RF-19).
 - O código ainda é o fork do JARVIS (`bridge/`, `src/`), já renomeado para
   A.P.O.L.O. e em pt-BR (persona, ativação "Apolo", voz masculina do sistema).
   O core (`core/`) ainda não existe. Variáveis de ambiente seguem `JARVIS_*`.

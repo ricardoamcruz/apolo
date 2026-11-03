@@ -23,6 +23,10 @@ Fase: ver `05-roadmap.md`.
 | RF-13 | **Registro de auditoria** de toda ação com efeito (quem pediu, qual módulo, resultado) | M | 1 | proposto |
 | RF-14 | **Configuração** por arquivo + variáveis de ambiente, com segredos fora do Git | M | 1 | proposto |
 | RF-15 | **Autodesenvolvimento**: por voz ou chat, alterar o próprio código com o Claude Code, seguir o roadmap, reiniciar e fazer rollback automático se quebrar (ADR 0011) | S | 2 | em andamento |
+| RF-16 | **Limpar a tela por comando**: entender pedidos como "limpe a bagunça" como fechar os popups abertos | S | próxima versão | proposto |
+| RF-17 | **Sub-módulo git**: fazer commits e gerar pull requests para a própria `main`, passando pelo gate de permissões; o merge continua sendo revisado pelo Ricardo | S | próxima versão | proposto |
+| RF-18 | **Contexto compartilhado**: avaliar salvar informações importantes em uma branch local ou em um arquivo de contexto compartilhado, para uso futuro (relacionado a RF-06) | S | próxima versão | proposto |
+| RF-19 | **Controle do navegador**: detectar em qual navegador e sistema está rodando, abrir novas abas e transformar uma popup aberta em aba | S | próxima versão | proposto |
 
 ## Requisitos funcionais — módulos futuros (fora do escopo atual)
 

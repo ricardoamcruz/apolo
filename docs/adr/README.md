@@ -16,4 +16,6 @@
 
 ## Em aberto
 
-Nenhuma no momento.
+- Contexto compartilhado (RF-18): branch local ou arquivo? Decidir em ADR nova.
+- Sub-módulo git (RF-17): como guardar a credencial do GitHub fora do repositório
+  e como isso convive com o item 7 da ADR 0011. Decidir em ADR nova.

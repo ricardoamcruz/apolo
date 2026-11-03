@@ -1,6 +1,11 @@
-import type { AskHandlers } from './anthropic'
 import type { Blade, Panel } from '../store'
 import { BRIDGE_WS_URL } from '../config'
+
+/** O que um pedido ao agente de tarefas recebe enquanto ele trabalha. */
+export type AskHandlers = {
+  onText: (delta: string) => void
+  onTool: (name: string) => void
+}
 
 /**
  * Client for the local bridge (see bridge/server.mjs).
@@ -189,7 +194,7 @@ function dispatch(ws: WebSocket) {
         }
       }
       if (!onCapture) {
-        reply({ error: 'The interface has no camera handler.' })
+        reply({ error: 'A interface não tem acesso à câmera.' })
       } else {
         // Always answers, even on failure: the bridge is holding a turn open
         // waiting for this, and a rejection that never arrives is a turn that
@@ -238,7 +243,7 @@ function connect(): Promise<WebSocket> {
 
     const timer = setTimeout(() => {
       ws.close()
-      settle(new Error('Bridge not responding — is `npm run bridge` running?'))
+      settle(new Error('A ponte não responde — ela está rodando? Use npm start.'))
     }, 6000)
 
     ws.onopen = () => {
@@ -265,17 +270,17 @@ function connect(): Promise<WebSocket> {
        */
       settle(
         new Error(
-          `Cannot reach the bridge at ${BRIDGE_WS_URL}. Either it is not ` +
-            'running (start it with `npm start`), or this page is on a port it ' +
-            `refuses — it accepts localhost:5173-5199 and 4173-4199, and this ` +
-            `page is on ${location.port || '80'}.`,
+          `Não consegui falar com a ponte em ${BRIDGE_WS_URL}. Ou ela não está ` +
+            'rodando (inicie com npm start), ou esta página está numa porta que ' +
+            'ela recusa — aceita localhost:5173-5199 e 4173-4199, e esta página ' +
+            `está na ${location.port || '80'}.`,
         ),
       )
     }
     ws.onclose = () => {
       // A close before open is just a failed dial; after open it's a lost
       // session, and the two want different handling.
-      settle(new Error('The bridge closed the connection.'))
+      settle(new Error('A ponte encerrou a conexão.'))
       if (socket === ws) {
         socket = null
         onConnection?.('lost')
@@ -398,7 +403,7 @@ export async function ask(
     const arm = () => {
       clearTimeout(timer)
       timer = window.setTimeout(() => {
-        fail(new Error('The bridge went quiet — that turn was lost, sir.'))
+        fail(new Error('A ponte parou de responder — a tarefa se perdeu.'))
       }, IDLE_TIMEOUT_MS)
     }
 
@@ -445,7 +450,7 @@ export async function ask(
             break
 
           case 'error':
-            fail(new Error(msg.message ?? 'The bridge reported an error.'))
+            fail(new Error(msg.message ?? 'A ponte informou um erro.'))
             break
         }
       } catch (err) {
@@ -454,10 +459,10 @@ export async function ask(
     }
 
     const onClose = () => {
-      fail(new Error('The bridge disconnected mid-answer — that session is gone.'))
+      fail(new Error('A ponte caiu no meio da tarefa.'))
     }
     const onError = () => {
-      fail(new Error('The connection to the bridge failed.'))
+      fail(new Error('A conexão com a ponte falhou.'))
     }
 
     pending = { finish }

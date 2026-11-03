@@ -21,12 +21,13 @@ Marque `[x]` ao concluir e atualize o status em `01-requisitos.md`.
 - [ ] Memória em SQLite
 - [ ] Agendador e barramento de eventos
 - [ ] Gateway com token de acesso (logo depois: chat por texto no app iPhone conectado a ele, antes da voz no celular)
-- [ ] Persona A.P.O.L.O em pt-BR; identidade visual básica — **em andamento**: nome, persona, ativação "Apolo", STT/TTS e textos da interface em pt-BR feitos (01/11/2026); faltam identidade visual, variáveis `JARVIS_*` e a voz própria
+- [ ] Persona A.P.O.L.O em pt-BR; identidade visual básica — **em andamento**: nome, persona e textos da interface em pt-BR feitos (01/11/2026); voz em tempo real speech-to-speech em pt-BR (ADR 0009/0010, 03/11/2026); faltam identidade visual e variáveis `JARVIS_*`
 - [ ] Painel de status (módulos, provedor, consumo)
 
 ## Fase 2 — Voz e celular
-- [ ] Voz pt-BR gratuita (Kokoro `pm_alex` ou alternativa) + STT pt-BR
-- [ ] Palavra de ativação "Apolo"
+- [x] Voz pt-BR gratuita em tempo real — speech-to-speech pelo Gemini Live, OpenAI como opção (ADR 0009 e 0010, 03/11/2026)
+- [ ] Palavra de ativação "Apolo" (hoje: Espaço ou palmas acordam)
+- [ ] Voz no app de celular usando o mesmo `POST /realtime/sessao` da ponte
 - [ ] Protocolo de canal versionado (RNF-11)
 - [ ] App nativo React Native + Expo (MVP: texto, voz, notificações, confirmações), iPhone primeiro — ADR 0006
 

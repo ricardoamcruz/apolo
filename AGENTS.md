@@ -51,8 +51,10 @@ detalhe está em `docs/`.
    (ignorado pelo Git) ou no cofre do sistema. Nunca logue segredos.
 5. **Multi-IA de verdade.** Nenhum código fora de `core/providers/` pode
    depender de um provedor específico (Claude, Gemini, Grok...).
-6. **Gratuito/local por padrão** para voz (STT/TTS). Serviços pagos só como
-   opção, nunca como requisito.
+6. **Gratuito por padrão** para voz. Hoje a voz é speech-to-speech pelo Gemini
+   Live, que tem plano gratuito (ADR 0010); a OpenAI Realtime, paga, é só
+   opção. Provedores de voz ficam isolados em `src/lib/voz/` e
+   `bridge/realtime.mjs`.
 7. **Rodar local hoje, servidor amanhã.** Nada pode assumir `localhost` fixo,
    um único usuário conectado ou o sistema de arquivos do Mac.
 8. **Mudanças pequenas e verificáveis.** Rode `npm run lint` e `npm run build`
@@ -83,10 +85,16 @@ npm run bridge       # só o cérebro, modo somente leitura
 npm run dev          # só a interface (Vite, http://localhost:5173)
 npm run lint         # oxlint
 npm run build        # checagem de tipos + build
+npm run setup        # confere Node, Claude Code e a chave da voz (Gemini ou OpenAI)
 ```
 
 ## Ambiente
 
 - Desenvolvimento: macOS (Intel x64), VS Code, Node.js ≥ 20, Chrome.
 - Linguagem: **TypeScript** em core, web e app (`apps/mobile`, React Native + Expo).
-- Modelos Whisper locais já existem em `~/.whisper-models/`.
+- Modelos Whisper locais já existem em `~/.whisper-models/` (sem uso desde a
+  voz speech-to-speech, ADR 0009).
+- Chaves no `.env.local`: `GEMINI_API_KEY` (voz, padrão) e, opcional,
+  `OPENAI_API_KEY`. A ponte lê esse arquivo; nada disso vai ao navegador.
+- Testar a voz exige rodar no próprio Mac (`npm start`): a rede dos ambientes
+  de agente não alcança o Google nem a OpenAI.

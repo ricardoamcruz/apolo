@@ -17,8 +17,8 @@ Fase: ver `05-roadmap.md`.
 | RF-07 | **Agendador e eventos** (base do "Preditivo"): tarefas recorrentes, gatilhos por horário/evento e briefings proativos | M | 1 | proposto |
 | RF-08 | **Canal PC**: interface web atual (HUD), adaptada ao A.P.O.L.O | M | 1 | proposto |
 | RF-09 | **Canal celular**: **app nativo** (voz, notificações, confirmação de ações) conectado ao core | M | 2 | aprovado |
-| RF-10 | **Voz gratuita/local**: STT e TTS sem custo, com voz em pt-BR | M | 2 | em andamento |
-| RF-11 | **Palavra de ativação** "Apolo" no PC e Android; no iPhone via Siri/Atalhos (limite do iOS) | S | 2 | proposto |
+| RF-10 | **Voz em tempo real gratuita**: conversa speech-to-speech em pt-BR, sem custo por padrão (Gemini Live — ADR 0009 e 0010) | M | 2 | feito (03/11/2026) |
+| RF-11 | **Palavra de ativação** "Apolo" no PC e Android; no iPhone via Siri/Atalhos (limite do iOS). Hoje: microfone aberto após INICIAR, espera após 90 s, Espaço ou palmas acordam (ADR 0009) | S | 2 | proposto |
 | RF-12 | **Painel de status**: módulos carregados, provedor de IA em uso, consumo/limites, erros | S | 1 | proposto |
 | RF-13 | **Registro de auditoria** de toda ação com efeito (quem pediu, qual módulo, resultado) | M | 1 | proposto |
 | RF-14 | **Configuração** por arquivo + variáveis de ambiente, com segredos fora do Git | M | 1 | proposto |
@@ -58,8 +58,11 @@ Fase: ver `05-roadmap.md`.
   uso e possível uso dos dados para melhorar produtos Google.
 - **Claude:** o código-base usa o Claude Agent SDK com o login do Claude Code
   (assinatura). Para rodar 24 h num servidor, avaliar chave de API.
-- **Kokoro (TTS local, já no projeto):** tem vozes pt-BR (`pf_dora`, `pm_alex`,
-  `pm_santa`). Precisa testar se o pacote `kokoro-js` as inclui.
+- **Voz (03/11/2026):** o pipeline STT → LLM → TTS ficou lento; trocado por
+  speech-to-speech. OpenAI Realtime exige créditos; Gemini Live tem plano
+  gratuito e é o padrão (ADR 0010). Kokoro, ElevenLabs e a voz do VoiceStudio
+  saíram do projeto. Modelos de voz locais (Moshi, Qwen-Omni) ficam para quando
+  houver servidor com GPU.
 
 ## Decisões do usuário (01/11/2026)
 

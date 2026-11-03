@@ -28,12 +28,12 @@ const T = { rings: 1400, suit: 2800, reactor: 3800 }
 export const BOOT_MS = 5000
 
 const LOG = [
-  'MOUNT F:/BACKUP/GHOST (HIDDEN)',
-  'EXTEND SYSTEM MEMORY .......... OK',
-  'TELEMETRY / COMP CLIMATION',
-  'REMOVE SYSTEM CONFIGURATION',
-  'CHECKSUM ...................... OK',
-  'RUN SYSTEM TOOL',
+  'MONTAR F:/BACKUP/FANTASMA (OCULTO)',
+  'EXPANDIR MEMÓRIA DO SISTEMA ... OK',
+  'TELEMETRIA / CLIMATIZAÇÃO',
+  'CANAL DE VOZ EM TEMPO REAL .... OK',
+  'VERIFICAÇÃO ................... OK',
+  'EXECUTAR FERRAMENTA DO SISTEMA',
 ]
 
 type Stage = 'bar' | 'rings' | 'suit' | 'reactor'
@@ -205,8 +205,8 @@ function Suit({ reduced }: { reduced: boolean }) {
           />
         </motion.g>
       ))}
-      <text x="-150" y="34" className="boot-tag">RT / PWR</text>
-      <text x="150" y="34" className="boot-tag">DEP / MK</text>
+      <text x="-150" y="34" className="boot-tag">TR / ENR</text>
+      <text x="150" y="34" className="boot-tag">IMP / MK</text>
     </svg>
   )
 }

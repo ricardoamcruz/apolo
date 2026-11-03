@@ -138,10 +138,10 @@ const toJpeg = (canvas: HTMLCanvasElement, q = 0.82) => {
 
 /** One frame, full size. */
 export function grabFrame(): { data: string; mimeType: string } {
-  if (!video?.videoWidth) throw new Error('the camera is not ready')
+  if (!video?.videoWidth) throw new Error('a câmera não está pronta')
   const canvas = document.createElement('canvas')
   if (!drawTo(canvas, video.videoWidth, video.videoHeight)) {
-    throw new Error('could not read the camera frame')
+    throw new Error('não foi possível ler o quadro da câmera')
   }
   return toJpeg(canvas)
 }
@@ -201,7 +201,7 @@ function contactSheet(
   canvas.width = cols * CELL_W
   canvas.height = rows * CELL_H
   const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('could not build the grid')
+  if (!ctx) throw new Error('não foi possível montar a grade de quadros')
 
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
@@ -249,7 +249,7 @@ export async function watchAhead(
   seconds: number,
   frames: number,
 ): Promise<{ data: string; mimeType: string }> {
-  if (!video?.videoWidth) throw new Error('the camera is not ready')
+  if (!video?.videoWidth) throw new Error('a câmera não está pronta')
   const shots: Shot[] = []
   const started = performance.now()
   const gap = (seconds * 1000) / Math.max(1, frames - 1)
@@ -261,7 +261,7 @@ export async function watchAhead(
     }
     if (i < frames - 1) await new Promise((r) => setTimeout(r, gap))
   }
-  if (!shots.length) throw new Error('no frames were captured')
+  if (!shots.length) throw new Error('nenhum quadro foi capturado')
   return contactSheet(shots, started)
 }
 

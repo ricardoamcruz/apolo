@@ -3,7 +3,7 @@
 Marque `[x]` ao concluir e atualize o status em `01-requisitos.md`.
 
 ## Próxima versão — backlog (registrado em 03/11/2026)
-Os 5 pontos que o Ricardo definiu para a próxima versão. Eles têm prioridade
+Os 6 pontos que o Ricardo definiu para a próxima versão. Eles têm prioridade
 sobre a ordem das fases abaixo.
 
 - [ ] **1. Limpar a tela (RF-16):** ao ouvir "limpe a bagunça", o A.P.O.L.O. deve entender que é para fechar os popups da tela
@@ -13,6 +13,12 @@ sobre a ordem das fases abaixo.
   - [ ] **4.a** Essa habilidade funciona em conjunto com a de se auto-reiniciar
   - [ ] **4.b** Se algo der errado, o rollback automático entra em ação
 - [ ] **5. Navegador (RF-19):** detectar em qual navegador e sistema está rodando, abrir novas abas e transformar uma popup aberta em aba
+- [ ] **6. Comandos por voz (RF-20):** tudo o que hoje tem atalho de teclado também pode ser acionado por voz
+  - [ ] **6.a** Em espera: "Apolo, em espera", ou entrar em espera sozinho ao fim de uma conversa, da forma mais natural possível e sem se intrometer quando o Ricardo falar com outra pessoa ao lado
+  - [ ] **6.b** Popups: alternar por voz (hoje `[` e `]`), além de tela cheia (`E`) e fechar (`X`)
+  - [ ] **6.c** Modo mãos: ativar e desativar por voz (hoje `G`)
+  - [ ] **6.d** Demais comandos, com ativação e desativação por voz: diagnóstico (`D`), interromper a fala e acordar (`Espaço`), cancelar tarefa (`Esc`)
+  - [ ] **6.e** Se o Ricardo esquecer um comando, o A.P.O.L.O. explica e lembra quais existem
 
 ## Fase 0 — Fundação
 - [x] Analisar o código-base do JARVIS (`04-base-jarvis.md`)

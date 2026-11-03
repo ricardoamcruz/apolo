@@ -859,6 +859,19 @@ const wss = new WebSocketServer({
     done(true)
   },
 })
+// O WebSocketServer repete os erros do servidor HTTP; quem trata é o de baixo.
+wss.on('error', () => {})
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(
+      `[apolo] a porta ${PORT} já está em uso — provavelmente um A.P.O.L.O. antigo ` +
+        'ainda aberto. Feche-o (Ctrl-C no terminal dele) ou rode:\n' +
+        `  lsof -ti tcp:${PORT} | xargs kill`,
+    )
+    process.exit(1)
+  }
+  throw err
+})
 server.listen(PORT)
 
 console.log(`[apolo] ponte ouvindo em ws://localhost:${PORT}`)

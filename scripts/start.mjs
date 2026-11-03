@@ -10,7 +10,7 @@
  * browser, send things): `npm start -- --writes`.
  */
 
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import process from 'node:process'
 import { cpSync, existsSync, mkdirSync } from 'node:fs'
 
@@ -111,6 +111,42 @@ if (port) {
   console.log(`  interface na porta ${port}; a ponte vai aceitá-la.\n`)
 }
 
+/**
+ * Encerra um A.P.O.L.O. antigo que tenha ficado rodando.
+ *
+ * Um `npm start` esquecido num terminal do VS Code segura a porta 8787, a ponte
+ * nova não consegue subir e a página continua falando com a versão velha — sem
+ * nenhum aviso óbvio. Só mata processos que são nossos: a ponte
+ * (bridge/server.mjs) ou o Vite deste projeto. Qualquer outro programa na porta
+ * é deixado em paz e o aviso de porta ocupada aparece normalmente.
+ */
+function stopStale() {
+  const ports = [Number(process.env.JARVIS_BRIDGE_PORT ?? 8787), Number(port) || 5173]
+  let killed = 0
+  for (const p of ports) {
+    const found = spawnSync('lsof', ['-ti', `tcp:${p}`, '-sTCP:LISTEN'], { encoding: 'utf8' })
+    for (const pid of (found.stdout ?? '').split(/\s+/).filter(Boolean)) {
+      if (Number(pid) === process.pid) continue
+      const cmd = spawnSync('ps', ['-o', 'command=', '-p', pid], { encoding: 'utf8' }).stdout ?? ''
+      const cwd = spawnSync('lsof', ['-a', '-p', pid, '-d', 'cwd', '-Fn'], { encoding: 'utf8' }).stdout ?? ''
+      const ours =
+        /bridge\/server\.mjs/.test(cmd) ||
+        (/vite/.test(cmd) && cwd.includes(process.cwd()))
+      if (!ours) continue
+      try {
+        process.kill(Number(pid), 'SIGTERM')
+        killed++
+        console.log(`  encerrei um A.P.O.L.O. antigo na porta ${p} (processo ${pid}).`)
+      } catch {
+        /* já tinha saído */
+      }
+    }
+  }
+  // Dá um instante para o sistema liberar as portas antes de subir as novas.
+  if (killed) spawnSync('sleep', ['1'])
+}
+
+stopStale()
 vendorWasm()
 
 console.log('\nA.P.O.L.O. iniciando — o cérebro e a interface.\n')

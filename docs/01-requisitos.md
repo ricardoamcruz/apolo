@@ -17,7 +17,7 @@ Fase: ver `05-roadmap.md`.
 | RF-07 | **Agendador e eventos** (base do "Preditivo"): tarefas recorrentes, gatilhos por horário/evento e briefings proativos | M | 1 | proposto |
 | RF-08 | **Canal PC**: interface web atual (HUD), adaptada ao A.P.O.L.O | M | 1 | proposto |
 | RF-09 | **Canal celular**: **app nativo** (voz, notificações, confirmação de ações) conectado ao core | M | 2 | aprovado |
-| RF-10 | **Voz gratuita/local**: STT e TTS sem custo, com voz em pt-BR | M | 2 | em andamento |
+| RF-10 | **Voz gratuita/local**: STT e TTS sem custo, com voz em pt-BR (voz própria nas frases fixas — ADR 0008) | M | 2 | em andamento |
 | RF-11 | **Palavra de ativação** "Apolo" no PC e Android; no iPhone via Siri/Atalhos (limite do iOS) | S | 2 | proposto |
 | RF-12 | **Painel de status**: módulos carregados, provedor de IA em uso, consumo/limites, erros | S | 1 | proposto |
 | RF-13 | **Registro de auditoria** de toda ação com efeito (quem pediu, qual módulo, resultado) | M | 1 | proposto |

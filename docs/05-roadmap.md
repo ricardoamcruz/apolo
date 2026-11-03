@@ -21,11 +21,11 @@ Marque `[x]` ao concluir e atualize o status em `01-requisitos.md`.
 - [ ] Memória em SQLite
 - [ ] Agendador e barramento de eventos
 - [ ] Gateway com token de acesso (logo depois: chat por texto no app iPhone conectado a ele, antes da voz no celular)
-- [ ] Persona A.P.O.L.O em pt-BR; identidade visual básica — **em andamento**: nome, persona, ativação "Apolo", STT/TTS e textos da interface em pt-BR feitos (01/11/2026); faltam identidade visual, variáveis `JARVIS_*` e a voz própria
+- [ ] Persona A.P.O.L.O em pt-BR; identidade visual básica — **em andamento**: nome, persona, ativação "Apolo", STT/TTS e textos da interface em pt-BR feitos (01/11/2026); voz própria Apolo_v01 nas frases fixas (ADR 0008, 03/11/2026); faltam identidade visual e variáveis `JARVIS_*`
 - [ ] Painel de status (módulos, provedor, consumo)
 
 ## Fase 2 — Voz e celular
-- [ ] Voz pt-BR gratuita (Kokoro `pm_alex` ou alternativa) + STT pt-BR
+- [ ] Voz pt-BR gratuita + STT pt-BR — frases fixas na voz própria (ADR 0008); falta a voz própria nas respostas livres (precisa de GPU)
 - [ ] Palavra de ativação "Apolo"
 - [ ] Protocolo de canal versionado (RNF-11)
 - [ ] App nativo React Native + Expo (MVP: texto, voz, notificações, confirmações), iPhone primeiro — ADR 0006

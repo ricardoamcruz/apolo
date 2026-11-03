@@ -14,7 +14,7 @@ import { listenForClap } from './lib/clap'
 import * as camera from './lib/camera'
 import * as kokoro from './lib/kokoro'
 import { TTS_ENGINE } from './config'
-import { forTool, attention } from './lib/fillers'
+import { forTool, attention, INTRO } from './lib/fillers'
 import {
   ask,
   warm,
@@ -69,9 +69,6 @@ const PREFIX = '(?:(?:ei|oi|olá|ola|ok|okay|ô|e aí)[\\s,]+)?'
 const BARE_NAME = new RegExp(`^${PREFIX}${NAME}[\\s,.!?]*$`, 'iu')
 /** Vocativo no início de um pedido de verdade: "Apolo, como está o tempo". */
 const LEADING_NAME = new RegExp(`^${PREFIX}${NAME}(?![\\p{L}])[\\s,.:!?-]*`, 'iu')
-
-/** Dita uma vez ao ligar, pela voz do sistema. */
-const INTRO = 'Apolo online. Todos os sistemas operacionais.'
 
 export default function App() {
   const store = useStore

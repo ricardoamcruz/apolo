@@ -72,6 +72,7 @@ npm run bridge       # só o cérebro, modo somente leitura
 npm run dev          # só a interface (Vite, http://localhost:5173)
 npm run lint         # oxlint
 npm run build        # checagem de tipos + build
+npm run voz:gerar    # grava as frases fixas com a voz própria (VoiceStudio, ADR 0008)
 ```
 
 ## Ambiente

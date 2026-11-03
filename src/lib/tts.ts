@@ -8,6 +8,9 @@ import {
 } from '../config'
 import * as kokoro from './kokoro'
 import { caps } from './capabilities'
+import { clipFor, clipVoice, loadClips } from './clips'
+
+if (typeof window !== 'undefined') void loadClips(import.meta.env.BASE_URL)
 
 /**
  * Speech output.
@@ -62,7 +65,7 @@ const ECHO_TAIL_MS = 1800
  * indistinguishable. This tells them apart at a glance.
  */
 export const diag = {
-  engine: 'system' as 'system' | 'kokoro' | 'elevenlabs',
+  engine: 'system' as 'system' | 'kokoro' | 'elevenlabs' | 'clip',
   /** Utterances handed to an engine — the OS voice or an audio element. */
   spoken: 0,
   /**
@@ -370,6 +373,12 @@ export function createSpeaker(): Speaker {
 
   /** null means "no audio pipeline, use the system voice directly". */
   function synthesise(text: string): Promise<string | null> | null {
+    // Frase fixa pré-gravada com a voz própria: toca na hora, sem gerar nada.
+    const clip = clipFor(text)
+    if (clip) {
+      diag.engine = 'clip'
+      return Promise.resolve(clip)
+    }
     // Prefer the ElevenLabs voice whenever the bridge reports it is available —
     // for a demo the timbre is worth the round trip, and this is what makes the
     // premium path automatic with no flag to set. It falls back to the browser
@@ -588,7 +597,8 @@ export function createSpeaker(): Speaker {
       // see the onplaying handler below.
       diag.spoken++
       diag.lastText = text.slice(0, 60)
-      diag.voice = diag.engine === 'kokoro' ? KOKORO_VOICE : 'ElevenLabs'
+      diag.voice =
+        diag.engine === 'clip' ? clipVoice() : diag.engine === 'kokoro' ? KOKORO_VOICE : 'ElevenLabs'
 
       let read: (() => number) | null = null
       const ctx = outputContext()

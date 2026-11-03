@@ -14,6 +14,9 @@
  *   - Sem pronome de tratamento ("senhor"); a cortesia está na precisão.
  */
 
+/** Dita uma vez ao ligar. Sem palavras em inglês: a voz própria tropeça nelas. */
+export const INTRO = 'Apolo ativo. Todos os sistemas operacionais.'
+
 /** Dita assim que a primeira ferramenta dispara, antes de haver resposta. */
 const WORKING = [
   'Trabalhando nisso.',
@@ -160,6 +163,15 @@ const BY_TOOL: Rule[] = [
 ]
 
 const pickers = BY_TOOL.map((r) => ({ ...r, pick: makePicker(r.lines) }))
+
+/**
+ * Todas as frases fixas, sem repetição. É a lista que `npm run voz:gerar`
+ * pré-grava com a voz própria (ver tts.ts); uma frase nova aqui só ganha a voz
+ * própria depois de rodar o script de novo — até lá sai na voz do sistema.
+ */
+export const FIXED_PHRASES: readonly string[] = [
+  ...new Set([INTRO, ...WORKING, ...ACKNOWLEDGE, ...ATTENTION, ...BY_TOOL.flatMap((r) => r.lines)]),
+]
 
 /**
  * `mcp__<server>__<tool>`, split on the first separator so tool names keep

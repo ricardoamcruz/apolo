@@ -6,8 +6,9 @@ Fork em `github.com/ricardoamcruz/apolo`. Analisado em 01/11/2026.
 ## Como funciona hoje
 
 Dois processos:
-- **Rosto** (`src/`, React + Vite + Three.js): HUD holográfico, palavra de
-  ativação, detecção de voz (VAD), STT/TTS, câmera e gestos.
+- **Rosto** (`src/`, React + Vite + Three.js): HUD holográfico, câmera e
+  gestos. No JARVIS original também fazia ativação, VAD, STT e TTS; no
+  A.P.O.L.O isso foi substituído pela voz speech-to-speech (ADR 0009 e 0010).
 - **Cérebro** (`bridge/server.mjs`, Node): roda o **Claude Agent SDK** (Claude
   Code sem interface), autenticado pelo login do Claude Code. Conversa com o
   rosto por WebSocket em `ws://localhost:8787`.
@@ -21,9 +22,9 @@ Dois processos:
 | `bridge/ui.mjs` | ferramentas `ui_*` (tema, reator, efeitos) | manter |
 | `bridge/chrome.mjs`, `page.mjs`, `net.mjs` | controla o Chrome e busca páginas com proteção SSRF | virar **módulo** `navegador` |
 | `bridge/vision.mjs` | câmera | virar **módulo** `visao` |
-| `src/lib/bridge.ts`, `brain.ts` | cliente do cérebro no navegador | manter, apontando para o gateway novo |
-| `src/lib/voice.ts`, `vad.ts`, `tts.ts`, `kokoro.ts` | voz | manter; trocar idioma e voz para pt-BR |
-| `src/lib/anthropic.ts` | modo "direto" (navegador chama a API) | **remover**: expõe chave no navegador |
+| `src/lib/bridge.ts` | cliente do agente de tarefas no navegador | manter, apontando para o gateway novo (`brain.ts` removido em 03/11/2026) |
+| `src/lib/voice.ts`, `vad.ts`, `tts.ts`, `kokoro.ts` | voz | **removidos** (03/11/2026): substituídos por `src/lib/realtime.ts` e `src/lib/voz/` |
+| `src/lib/anthropic.ts` | modo "direto" (navegador chama a API) | **removido** (03/11/2026): expunha chave no navegador |
 | `src/lib/hands.ts`, `camera.ts`, `clap.ts` | gestos, câmera, palmas | manter como recursos opcionais do rosto |
 | `src/ui/*`, `src/scene/*` | HUD, boot, reator | manter; trocar identidade visual e textos para A.P.O.L.O |
 | `public/audio/*` | trilhas e apresentação falada | **atenção a direitos autorais**: a fala do filme em `boot-music.mp3` foi removida (02/11/2026); a origem de `ambient.mp3` não está confirmada — ver `CREDITS.md` |
@@ -33,9 +34,10 @@ Dois processos:
 - Nome A.P.O.L.O. na interface, no título e nas mensagens; servidores internos
   renomeados para `apolo`, `apolo_ui`, `apolo_navegador` e `apolo_visao`.
 - Persona reescrita em pt-BR (`SYSTEM_PROMPT`), sem "sir"/"senhor".
-- Ativação por "Apolo" (reconhecimento do navegador em `pt-BR`).
-- Voz provisória: a melhor voz masculina pt-BR do sistema (Reed, Eddy, Rocko).
-  O `kokoro-js` instalado só tem vozes em inglês.
+- Voz (03/11/2026): speech-to-speech pelo Gemini Live (padrão) ou OpenAI
+  Realtime; o Claude virou o agente de tarefas chamado pela voz. Sem palavra de
+  ativação por enquanto. Interface, diagnóstico e mensagens 100% em pt-BR.
+- `npm start` encerra sozinho um A.P.O.L.O. antigo que esteja segurando as portas.
 - Pendente: variáveis de ambiente ainda se chamam `JARVIS_*`.
 
 ## Pontos de atenção
@@ -50,4 +52,4 @@ Dois processos:
   módulos dele.
 - **`settingSources: []`** (bom): impede que configurações globais do Claude
   Code afrouxem o gate. Manter.
-- Palavra de ativação usa Porcupine (Picovoice), que pede chave de acesso.
+- A ativação por Porcupine (Picovoice) foi removida junto com o pipeline antigo.

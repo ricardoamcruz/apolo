@@ -87,17 +87,25 @@ Política inicial do roteador: **Claude** para conversa e ações; **Gemini**
 (gratuito) como fallback e para tarefas baratas/volumosas (resumos, triagem);
 **Grok** opcional (exige créditos pagos).
 
-## Voz (ADR 0009)
+## Voz (ADR 0009 e 0010)
 
-Speech-to-speech com a OpenAI Realtime (`gpt-realtime-2.1`): um modelo só ouve,
-raciocina e responde em áudio, por WebRTC aberto pelo navegador. A ponte emite a
-chave temporária (`POST /realtime/sessao`) e define personalidade, voz e
-ferramentas (`bridge/realtime.mjs`). O que exige agir no mundo vai ao Claude
-pela ferramenta `executar_tarefa`.
+Speech-to-speech: um modelo só ouve, raciocina e responde em áudio, numa conexão
+aberta pelo navegador direto com o provedor. A ponte guarda a chave, emite uma
+credencial temporária (`POST /realtime/sessao`) e define personalidade, voz,
+detecção de turno e ferramentas (`bridge/realtime.mjs`). O que exige agir no
+mundo vai ao Claude pela ferramenta `executar_tarefa`.
+
+| Provedor | Como | Custo |
+|---|---|---|
+| **Gemini Live** (padrão) — `gemini-3.8-live`, voz Charon | WebSocket, PCM 16/24 kHz, portão anti-eco e retomada de sessão (`src/lib/voz/gemini.ts`) | plano gratuito |
+| OpenAI Realtime — `gpt-realtime-2.1` | WebRTC (`src/lib/voz/openai.ts`) | pago por uso |
+
+Escolha com `APOLO_VOZ_PROVEDOR`. Ferramentas da voz: `executar_tarefa`,
+`olhar_camera`, `ajustar_interface`, `dormir`.
 
 | Função | Como |
 |---|---|
-| Ouvir + entender + falar | sessão Realtime (`src/lib/realtime.ts`) |
+| Ouvir + entender + falar | sessão de voz em tempo real (`src/lib/realtime.ts`) |
 | Agir (web, e-mail, navegador, painéis) | agente de tarefas Claude, na ponte |
 | Ativação | ligado após INICIAR; espera após 90 s; Espaço ou palmas acordam |
 

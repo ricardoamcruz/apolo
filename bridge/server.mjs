@@ -29,7 +29,7 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { openRemote, proxyError, vetTarget, PROXY_UA } from './net.mjs'
 import { probeUrl, renderPage } from './page.mjs'
-import { createRealtimeSession, realtimeKey, REALTIME_MODEL } from './realtime.mjs'
+import { createRealtimeSession, realtimeKey, realtimeModel, voiceProvider } from './realtime.mjs'
 import { fileURLToPath } from 'node:url'
 
 // O .env.local também vale para a ponte, para a chave da OpenAI ficar só aqui
@@ -680,7 +680,12 @@ const handleRequest = async (req, res) => {
   if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200, { ...cors, 'content-type': 'application/json' })
     return res.end(
-      JSON.stringify({ ok: true, realtime: Boolean(realtimeKey()), modelo: REALTIME_MODEL }),
+      JSON.stringify({
+        ok: true,
+        realtime: Boolean(realtimeKey()),
+        provedor: voiceProvider(),
+        modelo: realtimeModel(),
+      }),
     )
   }
 
@@ -859,8 +864,8 @@ server.listen(PORT)
 console.log(`[apolo] ponte ouvindo em ws://localhost:${PORT}`)
 console.log(
   realtimeKey()
-    ? `[apolo] voz em tempo real: ${REALTIME_MODEL}`
-    : '[apolo] voz em tempo real DESLIGADA — falta OPENAI_API_KEY no .env.local',
+    ? `[apolo] voz em tempo real: ${voiceProvider()} · ${realtimeModel()}`
+    : `[apolo] voz em tempo real DESLIGADA — falta a chave ${voiceProvider() === 'gemini' ? 'GEMINI_API_KEY' : 'OPENAI_API_KEY'} no .env.local`,
 )
 console.log(`[apolo] agente de tarefas: ${MODEL} · esforço ${EFFORT}`)
 console.log(

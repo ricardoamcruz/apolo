@@ -67,6 +67,7 @@ export function Diagnostics() {
 
       <div className="diag-sec">SESSÃO DE VOZ</div>
       <Row k="estado" v={rt.state} bad={!linked} />
+      <Row k="provedor" v={rt.provider || '—'} />
       <Row k="modelo" v={rt.model || '—'} />
       <Row k="conectada" v={ago(rt.connectedAt)} />
       <Row k="fase" v={phase} />

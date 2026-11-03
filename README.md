@@ -6,8 +6,8 @@ do Ricardo, com interface holográfica e conversa por voz em tempo real.
 ## Como funciona
 
 ```
- você fala ──► modelo de voz em tempo real (OpenAI Realtime, speech-to-speech)
-                 │  ouve, pensa e responde em áudio, numa conexão WebRTC
+ você fala ──► modelo de voz em tempo real (Gemini Live ou OpenAI Realtime)
+                 │  ouve, pensa e responde em áudio, direto do navegador
                  │
                  └─ executar_tarefa ──► agente de tarefas (Claude, na ponte local)
                                          internet, e-mail, agenda, navegador,
@@ -16,7 +16,9 @@ do Ricardo, com interface holográfica e conversa por voz em tempo real.
 
 - **A voz** é um modelo só, que ouve e fala direto (sem a fila
   reconhecimento → texto → síntese). Responde em fração de segundo e pode ser
-  interrompido falando por cima. Ver [ADR 0009](docs/adr/0009-voz-speech-to-speech.md).
+  interrompido falando por cima. O padrão é o Gemini Live, que tem plano
+  gratuito; a OpenAI Realtime é opcional. Ver [ADR 0009](docs/adr/0009-voz-speech-to-speech.md)
+  e [ADR 0010](docs/adr/0010-voz-gemini-live.md).
 - **O agente de tarefas** é o Claude Code rodando como biblioteca na ponte local.
   A voz repassa a ele tudo o que exige agir ou buscar informação.
 - **A interface** é uma página React + Three.js.
@@ -26,7 +28,8 @@ do Ricardo, com interface holográfica e conversa por voz em tempo real.
 - Node.js 22 ou mais novo.
 - Google Chrome (janela de verdade, não painel de prévia — o microfone não
   funciona nesses).
-- **Chave da OpenAI** para a voz (paga por uso).
+- **Chave do Gemini** para a voz, gratuita em https://aistudio.google.com/apikey
+  (ou uma chave da OpenAI, paga por uso).
 - **Claude Code** instalado e logado (`npm install -g @anthropic-ai/claude-code`,
   depois `claude` uma vez) para o agente de tarefas.
 
@@ -34,7 +37,7 @@ do Ricardo, com interface holográfica e conversa por voz em tempo real.
 
 ```bash
 npm install
-cp .env.example .env.local     # e preencha OPENAI_API_KEY
+cp .env.example .env.local     # e preencha GEMINI_API_KEY
 npm run setup                  # confere se está tudo pronto
 npm start                      # ponte + interface
 ```

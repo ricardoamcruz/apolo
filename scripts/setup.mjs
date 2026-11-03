@@ -42,21 +42,21 @@ try {
   line(info, '~/.claude.json ainda não existe — aparece depois do primeiro login no Claude Code.');
 }
 
-// --- Chave da OpenAI (voz em tempo real) -------------------------------------
-let key = process.env.OPENAI_API_KEY?.trim();
-if (!key) {
-  try {
-    const env = readFileSync('.env.local', 'utf8');
-    key = env.match(/^\s*OPENAI_API_KEY\s*=\s*(\S+)/m)?.[1];
-  } catch {
-    /* sem .env.local */
-  }
+// --- Chave da voz em tempo real -------------------------------------------
+let envFile = '';
+try {
+  envFile = readFileSync('.env.local', 'utf8');
+} catch {
+  /* sem .env.local */
 }
-if (key) line(ok, 'Chave da OpenAI encontrada — a voz em tempo real vai funcionar.');
+const has = (name) =>
+  Boolean(process.env[name]?.trim()) || new RegExp(`^\\s*${name}\\s*=\\s*\\S+`, 'm').test(envFile);
+if (has('GEMINI_API_KEY')) line(ok, 'Chave do Gemini encontrada — a voz em tempo real vai usar o Gemini Live.');
+else if (has('OPENAI_API_KEY')) line(ok, 'Chave da OpenAI encontrada — a voz vai usar a OpenAI Realtime (paga).');
 else {
-  line(warn, 'Falta a chave da OpenAI. Sem ela não há voz.');
-  line(info, 'Crie em https://platform.openai.com/api-keys e coloque no .env.local:');
-  line(info, '  OPENAI_API_KEY=sk-...');
+  line(warn, 'Falta a chave da voz. Sem ela, ele não fala.');
+  line(info, 'Crie uma gratuita em https://aistudio.google.com/apikey e coloque no .env.local:');
+  line(info, '  GEMINI_API_KEY=...');
 }
 
 console.log('');

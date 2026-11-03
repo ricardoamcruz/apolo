@@ -1,10 +1,14 @@
 /**
- * Sessão de voz em tempo real (speech-to-speech) — ver docs/adr/0009.
+ * Sessão de voz em tempo real (speech-to-speech) — ver docs/adr/0009 e 0010.
  *
  * A conversa não passa mais por três modelos em fila (reconhecimento de fala →
- * LLM → síntese de voz). Um único modelo da OpenAI, da linha Realtime, ouve o
- * áudio, pensa e responde em áudio, tudo na mesma conexão WebRTC que o
- * navegador abre direto com a OpenAI. Isso é o que derruba a latência.
+ * LLM → síntese de voz). Um único modelo ouve o áudio, pensa e responde em
+ * áudio, numa conexão que o navegador abre direto com o provedor. Isso é o que
+ * derruba a latência.
+ *
+ * Dois provedores, escolhidos por APOLO_VOZ_PROVEDOR:
+ *   gemini — Gemini Live, do Google (padrão; tem plano gratuito). WebSocket.
+ *   openai — OpenAI Realtime (pago por uso). WebRTC.
  *
  * O papel desta ponte é só um: emitir uma chave temporária (client secret). A
  * chave de verdade (OPENAI_API_KEY) fica nesta máquina e nunca vai para o
@@ -18,13 +22,35 @@
  */
 
 const OPENAI_URL = 'https://api.openai.com/v1/realtime/client_secrets'
+const GEMINI_TOKEN_URL = 'https://generativelanguage.googleapis.com/v1beta/auth_tokens'
 
 const env = (name, fallback) => {
   const v = process.env[name]?.trim()
   return v ? v : fallback
 }
 
-export const realtimeKey = () => env('OPENAI_API_KEY', null)
+const openaiKey = () => env('OPENAI_API_KEY', null)
+const geminiKey = () => env('GEMINI_API_KEY', env('GOOGLE_API_KEY', null))
+
+/** Qual provedor de voz usar. Sem escolha explícita: o Gemini se houver chave
+ *  dele (é gratuito), senão a OpenAI. */
+export function voiceProvider() {
+  const chosen = env('APOLO_VOZ_PROVEDOR', '').toLowerCase()
+  if (chosen === 'gemini' || chosen === 'openai') return chosen
+  if (geminiKey()) return 'gemini'
+  if (openaiKey()) return 'openai'
+  return 'gemini'
+}
+
+export const realtimeKey = () => (voiceProvider() === 'gemini' ? geminiKey() : openaiKey())
+
+/** `gemini-3.8-live` é o recomendado pelo Google para voz com baixa latência. */
+const GEMINI_MODEL = env('APOLO_GEMINI_MODELO', 'gemini-3.8-live')
+
+/** Vozes do Gemini: Charon, Orus e Fenrir são graves; Kore, Aoede e Leda, agudas. */
+const GEMINI_VOICE = env('APOLO_GEMINI_VOZ', 'Charon')
+
+export const realtimeModel = () => (voiceProvider() === 'gemini' ? GEMINI_MODEL : REALTIME_MODEL)
 
 /** `gpt-realtime-2.1` é o mais capaz; `gpt-realtime-2.1-mini` custa cerca de
  *  um terço e costuma bastar para conversa. */
@@ -204,8 +230,8 @@ export function sessionConfig() {
  * serve para iniciar a conexão e expira em dez minutos; a sessão em si dura
  * até a OpenAI encerrá-la (cerca de uma hora).
  */
-export async function createRealtimeSession() {
-  const key = realtimeKey()
+async function createOpenAiSession() {
+  const key = openaiKey()
   if (!key) {
     const err = new Error(
       'Falta a chave da OpenAI. Coloque OPENAI_API_KEY=... no arquivo .env.local ' +
@@ -235,5 +261,110 @@ export async function createRealtimeSession() {
     throw err
   }
   const data = JSON.parse(text)
-  return { value: data.value, expires_at: data.expires_at, model: REALTIME_MODEL }
+  return { provider: 'openai', value: data.value, expires_at: data.expires_at, model: REALTIME_MODEL }
+}
+
+// ---------------------------------------------------------------------------
+// Gemini Live
+// ---------------------------------------------------------------------------
+
+/** O esquema do Gemini é um subconjunto do OpenAPI, com tipos em maiúsculas. */
+function toGeminiSchema(schema) {
+  if (!schema || typeof schema !== 'object') return schema
+  const out = {}
+  for (const [k, v] of Object.entries(schema)) {
+    if (k === 'type') out.type = String(v).toUpperCase()
+    else if (k === 'properties') {
+      out.properties = Object.fromEntries(
+        Object.entries(v).map(([name, sub]) => [name, toGeminiSchema(sub)]),
+      )
+    } else if (k === 'items') out.items = toGeminiSchema(v)
+    else out[k] = v
+  }
+  return out
+}
+
+function geminiTools() {
+  return [
+    {
+      functionDeclarations: tools.map((t) => {
+        const decl = { name: t.name, description: t.description }
+        // Uma função sem parâmetros vai sem o campo: um objeto vazio é recusado.
+        if (Object.keys(t.parameters?.properties ?? {}).length) {
+          decl.parameters = toGeminiSchema(t.parameters)
+        }
+        return decl
+      }),
+    },
+  ]
+}
+
+/** A mensagem de configuração que o navegador manda ao abrir o WebSocket. */
+function geminiSetup() {
+  return {
+    model: `models/${GEMINI_MODEL}`,
+    generationConfig: {
+      responseModalities: ['AUDIO'],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_VOICE } } },
+    },
+    systemInstruction: { parts: [{ text: instructions() }] },
+    tools: geminiTools(),
+    inputAudioTranscription: {},
+    outputAudioTranscription: {},
+    realtimeInputConfig: {
+      automaticActivityDetection: {
+        disabled: false,
+        endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH',
+        prefixPaddingMs: 200,
+        silenceDurationMs: SILENCE_MS,
+      },
+    },
+    // Sem compressão, uma sessão só de áudio acaba em cerca de quinze minutos.
+    contextWindowCompression: { slidingWindow: {} },
+    // A conexão cai a cada poucos minutos por desenho; o identificador de
+    // retomada deixa o navegador reconectar sem perder a conversa.
+    sessionResumption: {},
+  }
+}
+
+async function createGeminiSession() {
+  const key = geminiKey()
+  if (!key) {
+    const err = new Error(
+      'Falta a chave do Gemini. Crie em aistudio.google.com/apikey, coloque ' +
+        'GEMINI_API_KEY=... no arquivo .env.local e reinicie com npm start.',
+    )
+    err.status = 503
+    throw err
+  }
+  const now = Date.now()
+  const upstream = await fetch(GEMINI_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'x-goog-api-key': key, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      uses: 1,
+      expireTime: new Date(now + 30 * 60_000).toISOString(),
+      newSessionExpireTime: new Date(now + 2 * 60_000).toISOString(),
+      liveConnectConstraints: { model: `models/${GEMINI_MODEL}` },
+    }),
+  })
+  const text = await upstream.text()
+  if (!upstream.ok) {
+    let detail = text
+    try {
+      detail = JSON.parse(text)?.error?.message ?? text
+    } catch {
+      /* resposta não era JSON */
+    }
+    const err = new Error(`O Google recusou a sessão de voz (${upstream.status}): ${detail}`)
+    err.status = upstream.status === 401 || upstream.status === 403 ? 401 : 502
+    throw err
+  }
+  const data = JSON.parse(text)
+  return { provider: 'gemini', token: data.name, model: GEMINI_MODEL, setup: geminiSetup() }
+}
+
+/** Emite a credencial temporária do provedor escolhido. */
+export function createRealtimeSession() {
+  return voiceProvider() === 'gemini' ? createGeminiSession() : createOpenAiSession()
 }

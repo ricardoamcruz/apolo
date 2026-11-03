@@ -345,7 +345,8 @@ async function createGeminiSession() {
       uses: 1,
       expireTime: new Date(now + 30 * 60_000).toISOString(),
       newSessionExpireTime: new Date(now + 2 * 60_000).toISOString(),
-      liveConnectConstraints: { model: `models/${GEMINI_MODEL}` },
+      // Sem travar modelo e configuração no token: o navegador manda a
+      // configuração completa ao abrir a conexão (ela vem desta ponte).
     }),
   })
   const text = await upstream.text()

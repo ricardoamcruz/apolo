@@ -18,6 +18,7 @@ import {
   watchPanels,
   watchBlades,
   watchCapture,
+  watchBrowser,
   watchUi,
   watchConnection,
   watchAutodev,
@@ -27,6 +28,7 @@ import {
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
 import { startAnalyser, micLevel } from './lib/audio'
 import { ouviuConfirmacao, registrarFala } from './lib/autodev'
+import { handleBrowser } from './lib/navegador'
 
 /**
  * A conversa, agora em speech-to-speech (docs/adr/0009).
@@ -388,6 +390,11 @@ export default function App() {
         store.getState().setLooking(null)
       }
     })
+
+    // O agente de tarefas querendo saber em que navegador está, ou abrir uma
+    // aba nele (ferramentas browser_*). Quem responde é a página: ninguém no
+    // servidor sabe o que tem do outro lado da tela.
+    watchBrowser(handleBrowser)
 
     // A interface é dele para mexer (ferramentas ui_* do agente de tarefas).
     watchUi((op, args) => {

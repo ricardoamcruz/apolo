@@ -45,6 +45,12 @@ npm start                      # ponte + interface
 Abra no Chrome o endereço que aparecer (http://localhost:5173), clique em
 **INICIAR** (ou bata palmas) e fale normalmente.
 
+Para ele poder abrir abas quando você pedir, libere pop-ups para esse endereço
+uma vez: nas configurações do site, **Permitir pop-ups e redirecionamentos**. O
+navegador só abre janelas que um clique pediu, e um pedido por voz não é clique
+— sem isso, ele avisa que a janela foi bloqueada. Ver
+[ADR 0012](docs/adr/0012-controle-navegador.md).
+
 ## Teclas
 
 | Tecla | Ação |

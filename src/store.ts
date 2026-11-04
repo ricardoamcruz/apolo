@@ -406,19 +406,20 @@ export const useStore = create<State>((set) => ({
   // meant "survive the next turn boundary"; when someone says "clear the
   // screen", a card staying up because an earlier turn asked nicely reads as
   // the interface ignoring the instruction.
-  clearScreen: (what) =>
-    set((s) => {
-      const panels = what === 'transcript' ? s.panels : []
-      const turns = what === 'panels' ? s.turns : []
-      // Blades clear with the panels. "Clear the screen" said out loud means the
-      // screen, and leaving a full-height article standing while the cards
-      // around it vanish is the interface arguing with the instruction.
-      const blades = what === 'transcript' ? s.blades : []
-      const cleared = { panels, turns, blades, focusedBlade: null, expandedBlade: null }
-      return what === 'all'
-        ? { ...cleared, caption: '', activeTool: null }
-        : cleared
-    }),
+  clearScreen: (what) => {
+    // Wiping the log leaves the popups exactly as they are — including which
+    // one is in front and which one is full screen. Resetting the focus here
+    // closed the article the user was reading because they asked for the
+    // *conversation* to go.
+    if (what === 'transcript') return set({ turns: [] })
+    // Blades clear with the panels. "Clear the screen" said out loud means the
+    // screen, and leaving a full-height article standing while the cards
+    // around it vanish is the interface arguing with the instruction.
+    const cleared = { panels: [], blades: [], focusedBlade: null, expandedBlade: null }
+    return set(
+      what === 'all' ? { ...cleared, turns: [], caption: '', activeTool: null } : cleared,
+    )
+  },
 }))
 
 /** Colour identity per phase — shared by the 3D scene and the 2D HUD. */

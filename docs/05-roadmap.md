@@ -6,7 +6,7 @@ Marque `[x]` ao concluir e atualize o status em `01-requisitos.md`.
 Os 6 pontos que o Ricardo definiu para a próxima versão. Eles têm prioridade
 sobre a ordem das fases abaixo.
 
-- [ ] **1. Limpar a tela (RF-16):** ao ouvir "limpe a bagunça", o A.P.O.L.O. deve entender que é para fechar os popups da tela
+- [x] **1. Limpar a tela (RF-16):** "limpe a bagunça", "tira isso da tela" e "fecha esses popups" fecham os painéis e os artigos abertos sem apagar a conversa; "apague o histórico" e "limpe tudo" são os outros escopos, e ele informa o que saiu ou que a tela já estava limpa (03/11/2026). Falta validar por voz no navegador
 - [ ] **2. Sub-módulo git (RF-17):** o A.P.O.L.O. faz commits e gera pull requests para a própria `main`
 - [ ] **3. Contexto compartilhado (RF-18):** avaliar salvar informações importantes em uma branch local ou em um arquivo de contexto compartilhado, para uso futuro
 - [ ] **4. Gerar código para si próprio (RF-15):** integrar-se ao VS Code e ao Claude para isso — a base está nesta versão; falta validar o fluxo completo com o agente real

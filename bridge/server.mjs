@@ -17,6 +17,9 @@
  *   node bridge/server.mjs
  */
 
+// Primeiro de todos: o .env.local tem de estar na memória antes de qualquer
+// módulo que leia configuração ao ser avaliado (ver bridge/env.mjs).
+import './env.mjs'
 import { WebSocketServer } from 'ws'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { displayServer } from './panels.mjs'
@@ -32,15 +35,6 @@ import { probeUrl, renderPage } from './page.mjs'
 import { createRealtimeSession, realtimeKey, realtimeModel, voiceProvider } from './realtime.mjs'
 import { fileURLToPath } from 'node:url'
 import { criarAutodev } from './autodev/index.mjs'
-
-// O .env.local também vale para a ponte, para a chave da OpenAI ficar só aqui
-// (o Vite só repassa ao navegador o que começa com VITE_). Variáveis já
-// definidas no terminal têm prioridade.
-try {
-  process.loadEnvFile(fileURLToPath(new URL('../.env.local', import.meta.url)))
-} catch {
-  /* sem .env.local: tudo bem */
-}
 
 const PORT = Number(process.env.JARVIS_BRIDGE_PORT ?? 8787)
 

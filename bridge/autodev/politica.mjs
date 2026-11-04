@@ -39,6 +39,8 @@ export const SENSIVEIS = [
   /^bridge\/autodev\//,
   // O gate, o sandbox do agente, a proteção SSRF e o saneamento do HTML.
   /^bridge\/server\.mjs$/,
+  // Roda antes de todo o resto e decide a configuração que o gate lê.
+  /^bridge\/env\.mjs$/,
   /^bridge\/net\.mjs$/,
   /^bridge\/page\.mjs$/,
   /^bridge\/chrome\.mjs$/,

@@ -43,7 +43,7 @@ sobre a ordem das fases abaixo.
 - [ ] Painel de status (módulos, provedor, consumo)
 
 ## Fase 2 — Voz e celular
-- [ ] Autodesenvolvimento por voz e chat, com rollback automático (ADR 0011, RF-15) — **em andamento**: implementado e testado; falta validar por voz no navegador, aprovar a ADR e corrigir as variáveis `APOLO_AUTODEV_*` e `JARVIS_MODEL`, que são lidas antes do `.env.local` e por isso não têm efeito quando definidas nesse arquivo
+- [ ] Autodesenvolvimento por voz e chat, com rollback automático (ADR 0011, RF-15) — **em andamento**: implementado e testado; o `.env.local` passou a ser lido antes de qualquer módulo que leia configuração (`bridge/env.mjs`), então `APOLO_AUTODEV_*` e `JARVIS_MODEL` valem nesse arquivo, e não só no terminal (03/11/2026); falta validar por voz no navegador e aprovar a ADR
 - [x] Voz pt-BR gratuita em tempo real — speech-to-speech pelo Gemini Live, OpenAI como opção (ADR 0009 e 0010, 03/11/2026)
 - [ ] Palavra de ativação "Apolo" (hoje: Espaço ou palmas acordam)
 - [ ] Voz no app de celular usando o mesmo `POST /realtime/sessao` da ponte

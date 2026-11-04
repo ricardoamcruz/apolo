@@ -21,6 +21,7 @@ Dois processos:
 | `bridge/panels.mjs` | ferramenta `display`: o modelo desenha painéis do HUD | manter; vira serviço do core para módulos |
 | `bridge/ui.mjs` | ferramentas `ui_*` (tema, reator, efeitos) | manter |
 | `bridge/chrome.mjs`, `page.mjs`, `net.mjs` | controla o Chrome e busca páginas com proteção SSRF | virar **módulo** `navegador` |
+| `bridge/navegador.mjs` + `src/lib/navegador.ts` | ferramentas `browser_*`: em que navegador e sistema a interface está, abrir aba, popup em aba (código novo, ADR 0012) | entra no mesmo **módulo** `navegador` |
 | `bridge/vision.mjs` | câmera | virar **módulo** `visao` |
 | `src/lib/bridge.ts` | cliente do agente de tarefas no navegador | manter, apontando para o gateway novo (`brain.ts` removido em 03/11/2026) |
 | `src/lib/voice.ts`, `vad.ts`, `tts.ts`, `kokoro.ts` | voz | **removidos** (03/11/2026): substituídos por `src/lib/realtime.ts` e `src/lib/voz/` |

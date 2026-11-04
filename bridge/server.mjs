@@ -25,6 +25,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
 import { displayServer } from './panels.mjs'
 import { uiServer } from './ui.mjs'
 import { chromeAvailable, chromeServer } from './chrome.mjs'
+import { navegadorServer } from './navegador.mjs'
 import { visionServer } from './vision.mjs'
 import { homedir, tmpdir } from 'node:os'
 import { readFileSync, realpathSync } from 'node:fs'
@@ -282,6 +283,17 @@ function decideTool(name) {
     // withhold the one tool the whole server is for.
     if (server === 'apolo_navegador') return true
 
+    // O ambiente: em que navegador e em que sistema a interface está, e as abas
+    // que o A.P.O.L.O. abriu nela. Permitido pelo mesmo critério do servidor
+    // acima — abrir uma aba é tão visível e tão reversível quanto navegar numa,
+    // que já passa aqui, e nada disto escreve em disco, envia nada nem preenche
+    // formulário. Nomeado em vez de deixado às regras de verbo porque
+    // `browser_open_tab` não começa com verbo de leitura e ficaria preso atrás
+    // de ALLOW_WRITES, o que tiraria do ar a metade útil do requisito. Agir
+    // DENTRO de uma página continua sendo assunto de apolo_navegador, com o
+    // gate dele.
+    if (server === 'apolo_ambiente') return true
+
     // The camera. Not withheld behind ALLOW_WRITES: looking changes nothing,
     // and the real gate is the browser's own camera permission plus an
     // indicator the user can see for as long as it is live.
@@ -421,6 +433,21 @@ coisa envolvendo navegador ou página web:
 - Antes de qualquer coisa que envie, compre, apague ou publique, diga numa frase
   o que vai fazer. Depois, diga o que aconteceu.
 - Se o navegador estiver inacessível, diga uma vez e siga sem ele.
+
+Onde você está — as ferramentas \`browser_*\`:
+- \`browser_environment\` diz em que navegador a interface está aberta, em que
+  sistema ele roda e em que sistema roda o seu núcleo. Use antes de falar de
+  tecla de atalho (Command e Control não são a mesma coisa) e sempre que a
+  resposta depender do navegador ou da máquina. Não adivinhe isso.
+- \`browser_open_tab\` abre uma aba no navegador em que o Ricardo está olhando.
+  Só quando ele pedir aba ou janela. O que é para VER continua indo para um
+  painel: a aba é outro lugar para olhar, e ele está olhando para cá.
+- \`browser_popup_to_tab\` transforma uma popup em aba. É quase sempre o que a
+  pessoa quer com uma popup. \`browser_windows\` lista o que você abriu.
+- Se o navegador bloquear a janela, diga em uma frase o que a resposta da
+  ferramenta explicar e não tente de novo.
+- As \`chrome_*\` são a mão dentro das páginas; as \`browser_*\` são o lugar onde
+  você está. Precisa ler ou clicar numa página? \`chrome_*\`.
 
 Seus olhos:
 - \`look\` tira um quadro e deixa você vê-lo. \`watch\` capta alguns segundos e
@@ -1110,6 +1137,10 @@ wss.on('connection', (socket) => {
         // holds no per-connection state, but it is built here with the rest so
         // the write gate is read once, at the same point as everything else.
         apolo_navegador: chromeServer({ allowWrites: ALLOW_WRITES }),
+        // O navegador em que a interface está aberta: qual é ele, qual o
+        // sistema embaixo dele, e as abas e popups que o A.P.O.L.O. abriu lá
+        // (RF-19, ADR 0012). Como a câmera, pergunta à interface e espera.
+        apolo_ambiente: navegadorServer(ask),
         // The camera, which unlike everything else here has to ask and wait.
         apolo_visao: visionServer(ask),
       },

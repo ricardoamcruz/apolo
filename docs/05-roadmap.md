@@ -12,7 +12,7 @@ sobre a ordem das fases abaixo.
 - [ ] **4. Gerar código para si próprio (RF-15):** integrar-se ao VS Code e ao Claude para isso — a base está nesta versão; falta validar o fluxo completo com o agente real
   - [ ] **4.a** Essa habilidade funciona em conjunto com a de se auto-reiniciar
   - [ ] **4.b** Se algo der errado, o rollback automático entra em ação
-- [ ] **5. Navegador (RF-19):** detectar em qual navegador e sistema está rodando, abrir novas abas e transformar uma popup aberta em aba
+- [ ] **5. Navegador (RF-19):** detectar em qual navegador e sistema está rodando, abrir novas abas e transformar uma popup aberta em aba — **em andamento**: ferramentas `browser_*` implementadas (ADR 0012, 04/11/2026); falta validar no navegador do Mac, liberar pop-ups para o endereço da interface e decidir se vale criar aba pela extensão do Claude quando o bloqueador recusar
 - [ ] **6. Comandos por voz (RF-20):** tudo o que hoje tem atalho de teclado também pode ser acionado por voz
   - [ ] **6.a** Em espera: "Apolo, em espera", ou entrar em espera sozinho ao fim de uma conversa, da forma mais natural possível e sem se intrometer quando o Ricardo falar com outra pessoa ao lado
   - [ ] **6.b** Popups: alternar por voz (hoje `[` e `]`), além de tela cheia (`E`) e fechar (`X`)

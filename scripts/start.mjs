@@ -13,6 +13,10 @@
  * você pedir e confirmar (docs/adr/0011): `npm start -- --autodev`.
  */
 
+// Primeiro de todos: quem sobe o sistema precisa ver as mesmas variáveis que a
+// ponte, e o .env.local tem de estar na memória antes de politica.mjs ser
+// avaliado (ver bridge/env.mjs). Os filhos herdam este process.env.
+import '../bridge/env.mjs'
 import { spawn, spawnSync } from 'node:child_process'
 import process from 'node:process'
 import { cpSync, existsSync, mkdirSync } from 'node:fs'

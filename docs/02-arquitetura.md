@@ -32,7 +32,7 @@ com o core.** Canais nunca chamam módulos diretamente.
 | **Gate de permissões** | `livre` / `confirmar` / `negado` por ferramenta; pede confirmação pelo canal; grava auditoria | evolui `decideTool()` |
 | **Memória** | SQLite local: conversas, preferências, fatos, estado dos módulos | **novo** |
 | **Agendador/eventos** | cron, gatilhos e barramento interno de eventos (módulos publicam/assinam) | **novo** |
-| **Config/segredos** | `apolo.config.json` + `.env.local`; segredos nunca no Git | evolui `.env.example` |
+| **Config/segredos** | `apolo.config.json` + `.env.local`; segredos nunca no Git; quem lê o `.env.local` é `bridge/env.mjs`, o primeiro import de todo ponto de entrada (ponte, `npm start`, `npm run rollback`), para que nenhum módulo leia configuração antes de ela existir | evolui `.env.example` |
 
 ## Estrutura de pastas alvo
 

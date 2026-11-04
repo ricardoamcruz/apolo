@@ -5,6 +5,9 @@
  * última alteração feita pelo autodesenvolvimento (docs/adr/0011).
  */
 
+// Primeiro de todos: APOLO_AUTODEV_PASTA tem de valer aqui igual à ponte, e o
+// .env.local tem de estar na memória antes de politica.mjs (ver bridge/env.mjs).
+import '../bridge/env.mjs'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'

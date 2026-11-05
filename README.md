@@ -51,6 +51,13 @@ navegador só abre janelas que um clique pediu, e um pedido por voz não é cliq
 — sem isso, ele avisa que a janela foi bloqueada. Ver
 [ADR 0012](docs/adr/0012-controle-navegador.md).
 
+Ele também cuida do próprio código: diz o que está pendente no repositório, faz
+commit numa branch e abre pull request para a `main`. As duas últimas só com
+`npm start -- --writes`, e o pull request precisa do
+[GitHub CLI](https://cli.github.com) logado nesta máquina. Na `main` ele nunca
+commita, e o merge é sempre seu. Ver
+[ADR 0014](docs/adr/0014-submodulo-git.md).
+
 ## Teclas
 
 | Tecla | Ação |

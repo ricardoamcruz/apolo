@@ -41,6 +41,9 @@ export const SENSIVEIS = [
   /^bridge\/server\.mjs$/,
   // Roda antes de todo o resto e decide a configuração que o gate lê.
   /^bridge\/env\.mjs$/,
+  // Commita e envia código do próprio projeto: quem pode mexer nele pode
+  // mudar o que vai para a main.
+  /^bridge\/git\.mjs$/,
   /^bridge\/net\.mjs$/,
   /^bridge\/page\.mjs$/,
   /^bridge\/chrome\.mjs$/,

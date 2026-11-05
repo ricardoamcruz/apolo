@@ -130,6 +130,19 @@ voz/chat → proposta → confirmação humana → worktree + Claude Code → ch
 A ponte e o supervisor conversam pelo canal IPC do `npm start`. Fora dele, a
 alteração fica na branch e nada reinicia.
 
+## Sub-módulo git (ADR 0013)
+
+`bridge/git.mjs` expõe as ferramentas `git_*` sobre o repositório do próprio
+A.P.O.L.O.: `git_status` e `git_diff` leem; `git_commit` guarda o trabalho
+pendente numa branch e `git_pull_request` propõe o merge para a `main`. As duas
+últimas só existem com `JARVIS_ALLOW_WRITES=1` — o gate acontece na construção
+do servidor, como no `chrome.mjs`.
+
+Não há merge, push na `main`, `--force` nem rebase: o merge é do Ricardo. A
+conferência de segredos é a mesma do autodesenvolvimento (`classificar()` em
+`bridge/autodev/politica.mjs`), e a credencial do GitHub nunca passa pela ponte
+— quem autentica são o `git` e o `gh` da máquina. Testes: `npm run test:git`.
+
 ## Protocolo de canal (RNF-11)
 
 Web e app nativo usam o **mesmo** protocolo WebSocket do gateway, com

@@ -28,6 +28,10 @@ detalhe está em `docs/`.
 - **Próxima versão:** 6 pontos do backlog têm prioridade sobre a ordem das fases
   (seção "Próxima versão" de `docs/05-roadmap.md`, RF-15 a RF-20). O primeiro,
   limpar a tela por voz (RF-16), está feito desde 03/11/2026.
+- **Sub-módulo git (ADR 0013):** `bridge/git.mjs` dá ao A.P.O.L.O. as ferramentas
+  `git_*` sobre o próprio repositório — ler o estado, commitar numa branch e
+  abrir pull request para a `main`. Commitar e propor merge exigem
+  `npm start -- --writes`; merge, push na `main` e `--force` não existem.
 - O código ainda é o fork do JARVIS (`bridge/`, `src/`), já renomeado para
   A.P.O.L.O. e em pt-BR (persona, ativação "Apolo", voz masculina do sistema).
   O core (`core/`) ainda não existe. Variáveis de ambiente seguem `JARVIS_*`.
@@ -97,6 +101,8 @@ npm run setup        # confere Node, Claude Code e a chave da voz (Gemini ou Ope
 npm start -- --autodev  # permite o autodesenvolvimento (ADR 0011)
 npm run rollback     # volta a última alteração do autodesenvolvimento (com tudo parado)
 npm run test:autodev # testes da política e do rollback
+npm run test:git     # testes do sub-módulo git (commit e pull request)
+npm test             # todos os testes de scripts/
 ```
 
 ## Ambiente

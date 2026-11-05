@@ -39,7 +39,7 @@ sobre a ordem das fases abaixo.
 - [ ] Memória em SQLite
 - [ ] Agendador e barramento de eventos
 - [ ] Gateway com token de acesso (logo depois: chat por texto no app iPhone conectado a ele, antes da voz no celular)
-- [ ] Persona A.P.O.L.O em pt-BR; identidade visual básica — **em andamento**: nome, persona e textos da interface em pt-BR feitos (01/11/2026); voz em tempo real speech-to-speech em pt-BR (ADR 0009/0010, 03/11/2026); abertura reduzida à barra de status e aos anéis com o nome, sem o reator e o esquema da armadura herdados do JARVIS (03/11/2026); faltam identidade visual e variáveis `JARVIS_*`
+- [ ] Persona A.P.O.L.O em pt-BR; identidade visual básica — **em andamento**: nome, persona e textos da interface em pt-BR feitos (01/11/2026); voz em tempo real speech-to-speech em pt-BR (ADR 0009/0010, 03/11/2026); abertura reduzida à barra de status e aos anéis com o nome, sem o reator e o esquema da armadura herdados do JARVIS (03/11/2026); identidade visual começada (ADR 0013, 05/11/2026): barra lateral direita "SINAL" removida, tipografia e cor em tokens no `:root`, marca própria no favicon, `__jarvis` → `__apolo` no console. Faltam as fontes locais (sem o Google Fonts), a decisão da paleta, a geometria do núcleo 3D, o painel de status (RF-12) e as variáveis `JARVIS_*`
 - [ ] Painel de status (módulos, provedor, consumo)
 
 ## Fase 2 — Voz e celular

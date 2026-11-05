@@ -449,17 +449,20 @@ export function accentFor(phase: Phase, ui: UiState): string {
 
 // Handy while dressing the scene for camera: in the dev server you can drive
 // the visuals from the console without talking, e.g.
-//   __jarvis.setPhase('tooling'); __jarvis.setLevel(0.8)
-//   __jarvis.applyUi({ accent: '#ff5a3c', reactor: { style: 'wire', spin: 3 } })
-//   __jarvis.addOrbit({ id: 'moon', src: '/vite.svg', radius: 0.6, speed: 8,
-//                       size: 90, tilt: 25, opacity: 1, phase: 0 })
-//   __jarvis.fireEffect('glitch'); __jarvis.resetUi()
+//   __apolo.setPhase('tooling'); __apolo.setLevel(0.8)
+//   __apolo.applyUi({ accent: '#ff5a3c', reactor: { style: 'wire', spin: 3 } })
+//   __apolo.addOrbit({ id: 'moon', src: '/vite.svg', radius: 0.6, speed: 8,
+//                      size: 90, tilt: 25, opacity: 1, phase: 0 })
+//   __apolo.fireEffect('glitch'); __apolo.resetUi()
+//
+// Chamava-se `__jarvis` até 05/11/2026. É o nome que o Ricardo digita no
+// console, então faz parte da identidade como qualquer texto na tela.
 if (import.meta.env.DEV) {
   // Not `useStore.getState()` directly: zustand replaces the state object on
   // every set, so a captured snapshot's *actions* keep working while every
-  // data field reads forever as it was at module load. `__jarvis.phase` said
+  // data field reads forever as it was at module load. `__apolo.phase` said
   // 'offline' no matter what was on screen.
-  ;(window as unknown as Record<string, unknown>).__jarvis = new Proxy(
+  ;(window as unknown as Record<string, unknown>).__apolo = new Proxy(
     {} as Record<string, unknown>,
     {
       get: (_t, key) => (useStore.getState() as Record<string | symbol, unknown>)[key],

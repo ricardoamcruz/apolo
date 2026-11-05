@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#01060c" />
 
+    <!-- A marca na aba. Vinha faltando: o arquivo existia em `public/` mas
+         ninguém o apontava, então o navegador pedia `/favicon.ico`, levava 404 e
+         mostrava o ícone genérico. `img-src 'self'` da política abaixo já cobre
+         isto; nada externo é carregado. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
     <!--
       Defence in depth behind the sanitiser in src/ui/Panels.tsx.
 

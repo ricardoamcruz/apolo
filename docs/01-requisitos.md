@@ -15,7 +15,7 @@ Fase: ver `05-roadmap.md`.
 | RF-05 | **Confirmação de ações** pelo canal ativo (tela do PC ou celular), com resumo do que será feito | M | 1 | proposto |
 | RF-06 | **Memória persistente**: histórico de conversas, preferências e fatos do usuário, consultável pelos módulos com permissão | M | 1 | proposto |
 | RF-07 | **Agendador e eventos** (base do "Preditivo"): tarefas recorrentes, gatilhos por horário/evento e briefings proativos | M | 1 | proposto |
-| RF-08 | **Canal PC**: interface web atual (HUD), adaptada ao A.P.O.L.O | M | 1 | proposto |
+| RF-08 | **Canal PC**: interface web atual (HUD), adaptada ao A.P.O.L.O | M | 1 | em andamento |
 | RF-09 | **Canal celular**: **app nativo** (voz, notificações, confirmação de ações) conectado ao core | M | 2 | aprovado |
 | RF-10 | **Voz em tempo real gratuita**: conversa speech-to-speech em pt-BR, sem custo por padrão (Gemini Live — ADR 0009 e 0010) | M | 2 | feito (03/11/2026) |
 | RF-11 | **Palavra de ativação** "Apolo" no PC e Android; no iPhone via Siri/Atalhos (limite do iOS). Hoje: microfone aberto após INICIAR, espera após 90 s, Espaço ou palmas acordam (ADR 0009) | S | 2 | proposto |

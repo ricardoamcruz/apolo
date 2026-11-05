@@ -97,10 +97,14 @@ function replaceWithNote(el: Element, text: string) {
 }
 
 /**
- * Memoised because the HUD around it re-renders with the microphone level —
- * roughly sixty times a second — and none of that has anything to do with what
- * is on a card. Panels are immutable once pushed, so identity comparison is
- * enough, and it is what keeps the sanitise pass below from running per frame.
+ * Memoised because the HUD around it re-renders for reasons that have nothing
+ * to do with what is on a card — a phase change, a token of transcript, a
+ * caption. Panels are immutable once pushed, so identity comparison is enough,
+ * and it is what keeps the sanitise pass below from running again each time.
+ *
+ * Até 05/11/2026 o motivo era mais bruto: o HUD estava assinado no nível do
+ * microfone e re-renderizava sessenta vezes por segundo. Essa leitura (a barra
+ * "SINAL") saiu com a identidade visual do A.P.O.L.O.
  */
 const Card = memo(function Card({ panel }: { panel: Panel }) {
   const html = useMemo(() => sanitisePanelHtml(panel.html ?? ''), [panel.html])

@@ -31,6 +31,12 @@ detalhe está em `docs/`.
 - O código ainda é o fork do JARVIS (`bridge/`, `src/`), já renomeado para
   A.P.O.L.O. e em pt-BR (persona, ativação "Apolo", voz masculina do sistema).
   O core (`core/`) ainda não existe. Variáveis de ambiente seguem `JARVIS_*`.
+- **Identidade visual (ADR 0013, 05/11/2026):** começada. Cor e tipografia são
+  tokens no `:root` de `src/index.css` (`--interface`, `--bg`, `--font-ui`,
+  `--font-mono`) — CSS novo usa os tokens, não valores escritos à mão. A cor por
+  fase fica em `phaseColor`/`accentFor()` (`src/store.ts`), porque a cena 3D e o
+  HUD precisam da mesma resposta. Faltam fontes locais, a paleta definitiva e a
+  geometria do núcleo; a decisão da paleta é do Ricardo.
 - **App mobile:** `apps/mobile` (Expo SDK 58, RN 0.88), app "olá" validado no
   iPhone (bundle `com.ricardocruz.apolo`, Personal Team `9F2MVYQ9SF`). Ainda não
   conversa com o core: depende do gateway com token (Fase 1). CocoaPods usa o

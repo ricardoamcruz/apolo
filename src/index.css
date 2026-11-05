@@ -126,7 +126,8 @@ body::after {
   50% { opacity: 0.35; transform: scale(0.75); }
 }
 
-/* Side rails */
+/* Trilha lateral. Só a da esquerda (SISTEMAS) existe: a da direita, o medidor
+   SINAL, saiu em 05/11/2026 — ver o comentário em src/ui/Hud.tsx. */
 
 .rail {
   position: absolute;
@@ -138,7 +139,6 @@ body::after {
   font-size: 10px;
 }
 .rail-left { left: 92px; }
-.rail-right { right: 92px; align-items: flex-end; }
 
 .rail-title {
   font-size: 8px;
@@ -154,7 +154,6 @@ body::after {
   opacity: 0.82;
 }
 .rail-item.dim { opacity: 0.3; }
-.rail-item.mono { font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em; }
 
 .tick {
   width: 5px;
@@ -162,22 +161,6 @@ body::after {
   background: var(--accent);
   transform: rotate(45deg);
   box-shadow: 0 0 8px var(--accent);
-}
-
-.meter {
-  width: 3px;
-  height: 96px;
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  display: flex;
-  align-items: flex-end;
-  margin: 4px 0;
-}
-
-.meter-fill {
-  width: 100%;
-  background: var(--accent);
-  box-shadow: 0 0 12px var(--accent);
-  transition: height 90ms linear;
 }
 
 /* Tool badge */
@@ -956,7 +939,6 @@ kbd {
 @media (max-width: 900px) {
   .hud-top { padding: 0 46px; }
   .rail-left { left: 30px; }
-  .rail-right { right: 30px; }
   .log { width: 84vw; }
 }
 

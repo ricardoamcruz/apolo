@@ -154,7 +154,6 @@ export function Hud() {
   const activeTool = useStore((s) => s.activeTool)
   const connected = useStore((s) => s.connected)
   const error = useStore((s) => s.error)
-  const level = useStore((s) => s.level)
   const voice = useStore((s) => s.voice)
   const bootNote = useStore((s) => s.bootNote)
   const gestures = useStore((s) => s.gestures)
@@ -226,14 +225,11 @@ export function Hud() {
         </aside>
       )}
 
-      {/* Right rail: live telemetry, mostly for flavour */}
-      <aside className="rail rail-right">
-        <div className="rail-title">SINAL</div>
-        <div className="meter">
-          <div className="meter-fill" style={{ height: `${level * 100}%` }} />
-        </div>
-        <div className="rail-item mono">{(level * 100).toFixed(0).padStart(3, '0')}%</div>
-      </aside>
+      {/* A trilha direita — o medidor SINAL — foi removida a pedido do Ricardo
+          (05/11/2026). Era enfeite: repetia em número o que o reator já diz em
+          luz, e assinar `level` aqui obrigava o HUD inteiro a re-renderizar
+          sessenta vezes por segundo. O nível continua vivo no store, lido pela
+          cena (`src/scene/Scene.tsx`) sem passar por React. */}
 
       <AnimatePresence>
         {activeTool && ui.chrome.toolBadge && (

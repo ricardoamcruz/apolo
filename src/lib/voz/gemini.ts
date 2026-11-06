@@ -278,6 +278,10 @@ export async function connectGemini(
         const data = result.image.slice(result.image.indexOf(',') + 1)
         send({ realtimeInput: { video: { data, mimeType: 'image/jpeg' } } })
       }
+      if (result.descartar) {
+        stopPlayback()
+        dropUntilTurnEnd = true
+      }
       responses.push({ id: call.id, name: call.name, response: { result: result.output } })
     }
     if (!closed && responses.length) send({ toolResponse: { functionResponses: responses } })

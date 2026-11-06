@@ -69,7 +69,7 @@ const TRANSCRIBE_MODEL = env('APOLO_REALTIME_TRANSCRICAO', 'gpt-4o-mini-transcri
 
 /** Silêncio, em milissegundos, que encerra a sua vez de falar. Menor responde
  *  mais rápido; maior corta menos quem faz pausas no meio da frase. */
-const SILENCE_MS = Number(env('APOLO_REALTIME_SILENCIO_MS', '500'))
+const SILENCE_MS = Number(env('APOLO_REALTIME_SILENCIO_MS', '1200'))
 
 /** Modelos que aceitam o parâmetro de raciocínio. Os antigos o recusam. */
 const supportsReasoning = (model) => /realtime-2/.test(model)
@@ -123,10 +123,14 @@ FERRAMENTAS.
   sabe de verdade. Abrir uma aba ou transformar uma popup em aba também vai por
   ela.
 - desenvolvimento: alterar o seu próprio código-fonte, quando o Ricardo pedir uma
-  mudança em você ou mandar seguir o roadmap ("faça o próximo passo"). Use
-  acao "propor" com o pedido completo; diga em uma frase o que será feito e
-  pergunte se ele confirma. Só depois que ele disser que sim, use "confirmar".
+  mudança em você ou mandar seguir o roadmap ("faça o próximo passo"). Primeiro
+  chame acao "propor" com o pedido completo, sem pedir licença antes: é ela que
+  cria a proposta e mostra o botão na tela. Se ela for aceita, diga em uma frase
+  o que será feito e pergunte se ele confirma; se for recusada, diga o motivo e
+  não peça confirmação. Só depois que ele disser que sim, use "confirmar".
   "confirmo" nunca é um pedido: se ele confirmar, use "confirmar", e não "propor".
+  Peça a confirmação uma vez só. Se ele falar de outra coisa, atenda: a proposta
+  fica na tela. Se a ferramenta disser que não há proposta, acredite nela.
   O trabalho leva minutos e segue em segundo plano: avise e continue a conversa.
   Quando ficar pronto, você reinicia no código novo e ele testa, pelo tempo que
   quiser. Se ele gostar, use "aprovar": a alteração vai para uma branch e você
@@ -143,11 +147,37 @@ FERRAMENTAS.
   deixa a conversa em paz. Use "historico" só se ele pedir para apagar a conversa
   escrita na tela, e "tudo" se pedir as duas coisas. Depois diga em poucas
   palavras o que saiu — ou que não havia nada na tela, se for o caso.
-- dormir: quando a pessoa encerrar a conversa ("pode descansar", "tchau",
-  "obrigado, é só isso"). Despeça-se em poucas palavras antes de chamar.
+- Popups: ao entrar em espera, eles viram quadradinhos à direita da tela e ficam
+  lá ao acordar. Para abrir ("abre aquele artigo"), use ajustar_interface com popups
+  "abrir", e popup com parte do título se ele indicar um; sem título, abre todos.
+  Fechar de vez continua sendo limpar_tela.
+- Exibição: a ponte (o painel do seu desenvolvimento) e o chat ficam ocultos até ele
+  pedir, e o que ele escolher continua valendo ao religar. Use ajustar_interface:
+  "exibir ponte" é exibir_ponte true, "exibir chat" é exibir_chat true, e "exibir
+  ponte e chat" ou "habilitar modo detalhado" são os dois. Para ocultar, false.
+- diagnostico: quando ele pedir diagnóstico ou status dos sistemas. Mostra a aba
+  SISTEMAS; narre em uma frase se está tudo bem ou o que está degradado. Com mostrar
+  false, fecha a aba, se ele pedir. Você é um só: C.O.R.E. é tudo o que faz você
+  rodar, não fale em servidores separados.
+- dormir: coloca você Em Espera, o mesmo que a tecla Esc. Use quando ele pedir
+  ("em espera", "fica em espera", "pode descansar") ou encerrar a conversa
+  ("tchau", "obrigado, é só isso", "já volto", "até já"). "Boa noite" só vale
+  como despedida ("boa noite, vou dormir", "boa noite, Apolo, até amanhã"): como
+  cumprimento, no início de uma conversa, responda normalmente. Despeça-se em
+  poucas palavras antes de chamar. Em espera, você só volta se ele chamar seu nome.
+- ignorar_fala: nem tudo o que você ouve é para você, e ficar quieto é uma resposta
+  válida. Chame ignorar_fala, sem dizer nada, nem "ok", quando:
+  a) ele estiver falando com outra pessoa, ao telefone ou pensando alto: duas vozes
+  alternando, um nome de outra pessoa, você citado na terceira pessoa, um assunto
+  sem relação com a conversa, ou uma frase sem nada que você possa atender;
+  b) a frase ficou pela metade, porque ele pausou para pensar ("quero que você...",
+  "e aí eu acho que"): ele ainda vai continuar.
+  Se ele disser seu nome ou fizer um pedido claro, a fala é para você. Na dúvida,
+  ignore: interromper é pior do que esperar ele repetir.
 - Se não souber algo e nenhuma ferramenta resolver, diga que não sabe.
 - Ações que enviam, compram, apagam ou publicam: diga numa frase o que vai fazer
-  e espere a confirmação antes de pedir a tarefa.`
+  e espere a confirmação antes de pedir a tarefa. Isso não vale para
+  desenvolvimento, que tem a ordem própria descrita acima.`
 }
 
 const tools = [
@@ -238,9 +268,39 @@ const tools = [
             'conversa — é o que significa "limpe a bagunça". "historico" apaga só a conversa ' +
             'escrita na tela. "tudo" faz as duas coisas.',
         },
+        exibir_ponte: { type: 'boolean', description: 'Mostra ou oculta a ponte. Fica guardado.' },
+        exibir_chat: { type: 'boolean', description: 'Mostra ou oculta o chat. Fica guardado.' },
+        popups: {
+          type: 'string',
+          enum: ['abrir', 'minimizar'],
+          description: 'Abre os popups minimizados na bandeja à direita, ou minimiza os abertos.',
+        },
+        popup: {
+          type: 'string',
+          description: 'Com popups "abrir": parte do título de um deles. Sem isso, abre todos.',
+        },
         restaurar: { type: 'boolean', description: 'Volta a interface ao padrão.' },
       },
     },
+  },
+  {
+    type: 'function',
+    name: 'diagnostico',
+    description: 'Mostra a aba SISTEMAS e devolve o estado do C.O.R.E. para você narrar.',
+    parameters: {
+      type: 'object',
+      properties: {
+        mostrar: { type: 'boolean', description: 'false fecha a aba. Por padrão, abre.' },
+      },
+    },
+  },
+  {
+    type: 'function',
+    name: 'ignorar_fala',
+    description:
+      'Fica em silêncio porque a fala não era para você (ele fala com outra pessoa) ' +
+      'ou ficou pela metade. Nada é dito ao Ricardo.',
+    parameters: { type: 'object', properties: {} },
   },
   {
     type: 'function',
@@ -368,8 +428,11 @@ function geminiSetup() {
     realtimeInputConfig: {
       automaticActivityDetection: {
         disabled: false,
-        endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH',
-        prefixPaddingMs: 200,
+        // Baixa nos dois lados: voz distante não abre a vez de falar, e uma pausa
+        // no meio da frase não a encerra.
+        startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
+        endOfSpeechSensitivity: 'END_SENSITIVITY_LOW',
+        prefixPaddingMs: 300,
         silenceDurationMs: SILENCE_MS,
       },
     },

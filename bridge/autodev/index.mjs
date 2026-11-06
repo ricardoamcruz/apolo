@@ -19,6 +19,7 @@ import { promisify } from 'node:util'
 import { BASE, PASTA_AUTODEV, classificar, gateIntacto } from './politica.mjs'
 import { rodarAgente } from './agente.mjs'
 import { abrirEditor as abrirEditorPadrao, fecharEditor as fecharEditorPadrao } from './editor.mjs'
+import { historicoDeBranches, proximaFase } from '../branches.mjs'
 import { lerEntrega, nomeLivre, pedidoVago } from './entrega.mjs'
 
 const exec = promisify(execFile)
@@ -225,6 +226,12 @@ export function criarAutodev({
       () => false,
     )
 
+  /** O nome escolhido pelo agente, com o número da próxima branch. */
+  const nomeDaBranch = async (nome) => {
+    const historico = await historicoDeBranches((args) => git(repo, ...args), BASE)
+    return nomeLivre(`fase-${proximaFase(historico)}/${nome}`, existeBranch)
+  }
+
   const encerrarCopia = async () => {
     fecharEditor()
     await limparCopias()
@@ -268,7 +275,7 @@ export function criarAutodev({
     // Código sensível não roda antes de alguém ler, nem nas checagens. Vai
     // direto para a branch definitiva: não há o que testar aqui.
     const guardar = async (motivo, extra = {}) => {
-      const final = await nomeLivre(entrega.branch, existeBranch)
+      const final = await nomeDaBranch(entrega.branch)
       await git(repo, 'branch', final, sha)
       return ['revisao', `${entrega.resumo} ${motivo}`, { branch: final, ...extra }]
     }
@@ -389,7 +396,7 @@ export function criarAutodev({
       }
       if (acao === 'aprovar') {
         if (estado.fase !== 'testando') return { ok: false, mensagem: 'Não há alteração em teste.' }
-        const branch = await nomeLivre(estado.entrega.branch, existeBranch)
+        const branch = await nomeDaBranch(estado.entrega.branch)
         mudar({ fase: 'aplicando', etapa: `guardando em ${branch}`, resultado: undefined })
         vigiarTroca()
         supervisor({ type: 'autodev:aprovar', id: estado.id, branch })

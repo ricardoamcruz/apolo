@@ -215,6 +215,8 @@ const RING_R = 0.74
  * both edges of a portrait window.
  */
 const FIT = 0.60
+/** O tamanho do círculo em espera, em relação ao normal. */
+const STANDBY_SCALE = 0.42
 
 export function Core({ drive }: { drive: Drive }) {
   const mat = useRef<THREE.ShaderMaterial>(null)
@@ -250,18 +252,22 @@ export function Core({ drive }: { drive: Drive }) {
     // radius inside a fixed quad with dark margin around it, so zooming the
     // field out would push the ring past the quad's own edge and cut it off in
     // a square; moving the quad takes the margin along with it.
-    mesh.current.scale.setScalar(r.scale)
+    const s = drive.standby
+    mesh.current.scale.setScalar(
+      r.scale * THREE.MathUtils.lerp(1, STANDBY_SCALE * (0.985 + drive.pulse * 0.03), s),
+    )
 
     const fit = Math.min(viewport.width, viewport.height)
+    drive.standbyRing = FIT * 0.5 * fit * STANDBY_SCALE * r.scale
     u.uZoom.value = (RING_R * HALF) / (FIT * 0.5 * fit)
     u.uLevel.value += (drive.level - u.uLevel.value) * Math.min(1, dt * 8)
     // Accumulated, not derived from elapsed time scaled by level — scaling the
     // clock would rewrite all the turbulence that has already happened, and the
     // edge would boil harder the longer the tab had been open. The spin
     // multiplier rides on the same accumulator for the same reason.
-    u.uPhase.value += dt * (0.5 + u.uLevel.value * 0.7) * r.spin
+    u.uPhase.value += dt * (0.5 + u.uLevel.value * 0.7) * r.spin * (1 - s * 0.85)
     u.uOpen.value += (drive.open - u.uOpen.value) * Math.min(1, dt * 1.6)
-    u.uIntensity.value = r.intensity
+    u.uIntensity.value = r.intensity * THREE.MathUtils.lerp(1, 0.55 + drive.pulse * 0.45, s)
     u.uStyle.value = r.style
     ;(u.uColor.value as THREE.Color).lerp(r.color, Math.min(1, dt * 2.5))
   })

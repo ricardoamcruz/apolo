@@ -5,7 +5,7 @@ import { diag as rt } from '../lib/realtime'
 /**
  * Painel "por que ele não me ouve / por que eu não o ouço".
  *
- * Tecla D abre e fecha. Mostra o estado da sessão de voz em tempo real lido
+ * Tecla D abre e fecha, junto com a aba SISTEMAS. Mostra o estado da sessão de voz em tempo real lido
  * direto do cliente WebRTC, para transformar "não funciona" num fato concreto.
  */
 
@@ -25,7 +25,7 @@ function Row({ k, v, bad }: { k: string; v: string; bad?: boolean }) {
 }
 
 export function Diagnostics() {
-  const [open, setOpen] = useState(false)
+  const open = useStore((s) => s.sistemas === 'completo')
   const [, tick] = useState(0)
   const phase = useStore((s) => s.phase)
 
@@ -35,7 +35,8 @@ export function Diagnostics() {
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       if (e.key === 'd' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault()
-        setOpen((o) => !o)
+        const { sistemas, setSistemas } = useStore.getState()
+        setSistemas(sistemas === 'fechado' ? 'completo' : 'fechado')
       }
     }
     window.addEventListener('keydown', onKey)

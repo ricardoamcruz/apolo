@@ -14,6 +14,8 @@ const vertex = /* glsl */ `
   uniform float uTime;
   uniform float uLevel;
   uniform float uSize;
+  uniform float uStandby;
+  uniform float uRing;
 
   attribute float aSeed;
   attribute float aRadius;
@@ -31,6 +33,12 @@ const vertex = /* glsl */ `
     float push = 1.0 + uLevel * 0.35 + sin(uTime * 2.0 + aSeed * 12.0) * 0.02;
     p *= push;
 
+    // Em espera, cada ponto vai para um halo colado ao círculo, no plano dele, em
+    // vez de uma casca: uma esfera vista de frente encheria o círculo por dentro.
+    vec2 dir = p.xy / max(length(p.xy), 0.001);
+    vec3 halo = vec3(dir * uRing * (1.08 + aRadius * 0.34 + aSeed * 0.05), (aSeed - 0.5) * 0.12);
+    p = mix(p, halo, uStandby);
+
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mv;
 
@@ -44,11 +52,12 @@ const vertex = /* glsl */ `
     // of those points.
     vAlpha = smoothstep(-11.5, -2.5, mv.z)
            * (0.30 + uLevel * 0.35)
-           * (1.0 - aRadius * 0.55);
+           * (1.0 - aRadius * 0.55)
+           * mix(1.0, 0.55, uStandby);
 
     // Perspective-correct sizing. The constant is tuned for the default 6-unit
     // camera distance — bigger values make the cloud read as fog, not points.
-    gl_PointSize = uSize * (1.0 + uLevel * 0.7) * (13.0 / -mv.z);
+    gl_PointSize = uSize * (1.0 + uLevel * 0.7) * (13.0 / -mv.z) * mix(1.0, 0.7, uStandby);
   }
 `
 
@@ -97,26 +106,30 @@ export function Particles({ drive }: { drive: Drive }) {
       uTime: { value: 0 },
       uLevel: { value: 0 },
       uSize: { value: 3.4 },
+      uStandby: { value: 0 },
+      uRing: { value: 1 },
       uColor: { value: new THREE.Color('#00e5ff') },
       uIntensity: { value: 1 },
     }),
     [],
   )
 
-  useFrame((state, dt) => {
+  useFrame((_, dt) => {
     if (!mat.current || !pts.current) return
     const u = mat.current.uniforms
     pts.current.visible = drive.reactor.visible
     u.uIntensity.value = drive.reactor.intensity
-    u.uTime.value = state.clock.elapsedTime
+    // Acumulado, não o relógio: é assim que as órbitas param em espera e retomam
+    // de onde estavam, sem um salto.
+    u.uTime.value += dt * (1 - drive.standby)
+    u.uStandby.value = drive.standby
+    u.uRing.value = drive.standbyRing
     u.uLevel.value += (drive.level - u.uLevel.value) * Math.min(1, dt * 6)
     ;(u.uColor.value as THREE.Color).lerp(drive.color, Math.min(1, dt * 3))
   })
 
-  // Each point's own orbit runs at a constant per-particle rate, so unlike the
-  // core the shader can take the clock directly — nothing here rescales time by
-  // a value that changes. Culling, though, is off for the same reason as the
-  // core: loudness pushes the shell out past its authored radius.
+  // Culling is off for the same reason as the core: loudness pushes the shell out
+  // past its authored radius.
   return (
     <points ref={pts} frustumCulled={false}>
       <bufferGeometry>

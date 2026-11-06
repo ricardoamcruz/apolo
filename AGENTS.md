@@ -46,6 +46,18 @@ detalhe está em `docs/`.
   conversa com o core: depende do gateway com token (Fase 1). CocoaPods usa o
   Ruby portátil do Homebrew (`scripts/setup-mobile.command`); no Homebrew,
   Intel + macOS 26 compila LLVM por horas — sempre responder `n`.
+- **Em Espera (ADR 0017):** é a fase `dormant`, por Esc, ociosidade ou voz
+  (`dormir`: "em espera", "já volto", "boa noite" de despedida). Nela, só o nome
+  ou Espaço acordam: `src/lib/chamada.ts` usa a Web Speech API, com o microfone do
+  modelo fechado. `ignorar_fala` é como ele fica calado quando a fala não é para ele.
+- **Aba SISTEMAS (ADR 0018, RF-56):** só aparece pela tecla `D` ou por voz
+  (`diagnostico`). Tudo o que o A.P.O.L.O. usa para rodar é uma linha só, C.O.R.E.;
+  skills, extensões, APIs e conectores futuros entram como outras linhas em
+  `src/lib/sistemas.ts`. Degradado usa `--alerta` (`contrastante()` em `src/lib/cor.ts`),
+  nunca uma cor fixa. Popups viram quadradinhos ao entrar em espera (`BladeTray`).
+- **Exibição (RF-57):** ponte e chat só aparecem se pedidos por voz; a escolha fica
+  em `~/.apolo/preferencias.json` (`bridge/preferencias.mjs`). A ponte reaparece
+  sozinha com proposta ou teste em aberto: nunca esconda o botão Confirmar.
 - **Voz própria:** pendente; o usuário quer usar o "Voice Studio" (ferramenta a
   confirmar). ADR nova quando definida.
 - **Autodesenvolvimento (ADR 0011 e 0015):** com `npm start -- --autodev`, o
@@ -88,6 +100,13 @@ detalhe está em `docs/`.
   nunca de outra branch — para evitar conflitos.
 - Nada é commitado direto na `main`: o trabalho entra por pull request,
   revisado pelo Ricardo.
+- Nome de branch (ADR 0016): `fase-x.y/<nome-criativo>`. Cada branch nova soma 0.1
+  à maior já usada (`git branch -a`): depois de `fase-2.3/...` vem `fase-2.4/...`.
+- Ao mudar de fase, recomeça em `fase-x/<nome>`, com x = fase anterior + 1: depois
+  de `fase-2.N/...` vêm `fase-3/...` e `fase-3.1/...`. Só o Ricardo muda de fase.
+- O nome é criativo e amplo: evoca a entrega inteira, sem amarrar a uma única
+  alteração, porque a branch pode receber mais coisas antes do merge. Exemplo:
+  `fase-2.3/voz-e-verniz`, e não `fase-2.3/confirmacao-autodev`.
 
 ## Mantenha esta documentação viva
 

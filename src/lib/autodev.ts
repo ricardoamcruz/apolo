@@ -22,14 +22,41 @@ export type AutodevEstado = {
   }
 }
 
-const NEGA = /\b(n[ãa]o|cancel\w*|espera|pare|para)\b/i
+/** "para" só nega sozinho, no começo ou no fim: "manda para a branch" confirma. */
+const NEGA = /\b(n[ãa]o|cancel\w*|espera|pare)\b|^\s*para\b|\bpara[\s.,!]*$/i
 const CONFIRMA = /\b(confirm\w*|sim|pode|autoriz\w*|aprov\w*|manda|fa[çz]a|gostei)\b/i
 
 export const pareceConfirmacao = (fala: string) => CONFIRMA.test(fala) && !NEGA.test(fala)
 
 /**
- * A última fala da pessoa, e quando foi. A transcrição da OpenAI pode chegar
- * depois da chamada da ferramenta, por isso quem confere espera um instante.
+ * Por que não há o que confirmar ou aprovar agora, ou nada se há.
+ *
+ * Vem antes de conferir a fala. Sem proposta, responder "não ouvi" faria o modelo
+ * pedir de novo um "confirmo" que já foi ouvido, e um botão que não existe.
+ */
+export function foraDeHora(acao: 'confirmar' | 'aprovar', estado: AutodevEstado | null) {
+  if (!estado?.ligado) {
+    return 'O autodesenvolvimento está desligado: precisa iniciar com npm start -- --autodev. Nada foi feito.'
+  }
+  if (acao === 'aprovar') {
+    return estado.fase === 'testando' ? null : 'Não há alteração em teste para aprovar. Nada foi feito.'
+  }
+  if (estado.fase === 'proposto') return null
+  if (estado.fase === 'testando') {
+    return 'Não há proposta: há uma alteração em teste. Se o Ricardo gostou dela, use "aprovar". Nada foi feito.'
+  }
+  if (estado.fase === 'ocioso') {
+    return (
+      'Não há proposta aguardando, então também não há botão na tela. Nada foi feito. Não peça ' +
+      'confirmação de novo: se ele quer uma alteração, use "propor" com o pedido completo.'
+    )
+  }
+  return 'Já há um trabalho em andamento. Nada foi feito.'
+}
+
+/**
+ * A última fala da pessoa, e quando foi. A transcrição pode chegar depois da
+ * chamada da ferramenta, por isso quem confere espera um instante.
  */
 const ouvida = { texto: '', em: 0 }
 
@@ -39,7 +66,7 @@ export function registrarFala(texto: string) {
 }
 
 /** A pessoa disse "sim" depois de a proposta aparecer? */
-export async function ouviuConfirmacao(desde: number, esperaMs = 2500): Promise<boolean> {
+export async function ouviuConfirmacao(desde: number, esperaMs = 5000): Promise<boolean> {
   const limite = Date.now() + esperaMs
   while (true) {
     if (ouvida.em > desde && pareceConfirmacao(ouvida.texto)) return true

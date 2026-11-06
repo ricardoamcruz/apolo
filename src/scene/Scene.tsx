@@ -14,6 +14,11 @@ import { Particles } from './Particles'
 import { Orbits } from './Orbits'
 import { useStore, phaseColor, accentFor, type Phase } from '../store'
 
+/** Velocidade da transição para a espera: cerca de dois segundos. */
+const STANDBY_RATE = 1.6
+/** Período da pulsação em espera, bem mais lenta que qualquer outra fase. */
+const STANDBY_PULSE_S = 7
+
 /** Rings spin harder while JARVIS is working — reads as effort. */
 const spinFor: Record<Phase, number> = {
   offline: 0.08, // barely turning — the machine is off
@@ -67,6 +72,12 @@ export type Drive = {
   amp: number
   /** 0..1 power-up reveal — the ring assembles outwards from the centre. */
   open: number
+  /** 0..1 Em Espera: o círculo encolhe e as partículas se juntam em volta dele. */
+  standby: number
+  /** 0..1 a pulsação lenta da espera. Sinal de vida, não de atividade. */
+  pulse: number
+  /** Raio do círculo em espera, em unidades do mundo: onde as partículas se juntam. */
+  standbyRing: number
   /**
    * The reactor slice of the ui state, already resolved and smoothed.
    *
@@ -114,6 +125,9 @@ function Rig() {
       spin: spinFor.offline,
       amp: AMP_CALM,
       open: 0,
+      standby: 0,
+      pulse: 0,
+      standbyRing: 1,
       reactor: {
         color: new THREE.Color(phaseColor.offline),
         scale: 1,
@@ -162,17 +176,24 @@ function Rig() {
     // of the centre on the ignition click rather than simply appearing.
     drive.open = phase === 'offline' ? 0.28 : phase === 'boot' ? 0.7 : 1.6
 
-    // Idle breathing so the orb is never completely still.
-    const idle = phase === 'offline' ? 0.02 : phase === 'dormant' ? 0.05 : 0.12
+    const emEspera = phase === 'dormant'
+    drive.standby += ((emEspera ? 1 : 0) - drive.standby) * Math.min(1, dt * STANDBY_RATE)
+    drive.pulse = Math.sin((state.clock.elapsedTime * Math.PI * 2) / STANDBY_PULSE_S) * 0.5 + 0.5
+
+    // Idle breathing so the orb is never completely still. Em espera, quem dá
+    // sinal de vida é a pulsação: o som da sala não deve mexer em nada.
+    const idle = phase === 'offline' ? 0.02 : 0.12
     const breathe =
       (Math.sin(state.clock.elapsedTime * 0.9) * 0.5 + 0.5) * idle
-    const want = Math.max(level, breathe)
+    const want = emEspera ? 0 : Math.max(level, breathe)
     drive.level += (want - drive.level) * Math.min(1, dt * 9)
 
-    // Slow drift on the camera keeps handheld-ish life in the shot.
+    // Slow drift on the camera keeps handheld-ish life in the shot. It stops in
+    // standby: with the camera moving, motionless particles would not read as still.
     const t = state.clock.elapsedTime
-    state.camera.position.x = Math.sin(t * 0.13) * 0.35
-    state.camera.position.y = Math.cos(t * 0.17) * 0.22
+    const sway = 1 - drive.standby
+    state.camera.position.x = Math.sin(t * 0.13) * 0.35 * sway
+    state.camera.position.y = Math.cos(t * 0.17) * 0.22 * sway
     state.camera.lookAt(0, 0, 0)
   })
 

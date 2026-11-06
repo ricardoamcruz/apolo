@@ -45,6 +45,7 @@ import {
 import { createRealtimeSession, realtimeKey, realtimeModel, voiceProvider } from './realtime.mjs'
 import { fileURLToPath } from 'node:url'
 import { criarAutodev } from './autodev/index.mjs'
+import { criarPreferencias } from './preferencias.mjs'
 
 const PORT = Number(process.env.JARVIS_BRIDGE_PORT ?? 8787)
 
@@ -262,7 +263,8 @@ O seu próprio código — as ferramentas \`git_*\`:
   descrição de pull request: descreva o que está lá, não o que você supõe.
 - \`git_commit\` guarda o trabalho pendente numa branch. Diga numa frase o que
   vai commitar antes de chamar. Na \`main\` nada é commitado direto: se a cópia
-  estiver nela, informe o nome de uma branch nova.
+  estiver nela, informe uma branch nova, com o número que \`git_status\` indicar
+  e um nome criativo e amplo: \`fase-x.y/nome-criativo\`.
 - \`git_pull_request\` propõe o merge para a \`main\`. Quem decide o merge é
   sempre o Ricardo — você nunca junta nada, e não existe ferramenta para isso.
 - Se as duas últimas não aparecerem, a escrita está bloqueada nesta máquina.
@@ -727,6 +729,8 @@ const broadcast = (msg) => {
     if (client.readyState === client.OPEN) client.send(JSON.stringify(msg))
   }
 }
+const preferencias = criarPreferencias()
+
 /** A cópia do projeto que está no ar. O autodev e o sub-módulo git partem dela. */
 const REPO = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '')
 
@@ -794,6 +798,7 @@ wss.on('connection', (socket) => {
     JSON.stringify({ type: 'ready', servers: Object.keys(MCP_SERVERS) }),
   )
   socket.send(JSON.stringify({ type: 'autodev', estado: autodev.estado() }))
+  socket.send(JSON.stringify({ type: 'preferencias', valores: preferencias.valores() }))
 
   /** Resolves the pending user message into the SDK's input generator. */
   let deliver = null
@@ -1113,11 +1118,11 @@ wss.on('connection', (socket) => {
           case 'system':
             if (msg.subtype === 'init') {
               // Servers report 'pending' until first use — they connect
-              // lazily — so only drop the ones that are actually unusable.
-              const usable = (msg.mcp_servers ?? [])
-                .filter((s) => s.status !== 'needs-auth' && s.status !== 'failed')
-                .map((s) => s.name)
-              send({ type: 'ready', servers: usable })
+              // lazily — so only count out the ones that are actually unusable.
+              // O estado vai junto: é assim que a aba SISTEMAS sabe o que falhou.
+              const servers = (msg.mcp_servers ?? []).map(({ name, status }) => ({ name, status }))
+              const usable = servers.filter((s) => s.status !== 'needs-auth' && s.status !== 'failed')
+              send({ type: 'ready', servers })
               console.log(`[apolo] ${usable.length} servidores MCP disponíveis`)
             }
             break
@@ -1171,6 +1176,10 @@ wss.on('connection', (socket) => {
           inbox.push(text)
         }
       })
+    }
+
+    if (msg.type === 'preferencias') {
+      broadcast({ type: 'preferencias', valores: preferencias.gravar(msg.valores) })
     }
 
     if (msg.type === 'autodev' && typeof msg.acao === 'string') {

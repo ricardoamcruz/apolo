@@ -1,4 +1,5 @@
 import type { AutodevEstado } from './lib/autodev'
+import type { Servidor } from './lib/sistemas'
 import { create } from 'zustand'
 
 export type Phase =
@@ -51,7 +52,12 @@ export type Blade = {
   mode?: 'reader' | 'live'
   size: 'compact' | 'tall' | 'wide' | 'full'
   hold: 'turn' | 'sticky'
+  /** Na bandeja da direita: fica lá até ser aberto ou fechado de vez. */
+  minimized?: boolean
 }
+
+/** O que aparece só se ele pedir, e continua como estava ao religar. */
+export type Exibicao = { exibirPonte: boolean; exibirChat: boolean }
 
 export type Turn = {
   id: string
@@ -220,7 +226,10 @@ type State = {
   turns: Turn[]
   activeTool: string | null
   error: string | null
-  connected: string[]
+  connected: Servidor[]
+  exibicao: Exibicao
+  /** A aba SISTEMAS: 'aba' pedida por voz; 'completo' pela tecla D, com a janela de voz. */
+  sistemas: 'fechado' | 'aba' | 'completo'
   /** Name of the speech-synthesis voice in use, shown in the HUD. */
   voice: string
   /** Whether the camera is on and hands are being tracked. Store-backed rather
@@ -254,6 +263,9 @@ type State = {
   pushBlade: (b: Blade) => void
   closeBlade: (id: string) => void
   clearBlades: () => void
+  minimizeBlades: () => void
+  /** Abre os minimizados, ou só o de `alvo` (id ou parte do título). Diz quantos abriu. */
+  restoreBlades: (alvo?: string) => number
   focusBlade: (id: string | null) => void
   expandBlade: (id: string | null) => void
   setPhase: (p: Phase) => void
@@ -261,7 +273,9 @@ type State = {
   setCaption: (c: string) => void
   setActiveTool: (t: string | null) => void
   setError: (e: string | null) => void
-  setConnected: (c: string[]) => void
+  setConnected: (c: Servidor[]) => void
+  setSistemas: (s: State['sistemas']) => void
+  setExibicao: (e: Exibicao) => void
   pushTurn: (t: Turn) => void
   appendToLastTurn: (text: string) => void
 
@@ -274,7 +288,7 @@ type State = {
   clearScreen: (what: 'all' | 'panels' | 'transcript') => void
 }
 
-export const useStore = create<State>((set) => ({
+export const useStore = create<State>((set, get) => ({
   phase: 'offline',
   level: 0,
   caption: '',
@@ -282,6 +296,8 @@ export const useStore = create<State>((set) => ({
   activeTool: null,
   error: null,
   connected: [],
+  sistemas: 'fechado',
+  exibicao: { exibirPonte: false, exibirChat: false },
   voice: '',
   gestures: false,
   looking: null,
@@ -326,7 +342,12 @@ export const useStore = create<State>((set) => ({
    */
   pushBlade: (blade) =>
     set((s) => {
-      const next = [...s.blades.filter((b) => b.id !== blade.id), blade].slice(-6)
+      const outros = s.blades.filter((b) => b.id !== blade.id)
+      // O limite é do que está aberto: a bandeja só esvazia quando ele pedir.
+      const next = [
+        ...outros.filter((b) => b.minimized),
+        ...[...outros.filter((b) => !b.minimized), blade].slice(-6),
+      ]
       // A new blade comes to the front. Leaving the old focus in place would
       // open something the user asked for and then hide it behind what they
       // were looking at before.
@@ -342,7 +363,7 @@ export const useStore = create<State>((set) => ({
   // 'sticky' ones stay until something replaces them.
   clearBlades: () =>
     set((s) => {
-      const kept = s.blades.filter((b) => b.hold === 'sticky')
+      const kept = s.blades.filter((b) => b.hold === 'sticky' || b.minimized)
       const alive = new Set(kept.map((b) => b.id))
       return {
         blades: kept,
@@ -350,6 +371,24 @@ export const useStore = create<State>((set) => ({
         expandedBlade: s.expandedBlade && alive.has(s.expandedBlade) ? s.expandedBlade : null,
       }
     }),
+  minimizeBlades: () =>
+    set((s) => ({
+      blades: s.blades.map((b) => ({ ...b, minimized: true })),
+      focusedBlade: null,
+      expandedBlade: null,
+    })),
+  restoreBlades: (alvo) => {
+    const texto = alvo?.trim().toLowerCase()
+    const abrir = get().blades.filter(
+      (b) => b.minimized && (!texto || b.id === alvo || b.title.toLowerCase().includes(texto)),
+    )
+    const ids = new Set(abrir.map((b) => b.id))
+    set((s) => ({
+      blades: s.blades.map((b) => (ids.has(b.id) ? { ...b, minimized: false } : b)),
+      focusedBlade: abrir.at(-1)?.id ?? s.focusedBlade,
+    }))
+    return abrir.length
+  },
   focusBlade: (focusedBlade) => set({ focusedBlade }),
   expandBlade: (expandedBlade) => set({ expandedBlade }),
   setPhase: (phase) => set({ phase }),
@@ -358,6 +397,8 @@ export const useStore = create<State>((set) => ({
   setActiveTool: (activeTool) => set({ activeTool }),
   setError: (error) => set({ error }),
   setConnected: (connected) => set({ connected }),
+  setSistemas: (sistemas) => set({ sistemas }),
+  setExibicao: (exibicao) => set({ exibicao }),
   pushTurn: (turn) => set((s) => ({ turns: [...s.turns.slice(-40), turn] })),
   appendToLastTurn: (text) =>
     set((s) => {
@@ -415,7 +456,7 @@ export const useStore = create<State>((set) => ({
     // Blades clear with the panels. "Clear the screen" said out loud means the
     // screen, and leaving a full-height article standing while the cards
     // around it vanish is the interface arguing with the instruction.
-    const cleared = { panels: [], blades: [], focusedBlade: null, expandedBlade: null }
+    const cleared = { panels: [], blades: [], focusedBlade: null, expandedBlade: null, sistemas: 'fechado' as const }
     return set(
       what === 'all' ? { ...cleared, turns: [], caption: '', activeTool: null } : cleared,
     )

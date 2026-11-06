@@ -14,6 +14,8 @@ import {
   ask,
   cancel as cancelTask,
   warmBridge,
+  salvarPreferencias,
+  watchPreferencias,
   watchServers,
   watchPanels,
   watchBlades,
@@ -27,7 +29,10 @@ import {
 } from './lib/bridge'
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
 import { startAnalyser, micLevel } from './lib/audio'
-import { ouviuConfirmacao, registrarFala } from './lib/autodev'
+import { foraDeHora, ouviuConfirmacao, registrarFala } from './lib/autodev'
+import { chamadaDisponivel, ouvirNome } from './lib/chamada'
+import { sistemasAgora } from './lib/estadoDosSistemas'
+import { resumoSistemas } from './lib/sistemas'
 import { handleBrowser } from './lib/navegador'
 
 /**
@@ -112,6 +117,7 @@ export default function App() {
     const s = store.getState()
     s.setCaption('')
     s.setActiveTool(null)
+    s.minimizeBlades()
     music.working(false)
     music.duck(false)
     sfx.duck(false)
@@ -156,15 +162,17 @@ export default function App() {
       const acao = String(args.acao ?? '')
       armIdle()
       // Quem confirma é a pessoa, na própria fala; o modelo só repassa.
-      const desde = acao === 'aprovar' ? s.autodev?.testeDesde : s.autodev?.criadoEm
-      if (
-        (acao === 'confirmar' || acao === 'aprovar') &&
-        !(await ouviuConfirmacao(desde ?? Date.now()))
-      ) {
-        return {
-          output:
-            'A confirmação não foi ouvida do Ricardo. Peça que ele diga "confirmo" ou ' +
-            'clique no botão na tela. Nada foi feito.',
+      if (acao === 'confirmar' || acao === 'aprovar') {
+        const impedimento = foraDeHora(acao, s.autodev)
+        if (impedimento) return { output: impedimento }
+        const desde = acao === 'aprovar' ? s.autodev?.testeDesde : s.autodev?.criadoEm
+        if (!(await ouviuConfirmacao(desde ?? Date.now()))) {
+          const botao = acao === 'aprovar' ? 'Aprovar' : 'Confirmar'
+          return {
+            output:
+              `A confirmação não foi ouvida do Ricardo. Peça uma vez que ele diga "confirmo" ou ` +
+              `clique em ${botao} na tela. Se ele pedir outra coisa, atenda. Nada foi feito.`,
+          }
         }
       }
       const { mensagem } = await autodev(acao, { pedido: String(args.pedido ?? '') })
@@ -213,6 +221,24 @@ export default function App() {
         s.fireEffect(args.efeito as never)
         feito.push(`efeito ${args.efeito}`)
       }
+      const pedido = {
+        ...(typeof args.exibir_ponte === 'boolean' && { exibirPonte: args.exibir_ponte }),
+        ...(typeof args.exibir_chat === 'boolean' && { exibirChat: args.exibir_chat }),
+      }
+      if (Object.keys(pedido).length) {
+        s.setExibicao({ ...s.exibicao, ...pedido })
+        void salvarPreferencias(pedido)
+        feito.push('exibição ajustada')
+      }
+      if (args.popups === 'minimizar') {
+        s.minimizeBlades()
+        feito.push('popups minimizados')
+      }
+      if (args.popups === 'abrir') {
+        const n = s.restoreBlades(typeof args.popup === 'string' ? args.popup : undefined)
+        if (n) feito.push(n === 1 ? 'um popup aberto' : `${n} popups abertos`)
+        else vazio = 'Não há popup minimizado com esse nome.'
+      }
       if (args.limpar_tela) {
         const alvo = SCREEN_SCOPE[String(args.limpar_tela)] ?? 'panels'
         const saiu = clearScreenAndReport(alvo)
@@ -229,10 +255,30 @@ export default function App() {
       return { output: partes.join(' ') || 'Nada foi alterado.' }
     }
 
+    if (name === 'diagnostico') {
+      armIdle()
+      if (args.mostrar === false) {
+        s.setSistemas('fechado')
+        return { output: 'A aba de sistemas foi fechada.' }
+      }
+      if (s.sistemas === 'fechado') s.setSistemas('aba')
+      return { output: resumoSistemas(sistemasAgora()) }
+    }
+
     if (name === 'dormir') {
+      // O mesmo que o Esc: também cancela a tarefa em andamento.
+      if (s.phase === 'tooling') cancelTask()
       // Deixa a despedida terminar de tocar antes de fechar o microfone.
       setTimeout(goDormant, 2500)
       return { output: 'Em espera.', silent: true }
+    }
+
+    if (name === 'ignorar_fala') {
+      // A fala não era para ele: volta a ouvir, e a espera por ociosidade segue
+      // valendo, então uma conversa longa ao lado acaba em espera sozinha.
+      if (s.phase === 'thinking') s.setPhase('listening')
+      armIdle()
+      return { output: 'Ignorado.', silent: true, descartar: true }
     }
 
     return { output: `Ferramenta desconhecida: ${name}.` }
@@ -342,6 +388,23 @@ export default function App() {
     }
   }
 
+  /** Chamado pelo nome em espera. O que veio junto vira o primeiro pedido. */
+  const atenderChamado = async (fala: string, pedido: string) => {
+    await wake()
+    const s = store.getState()
+    if (s.phase !== 'listening') return
+    if (pedido) {
+      registrarFala(fala)
+      s.pushTurn({ id: newId(), role: 'user', text: fala })
+      session.current?.prompt(`O Ricardo chamou você pelo nome e disse: "${fala}". Atenda.`)
+    } else {
+      session.current?.prompt(
+        'O Ricardo acabou de chamar você pelo nome, e você saiu da espera. Responda em ' +
+          'poucas palavras que está ouvindo.',
+      )
+    }
+  }
+
   // -- partida ----------------------------------------------------------------
 
   const powerOn = async () => {
@@ -374,6 +437,7 @@ export default function App() {
     s.setPhase('boot')
 
     watchServers((servers) => store.getState().setConnected(servers))
+    watchPreferencias((valores) => store.getState().setExibicao(valores))
     watchPanels((panel) => store.getState().pushPanel(panel))
     watchBlades((blade) => store.getState().pushBlade(blade))
 
@@ -515,9 +579,23 @@ export default function App() {
 
   // -- palmas -----------------------------------------------------------------
 
-  /** Uma palma liga a interface (antes da partida) ou o acorda da espera. */
+  /** Em espera, só o nome acorda por voz (RF-11). */
   useEffect(() => {
-    if (phase !== 'offline' && phase !== 'dormant') return
+    if (phase !== 'dormant' || !chamadaDisponivel()) return
+    const escuta = ouvirNome(
+      (fala, pedido) => void atenderChamado(fala, pedido),
+      (motivo) => store.getState().setError(motivo),
+    )
+    return () => escuta.stop()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
+
+  /**
+   * Uma palma liga a interface. Em espera ela não acorda mais, porque só o nome
+   * deve acordá-lo, salvo num navegador que não saiba ouvir o nome.
+   */
+  useEffect(() => {
+    if (phase !== 'offline' && !(phase === 'dormant' && !chamadaDisponivel())) return
     let live: { stop: () => void } | null = null
     let gone = false
     void listenForClap(() => {

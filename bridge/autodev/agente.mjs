@@ -51,7 +51,7 @@ Antes de terminar, rode npm run lint e npm run build e corrija o que falhar.
 Termine com um resumo de uma a três frases, em texto corrido, próprio para ser
 falado em voz alta: o que mudou e o que falta. Sem markdown, código ou caminhos.
 Depois do resumo, acrescente exatamente estas duas linhas, para o A.P.O.L.O. ler:
-BRANCH: fase-x.x/nome-curto (a fase em andamento em docs/05-roadmap.md; minúsculas e hífens)
+BRANCH: nome-criativo (só o nome, sem "fase-": quem numera é o A.P.O.L.O.; minúsculas e hífens; evoque a entrega inteira, de forma ampla)
 COMMIT: título do commit em português, no imperativo, até 72 caracteres`
 
 /** Resume uma chamada de ferramenta para o painel de acompanhamento. */

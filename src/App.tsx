@@ -156,11 +156,15 @@ export default function App() {
       const acao = String(args.acao ?? '')
       armIdle()
       // Quem confirma é a pessoa, na própria fala; o modelo só repassa.
-      if (acao === 'confirmar' && !(await ouviuConfirmacao(s.autodev?.criadoEm ?? Date.now()))) {
+      const desde = acao === 'aprovar' ? s.autodev?.testeDesde : s.autodev?.criadoEm
+      if (
+        (acao === 'confirmar' || acao === 'aprovar') &&
+        !(await ouviuConfirmacao(desde ?? Date.now()))
+      ) {
         return {
           output:
             'A confirmação não foi ouvida do Ricardo. Peça que ele diga "confirmo" ou ' +
-            'clique em Confirmar na tela. Nada foi iniciado.',
+            'clique no botão na tela. Nada foi feito.',
         }
       }
       const { mensagem } = await autodev(acao, { pedido: String(args.pedido ?? '') })
@@ -376,9 +380,18 @@ export default function App() {
     // O trabalho leva minutos, então o resultado é anunciado quando chega. Só
     // o que começou com esta página aberta: o estado salvo não é notícia.
     let acompanhando = false
+    let testeAvisado = false
     watchAutodev((estado) => {
       store.getState().setAutodev(estado)
       if (estado.fase !== 'ocioso' && estado.fase !== 'proposto') acompanhando = true
+      if (estado.fase === 'testando' && !testeAvisado && acompanhando) {
+        testeAvisado = true
+        session.current?.prompt(
+          `A alteração está no ar para teste. Diga o que mudou em uma ou duas frases e peça ` +
+            `que o Ricardo teste e diga se aprova ou descarta: ${estado.resumo ?? ''}`,
+        )
+      }
+      if (estado.fase === 'ocioso') testeAvisado = false
       if (estado.fase === 'ocioso' && estado.resultado && acompanhando) {
         acompanhando = false
         session.current?.prompt(

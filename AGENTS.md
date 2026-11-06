@@ -48,11 +48,15 @@ detalhe está em `docs/`.
   Intel + macOS 26 compila LLVM por horas — sempre responder `n`.
 - **Voz própria:** pendente; o usuário quer usar o "Voice Studio" (ferramenta a
   confirmar). ADR nova quando definida.
-- **Autodesenvolvimento (ADR 0011):** com `npm start -- --autodev`, o A.P.O.L.O.
-  altera o próprio código por voz ou chat, com confirmação, numa worktree em
-  `~/.apolo/autodev`, e reinicia com rollback automático. As branches ficam em
-  `autodev/<id>`; a cópia em execução pode estar numa delas. Arquivos sensíveis
-  (`bridge/autodev/politica.mjs`) nunca entram no ar sem revisão.
+- **Autodesenvolvimento (ADR 0011 e 0015):** com `npm start -- --autodev`, o
+  A.P.O.L.O. altera o próprio código por voz ou chat, com confirmação, numa
+  worktree em `~/.apolo/autodev`, sempre a partir da `main`. Depois das checagens,
+  reinicia no código novo e fica **em teste, sem prazo**: aprovar guarda em
+  `fase-x.x/nome` e volta à `main`; descartar, uma queda ou um `npm start` sem
+  aprovação voltam à `main` e apagam a branch. `autodev/<id>` só existe durante o
+  teste. O VS Code é opcional (`APOLO_AUTODEV_VSCODE=1`) e fecha sozinho. Arquivos
+  sensíveis (`bridge/autodev/politica.mjs`) nunca entram em teste sem revisão.
+  Motivos de rollback ficam em `~/.apolo/autodev/eventos.log`.
 - Escopo atual: **apenas o core e os pontos de extensão**. Módulos de domínio
   (e-mail, agenda, finanças, automação residencial) vêm depois.
 
@@ -105,8 +109,9 @@ npm run lint         # oxlint
 npm run build        # checagem de tipos + build
 npm run setup        # confere Node, Claude Code e a chave da voz (Gemini ou OpenAI)
 npm start -- --autodev  # permite o autodesenvolvimento (ADR 0011)
-npm run rollback     # volta a última alteração do autodesenvolvimento (com tudo parado)
+npm run rollback     # descarta a alteração em teste e volta à main (com tudo parado)
 npm run test:autodev # testes da política e do rollback
+npm run test:autodev:e2e # ciclo real com Chrome headless mudo (leva minutos, fora do npm test)
 npm run test:git     # testes do sub-módulo git (commit e pull request)
 npm test             # todos os testes de scripts/
 ```

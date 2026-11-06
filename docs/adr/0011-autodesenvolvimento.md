@@ -1,6 +1,6 @@
 # ADR 0011 — Autodesenvolvimento com rollback automático
 
-- **Status:** proposta
+- **Status:** aceita em parte; itens 4, 6, 7 e 8 substituídos pela ADR 0015
 - **Data:** 2026-11-03
 
 ## Contexto

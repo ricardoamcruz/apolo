@@ -7,6 +7,7 @@ const FASES = {
   trabalhando: 'ALTERANDO O CÓDIGO',
   verificando: 'VERIFICANDO',
   aplicando: 'REINICIANDO',
+  testando: 'EM TESTE',
 } as const
 
 /**
@@ -46,16 +47,21 @@ export function Autodev() {
       {fase !== 'ocioso' && (
         <>
           <div className="autodev-fase">
-            {fase !== 'proposto' && <span className="spinner" />}
+            {fase !== 'proposto' && fase !== 'testando' && <span className="spinner" />}
             {FASES[fase]}
           </div>
           <div className="autodev-pedido">{estado.pedido}</div>
           {estado.etapa && <div className="autodev-etapa">{estado.etapa}</div>}
+          {fase === 'testando' && resultado?.tipo === 'recusado' && (
+            <div className="autodev-resultado autodev-recusado">{resultado.mensagem}</div>
+          )}
           <div className="autodev-acoes">
             {fase === 'proposto' && <button onClick={() => void agir('confirmar')}>Confirmar</button>}
             {(fase === 'proposto' || fase === 'trabalhando') && (
               <button onClick={() => void agir('cancelar')}>Cancelar</button>
             )}
+            {fase === 'testando' && <button onClick={() => void agir('aprovar')}>Aprovar</button>}
+            {fase === 'testando' && <button onClick={() => void agir('reverter')}>Descartar</button>}
           </div>
         </>
       )}

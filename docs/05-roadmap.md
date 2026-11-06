@@ -9,7 +9,7 @@ sobre a ordem das fases abaixo.
 - [x] **1. Limpar a tela (RF-16):** "limpe a bagunça", "tira isso da tela" e "fecha esses popups" fecham os painéis e os artigos abertos sem apagar a conversa; "apague o histórico" e "limpe tudo" são os outros escopos, e ele informa o que saiu ou que a tela já estava limpa (03/11/2026). Falta validar por voz no navegador
 - [ ] **2. Sub-módulo git (RF-17):** o A.P.O.L.O. faz commits e gera pull requests para a própria `main` — **em andamento**: ferramentas `git_*` implementadas (ADR 0014, 05/11/2026), com commit só fora da `main`, conferência de segredos, sem merge e sem `--force`, testes offline em `npm run test:git`; falta validar na máquina do Ricardo o push no `origin` e o `gh pr create`
 - [ ] **3. Contexto compartilhado (RF-18):** avaliar salvar informações importantes em uma branch local ou em um arquivo de contexto compartilhado, para uso futuro
-- [ ] **4. Gerar código para si próprio (RF-15):** integrar-se ao VS Code e ao Claude para isso — a base está nesta versão; falta validar o fluxo completo com o agente real
+- [ ] **4. Gerar código para si próprio (RF-15):** ciclo de teste com aprovação (ADR 0015, 06/11/2026), verificado de ponta a ponta com agente falso em `npm run test:autodev:e2e`; falta validar por voz com o agente real
   - [ ] **4.a** Essa habilidade funciona em conjunto com a de se auto-reiniciar
   - [ ] **4.b** Se algo der errado, o rollback automático entra em ação
 - [ ] **5. Navegador (RF-19):** detectar em qual navegador e sistema está rodando, abrir novas abas e transformar uma popup aberta em aba — **em andamento**: ferramentas `browser_*` implementadas (ADR 0012, 04/11/2026); falta validar no navegador do Mac, liberar pop-ups para o endereço da interface e decidir se vale criar aba pela extensão do Claude quando o bloqueador recusar
@@ -43,7 +43,7 @@ sobre a ordem das fases abaixo.
 - [ ] Painel de status (módulos, provedor, consumo)
 
 ## Fase 2 — Voz e celular
-- [ ] Autodesenvolvimento por voz e chat, com rollback automático (ADR 0011, RF-15) — **em andamento**: implementado e testado; o `.env.local` passou a ser lido antes de qualquer módulo que leia configuração (`bridge/env.mjs`), então `APOLO_AUTODEV_*` e `JARVIS_MODEL` valem nesse arquivo, e não só no terminal (03/11/2026); falta validar por voz no navegador e aprovar a ADR
+- [ ] Autodesenvolvimento por voz e chat, com teste, aprovação e rollback para a `main` (ADR 0011, ADR 0015, RF-15) — **em andamento**: implementado e testado; o `.env.local` passou a ser lido antes de qualquer módulo que leia configuração (`bridge/env.mjs`), então `APOLO_AUTODEV_*` e `JARVIS_MODEL` valem nesse arquivo, e não só no terminal (03/11/2026); falta validar por voz no navegador
 - [x] Voz pt-BR gratuita em tempo real — speech-to-speech pelo Gemini Live, OpenAI como opção (ADR 0009 e 0010, 03/11/2026)
 - [ ] Palavra de ativação "Apolo" (hoje: Espaço ou palmas acordam)
 - [ ] Voz no app de celular usando o mesmo `POST /realtime/sessao` da ponte

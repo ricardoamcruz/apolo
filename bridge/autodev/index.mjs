@@ -2,21 +2,24 @@
  * Autodesenvolvimento: o A.P.O.L.O. altera o próprio código quando o Ricardo
  * pede e confirma (docs/adr/0011).
  *
- *   proposto → trabalhando → verificando → aplicando → resultado
+ *   proposto → trabalhando → verificando → aplicando → testando → resultado
  *
  * Nada acontece na cópia em execução. O agente trabalha numa worktree separada,
- * a partir da versão que está no ar; a ponte confere o resultado e só então pede
- * ao supervisor (scripts/supervisor.mjs) para trocar a versão. Se quebrar, ele
- * volta sozinho. A ponte nunca é quem faz a troca: ela é o que está sendo trocado.
+ * a partir da main; a ponte confere o resultado e só então pede ao supervisor
+ * (scripts/supervisor.mjs) para colocá-lo em teste. O Ricardo aprova ou descarta,
+ * e se quebrar ele volta sozinho (docs/adr/0015). A ponte nunca é quem faz a
+ * troca: ela é o que está sendo trocado.
  */
 
 import { execFile, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { PASTA_AUTODEV, classificar } from './politica.mjs'
+import { BASE, PASTA_AUTODEV, classificar, gateIntacto } from './politica.mjs'
 import { rodarAgente } from './agente.mjs'
+import { abrirEditor as abrirEditorPadrao, fecharEditor as fecharEditorPadrao } from './editor.mjs'
+import { lerEntrega, nomeLivre, pedidoVago } from './entrega.mjs'
 
 const exec = promisify(execFile)
 
@@ -25,7 +28,8 @@ const LIMITE_MS = Number(process.env.APOLO_AUTODEV_LIMITE_MIN ?? 30) * 60_000
 const CHECAGEM_MS = 5 * 60_000
 /** Mais que a subida e a observação do supervisor somadas. */
 const TROCA_MS = 5 * 60_000
-const EM_CURSO = new Set(['trabalhando', 'verificando', 'aplicando'])
+const BUSCA_MS = 15_000
+const EM_CURSO = new Set(['trabalhando', 'verificando', 'aplicando', 'testando'])
 
 const git = async (cwd, ...args) =>
   (await exec('git', args, { cwd, maxBuffer: 16 * 1024 * 1024 })).stdout.trim()
@@ -77,6 +81,9 @@ async function ponteSobe(pasta) {
  * fica em node_modules, compartilhado com a cópia em execução.
  */
 async function verificarPadrao(pasta) {
+  if (!gateIntacto(readFileSync(join(pasta, 'bridge/server.mjs'), 'utf8'))) {
+    return { ok: false, motivo: 'A alteração tirou bridge/server.mjs do gate.' }
+  }
   const bin = (nome) => join(pasta, 'node_modules', '.bin', nome)
   const passos = [
     ['lint', bin('oxlint'), []],
@@ -98,20 +105,6 @@ async function verificarPadrao(pasta) {
   return { ok: true }
 }
 
-/** Abre a cópia de trabalho no VS Code, para acompanhar. Opcional: sem ele, segue. */
-function abrirNoEditor(pasta) {
-  if (process.env.APOLO_AUTODEV_VSCODE === '0') return
-  const candidatos = [
-    process.env.APOLO_VSCODE_BIN,
-    '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code',
-    'code',
-  ].filter(Boolean)
-  const bin = candidatos.find((c) => !c.includes('/') || existsSync(c))
-  const filho = spawn(bin, ['-n', pasta], { stdio: 'ignore', detached: true })
-  filho.on('error', () => {})
-  filho.unref()
-}
-
 /**
  * @param repo         a cópia do projeto em execução
  * @param ligado       APOLO_AUTODEV=1; sem isso, tudo é recusado
@@ -128,10 +121,13 @@ export function criarAutodev({
   pasta = PASTA_AUTODEV,
   agente = rodarAgente,
   verificar = verificarPadrao,
-  abrirEditor = abrirNoEditor,
+  abrirEditor = abrirEditorPadrao,
+  fecharEditor = fecharEditorPadrao,
 }) {
   mkdirSync(pasta, { recursive: true })
   const arqEstado = join(pasta, 'estado.json')
+  const arqTransicao = join(pasta, 'transicao.json')
+  const arqEventos = join(pasta, 'eventos.log')
 
   let estado = { ligado, fase: 'ocioso' }
   try {
@@ -146,7 +142,9 @@ export function criarAutodev({
         resultado: { id: salvo.id, tipo: 'falhou', mensagem: 'A ponte reiniciou no meio do trabalho.' },
       }
     }
-    if (estado.fase === 'aplicando' && !supervisor) estado.fase = 'ocioso'
+    // Sem transição em disco não há nada em teste: o rollback manual já voltou.
+    const emTroca = estado.fase === 'aplicando' || estado.fase === 'testando'
+    if (emTroca && (!supervisor || !existsSync(arqTransicao))) estado.fase = 'ocioso'
     if (estado.fase === 'proposto') estado.fase = 'ocioso'
   } catch {
     /* primeira vez */
@@ -162,14 +160,23 @@ export function criarAutodev({
   }
 
   const terminar = (id, tipo, mensagem, extra = {}) => {
-    console.log(`[autodev] ${id}: ${tipo} — ${mensagem}`)
+    const linha = `[autodev] ${id}: ${tipo} — ${mensagem}`
+    console.log(linha)
+    try {
+      appendFileSync(arqEventos, `${new Date().toISOString()} ${linha}\n`)
+    } catch {
+      /* o registro nunca interrompe o trabalho */
+    }
     controle = null
     mudar({
       fase: 'ocioso',
       id: undefined,
       pedido: undefined,
+      ultimoPedido: estado.pedido ?? estado.ultimoPedido,
       criadoEm: undefined,
       etapa: undefined,
+      entrega: undefined,
+      testeDesde: undefined,
       resultado: { id, tipo, mensagem, ...extra },
     })
   }
@@ -189,7 +196,6 @@ export function criarAutodev({
   }
   if (estado.fase === 'aplicando') vigiarTroca()
 
-  /** Só a cópia do último trabalho fica, aberta no VS Code até o próximo. */
   async function limparCopias() {
     const raiz = join(pasta, 'worktrees')
     const lista = await git(repo, 'worktree', 'list', '--porcelain')
@@ -201,68 +207,113 @@ export function criarAutodev({
     rmSync(raiz, { recursive: true, force: true })
   }
 
-  async function trabalhar(id, pedido) {
+  /** O que sobrou de uma execução interrompida: nada de autodev fica para trás. */
+  async function limparRestos() {
+    if (!ligado || estado.fase !== 'ocioso') return
+    fecharEditor()
+    await limparCopias()
+    const branches = await git(repo, 'for-each-ref', '--format=%(refname:short)', 'refs/heads/autodev')
+    for (const branch of branches.split('\n').filter(Boolean)) {
+      await git(repo, 'branch', '-D', branch).catch(() => {})
+    }
+  }
+  const pronto = limparRestos().catch((err) => console.error('[autodev] limpeza:', err.message))
+
+  const existeBranch = (nome) =>
+    git(repo, 'rev-parse', '--verify', '-q', `refs/heads/${nome}`).then(
+      () => true,
+      () => false,
+    )
+
+  const encerrarCopia = async () => {
+    fecharEditor()
+    await limparCopias()
+  }
+
+  /** Devolve como terminou, ou nada se seguiu para o supervisor. */
+  async function executar(id, pedido, sinal) {
     const copia = join(pasta, 'worktrees', id)
     const branch = `autodev/${id}`
+    await limparCopias()
+    await git(repo, 'worktree', 'add', '--detach', copia, 'HEAD')
+    symlinkSync(join(repo, 'node_modules'), join(copia, 'node_modules'))
+    if (sinal.aborted) return ['cancelado', 'O trabalho foi cancelado.']
+    abrirEditor(copia)
+
+    const limite = setTimeout(() => controle?.abort(), LIMITE_MS)
+    const r = await agente({
+      pedido,
+      pasta: copia,
+      repo,
+      abortController: controle,
+      aoProgresso: (etapa) => mudar({ etapa }),
+    }).finally(() => clearTimeout(limite))
+
+    if (sinal.aborted) return ['cancelado', 'O trabalho foi cancelado.']
+    const entrega = lerEntrega(r.texto, pedido)
+    if (!r.ok) return ['falhou', entrega.resumo]
+
+    await git(copia, 'add', '-A')
+    const nomes = (await git(copia, 'diff', '--cached', '--name-only')).split('\n').filter(Boolean)
+    if (!nomes.length) return ['falhou', entrega.resumo || 'Nenhum arquivo foi alterado.']
+
+    const { proibidos, sensiveis } = classificar(nomes)
+    if (proibidos.length) {
+      return ['falhou', `A alteração tocou em ${proibidos.join(', ')} e foi descartada.`]
+    }
+
+    await git(copia, 'commit', '-m', entrega.titulo, '-m', `${entrega.resumo}\n\nPedido: ${pedido}`)
+    const sha = await git(copia, 'rev-parse', 'HEAD')
+
+    // Código sensível não roda antes de alguém ler, nem nas checagens. Vai
+    // direto para a branch definitiva: não há o que testar aqui.
+    const guardar = async (motivo, extra = {}) => {
+      const final = await nomeLivre(entrega.branch, existeBranch)
+      await git(repo, 'branch', final, sha)
+      return ['revisao', `${entrega.resumo} ${motivo}`, { branch: final, ...extra }]
+    }
+    if (sensiveis.length) {
+      return guardar('A alteração toca arquivos sensíveis e aguarda revisão na branch.', { sensiveis })
+    }
+
+    mudar({ fase: 'verificando', etapa: 'lint, tipos, build e partida' })
+    const v = await verificar(copia)
+    if (!v.ok) return ['falhou', `As checagens recusaram a alteração. ${v.motivo}`]
+
+    if (!supervisor) return guardar('Sem o supervisor do npm start, ela ficou na branch.')
+
+    await encerrarCopia()
+    await git(repo, 'branch', branch, sha)
+    controle = null
+    mudar({ fase: 'aplicando', etapa: 'reiniciando', branch, resumo: entrega.resumo, entrega })
+    vigiarTroca()
+    supervisor({ type: 'autodev:aplicar', id, sha, branch, interfaces: interfaces() })
+  }
+
+  async function trabalhar(id, pedido) {
+    const sinal = controle.signal
+    let fim
     try {
-      await limparCopias()
-      // Destacada: uma branch presa a uma worktree não pode ir para a cópia em
-      // execução. Ela é criada no fim, já apontando para o commit verificado.
-      await git(repo, 'worktree', 'add', '--detach', copia, 'HEAD')
-      symlinkSync(join(repo, 'node_modules'), join(copia, 'node_modules'))
-      if (controle.signal.aborted) return terminar(id, 'cancelado', 'O trabalho foi cancelado.')
-      abrirEditor(copia)
-
-      const limite = setTimeout(() => controle?.abort(), LIMITE_MS)
-      const r = await agente({
-        pedido,
-        pasta: copia,
-        repo,
-        abortController: controle,
-        aoProgresso: (etapa) => mudar({ etapa }),
-      }).finally(() => clearTimeout(limite))
-
-      if (controle.signal.aborted) return terminar(id, 'cancelado', 'O trabalho foi cancelado.')
-      if (!r.ok) return terminar(id, 'falhou', r.texto)
-
-      await git(copia, 'add', '-A')
-      const nomes = (await git(copia, 'diff', '--cached', '--name-only')).split('\n').filter(Boolean)
-      if (!nomes.length) return terminar(id, 'falhou', r.texto || 'Nenhum arquivo foi alterado.')
-
-      const { proibidos, sensiveis } = classificar(nomes)
-      if (proibidos.length) {
-        return terminar(id, 'falhou', `A alteração tocou em ${proibidos.join(', ')} e foi descartada.`)
-      }
-
-      await git(copia, 'commit', '-m', `Autodesenvolvimento: ${pedido.slice(0, 60)}\n\n${pedido}`)
-      const sha = await git(copia, 'rev-parse', 'HEAD')
-      await git(repo, 'branch', branch, sha)
-
-      // Código sensível não roda antes de alguém ler, nem nas checagens.
-      if (sensiveis.length) {
-        return terminar(
-          id,
-          'revisao',
-          `${r.texto} A alteração toca arquivos sensíveis e aguarda revisão na branch.`,
-          { branch, sensiveis },
-        )
-      }
-
-      mudar({ fase: 'verificando', etapa: 'lint, tipos, build e partida' })
-      const v = await verificar(copia)
-      if (!v.ok) return terminar(id, 'falhou', `As checagens recusaram a alteração. ${v.motivo}`, { branch })
-
-      if (!supervisor) {
-        return terminar(id, 'revisao', `${r.texto} Sem o supervisor do npm start, ela ficou na branch.`, { branch })
-      }
-
-      controle = null
-      mudar({ fase: 'aplicando', etapa: 'reiniciando', branch, resumo: r.texto })
-      vigiarTroca()
-      supervisor({ type: 'autodev:aplicar', id, sha, branch, interfaces: interfaces() })
+      fim = await executar(id, pedido, sinal)
     } catch (err) {
       console.error('[autodev] falha:', err)
-      terminar(id, 'falhou', `O trabalho falhou: ${err.message}`)
+      fim = sinal.aborted
+        ? ['cancelado', 'O trabalho foi cancelado.']
+        : ['falhou', `O trabalho falhou: ${err.message}`]
+    }
+    if (!fim) return
+    // Limpa antes de anunciar: um pedido novo não pode cruzar com esta limpeza.
+    await encerrarCopia().catch((err) => console.error('[autodev] limpeza:', err.message))
+    terminar(id, ...fim)
+  }
+
+  /** A main local atrás do GitHub faria o trabalho partir de código velho. */
+  async function mainAtrasada() {
+    try {
+      await exec('git', ['fetch', '-q', 'origin', BASE], { cwd: repo, timeout: BUSCA_MS })
+      return Number(await git(repo, 'rev-list', '--count', `${BASE}..origin/${BASE}`)) > 0
+    } catch {
+      return false // sem rede ou sem origin: trabalha com o que tem
     }
   }
 
@@ -272,11 +323,21 @@ export function criarAutodev({
       mudar({ fase: 'ocioso', id: undefined, pedido: undefined, criadoEm: undefined })
       return { ok: false, mensagem: 'A proposta expirou.' }
     }
+    const atual = await git(repo, 'symbolic-ref', '--short', '-q', 'HEAD').catch(() => '')
+    if (atual !== BASE) {
+      return {
+        ok: false,
+        mensagem: `Estou rodando em ${atual || 'um commit solto'}. Volte à ${BASE} e reinicie: todo trabalho parte dela.`,
+      }
+    }
     if (await git(repo, 'status', '--porcelain')) {
       return {
         ok: false,
         mensagem: 'A cópia em execução tem alterações não commitadas. Faça o commit antes.',
       }
+    }
+    if (await mainAtrasada()) {
+      return { ok: false, mensagem: `A ${BASE} local está atrás do GitHub. Atualize e reinicie antes.` }
     }
     controle = new AbortController()
     mudar({ fase: 'trabalhando', etapa: 'preparando a cópia de trabalho' })
@@ -286,6 +347,8 @@ export function criarAutodev({
 
   return {
     estado: () => estado,
+    /** Resolve quando a limpeza da partida terminar. */
+    pronto,
 
     /** Uma ação vinda da interface. */
     async acao(acao, { pedido } = {}) {
@@ -300,6 +363,13 @@ export function criarAutodev({
       if (acao === 'propor') {
         const texto = String(pedido ?? '').trim()
         if (!texto) return { ok: false, mensagem: 'Pedido vazio.' }
+        if (pedidoVago(texto)) {
+          const ultimo = estado.ultimoPedido ? ` O último pedido foi: ${estado.ultimoPedido}` : ''
+          return { ok: false, mensagem: `Isso não descreve uma alteração. Diga o pedido completo.${ultimo}` }
+        }
+        if (estado.fase === 'proposto') {
+          return { ok: false, mensagem: 'Já há uma proposta aguardando. Confirme ou cancele antes.' }
+        }
         if (EM_CURSO.has(estado.fase)) return { ok: false, mensagem: 'Já há um trabalho em andamento.' }
         const id = new Date().toISOString().replace(/\D/g, '').slice(0, 14)
         mudar({ fase: 'proposto', id, pedido: texto, criadoEm: Date.now(), etapa: undefined })
@@ -317,22 +387,41 @@ export function criarAutodev({
         }
         return { ok: false, mensagem: 'Não há nada para cancelar.' }
       }
+      if (acao === 'aprovar') {
+        if (estado.fase !== 'testando') return { ok: false, mensagem: 'Não há alteração em teste.' }
+        const branch = await nomeLivre(estado.entrega.branch, existeBranch)
+        mudar({ fase: 'aplicando', etapa: `guardando em ${branch}`, resultado: undefined })
+        vigiarTroca()
+        supervisor({ type: 'autodev:aprovar', id: estado.id, branch })
+        return { ok: true, mensagem: `Guardando na branch ${branch}.` }
+      }
       if (acao === 'reverter') {
         if (!supervisor) return { ok: false, mensagem: 'Reverter exige o supervisor do npm start.' }
-        if (EM_CURSO.has(estado.fase)) return { ok: false, mensagem: 'Há um trabalho em andamento.' }
-        mudar({ fase: 'aplicando', id: 'reversao', etapa: 'voltando à versão anterior' })
+        if (estado.fase !== 'testando') {
+          return { ok: false, mensagem: EM_CURSO.has(estado.fase) ? 'Há um trabalho em andamento.' : 'Já estou na versão segura.' }
+        }
+        mudar({ fase: 'aplicando', etapa: 'voltando à versão segura', resultado: undefined })
         vigiarTroca()
-        supervisor({ type: 'autodev:reverter', id: 'reversao' })
-        return { ok: true, mensagem: 'Voltando à versão anterior.' }
+        supervisor({ type: 'autodev:reverter', id: estado.id })
+        return { ok: true, mensagem: 'Voltando à versão segura.' }
       }
       return { ok: false, mensagem: `Ação desconhecida: ${acao}.` }
     },
 
     /** O resultado de uma troca, vindo do supervisor. */
-    resultado({ id, tipo, mensagem }) {
+    resultado({ id, tipo, mensagem, branch }) {
       clearTimeout(esperaTroca)
-      const { resumo, branch } = estado
-      const texto = tipo === 'concluido' && resumo ? `${resumo} ${mensagem}` : mensagem
+      if (tipo === 'em_teste') {
+        mudar({ fase: 'testando', etapa: 'aguardando sua avaliação', testeDesde: Date.now() })
+        return
+      }
+      // Recusou com a alteração ainda no ar: ela continua em teste.
+      if (tipo === 'recusado' && existsSync(arqTransicao)) {
+        mudar({ fase: 'testando', etapa: 'aguardando sua avaliação', resultado: { id, tipo, mensagem } })
+        return
+      }
+      const { resumo } = estado
+      const texto = tipo === 'aprovado' && resumo ? `${resumo} ${mensagem}` : mensagem
       mudar({ resumo: undefined, branch: undefined })
       terminar(id, tipo, texto, branch ? { branch } : {})
     },

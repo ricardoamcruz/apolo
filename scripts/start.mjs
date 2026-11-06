@@ -180,6 +180,7 @@ function startBridge() {
   ])
   bridge.on('message', (msg) => {
     if (msg?.type === 'autodev:aplicar') void supervisor.aplicar(msg)
+    if (msg?.type === 'autodev:aprovar') void supervisor.aprovar(msg)
     if (msg?.type === 'autodev:reverter') void supervisor.reverter(msg)
   })
 }
@@ -212,8 +213,12 @@ const supervisor = criarSupervisor({
   log: (linha) => console.log(linha),
 })
 
-// Antes de subir qualquer coisa: uma troca interrompida volta para a versão boa.
-const interrompida = await supervisor.recuperar()
+// Antes de subir qualquer coisa: o que não foi aprovado volta para a versão segura.
+const interrompida = await supervisor.recuperar().catch((err) => {
+  console.error(`Não consegui voltar à versão segura: ${err.message}`)
+  console.error('Resolva o que o Git apontou e rode npm run rollback.')
+  process.exit(1)
+})
 
 console.log('\nA.P.O.L.O. iniciando — o cérebro e a interface.\n')
 startBridge()
@@ -221,8 +226,10 @@ if (interrompida) {
   bridge.send({
     type: 'autodev:resultado',
     id: interrompida.id,
-    tipo: 'revertido',
-    mensagem: 'Uma troca de versão foi interrompida; a versão anterior voltou ao ar.',
+    tipo: interrompida.aprovada ? 'aprovado' : 'revertido',
+    mensagem: interrompida.aprovada
+      ? 'A alteração aprovada está guardada na branch e a versão segura voltou ao ar.'
+      : 'Uma alteração em teste foi interrompida; a versão segura voltou ao ar.',
   })
 }
 // npm is a shell script on most systems; call the vite binary directly so we do

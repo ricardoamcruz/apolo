@@ -21,6 +21,9 @@ import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
+/** A versão segura: todo trabalho parte dela e todo rollback volta para ela. */
+export const BASE = 'main'
+
 /** Fora do repositório de propósito: o Vite, o tsc e o oxlint varrem a raiz. */
 export const PASTA_AUTODEV =
   process.env.APOLO_AUTODEV_PASTA?.trim() || join(homedir(), '.apolo', 'autodev')
@@ -37,8 +40,8 @@ export const SENSIVEIS = [
   // O supervisor e a inicialização.
   /^scripts\//,
   /^bridge\/autodev\//,
-  // O gate, o sandbox do agente, a proteção SSRF e o saneamento do HTML.
-  /^bridge\/server\.mjs$/,
+  // O gate, a proteção SSRF e o saneamento do HTML.
+  /^bridge\/gate\.mjs$/,
   // Roda antes de todo o resto e decide a configuração que o gate lê.
   /^bridge\/env\.mjs$/,
   // Commita e envia código do próprio projeto: quem pode mexer nele pode
@@ -55,8 +58,8 @@ export const SENSIVEIS = [
   /^\.oxlintrc\.json$/,
   // Dependências: `npm install` roda scripts de terceiros nesta máquina.
   /^package(-lock)?\.json$/,
-  // Regras dos agentes e automações.
-  /^(AGENTS|CLAUDE|GEMINI)\.md$/,
+  // Automações. As regras dos agentes (AGENTS.md) ficam de fora: são texto, não
+  // executam no teste, e a regra de documentação viva manda alterá-las.
   /^\.github\//,
   /^\.claude\//,
   /^\.gitignore$/,
@@ -71,6 +74,21 @@ export function classificar(arquivos) {
     sensiveis: arquivos.filter((f) => !proibido(f) && SENSIVEIS.some((re) => re.test(f))),
   }
 }
+
+/**
+ * bridge/server.mjs entra em teste sem revisão, então precisa continuar passando
+ * pelo gate. É uma conferência contra engano, não contra má-fé: quem quiser burlar
+ * um texto consegue. Por isso a confirmação do Ricardo e a revisão no pull request
+ * continuam sendo a defesa de verdade (ADR 0015).
+ */
+const USO_DO_GATE = [
+  /from '\.\/gate\.mjs'/,
+  /canUseTool: podeUsarFerramenta,/,
+  /permissionMode: 'default',/,
+  /if \(!originAllowed\(origin\)\)/,
+]
+
+export const gateIntacto = (codigo) => USO_DO_GATE.every((re) => re.test(codigo))
 
 /** Resolve os links do trecho que já existe; um arquivo novo ainda não existe. */
 function realDe(caminho) {

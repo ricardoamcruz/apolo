@@ -140,7 +140,7 @@ export function watchAutodev(fn: (estado: AutodevEstado) => void) {
 export type AutodevResposta = { ok: boolean; mensagem: string }
 const respostas = new Map<string, (r: AutodevResposta) => void>()
 
-/** Uma ação do autodesenvolvimento: propor, confirmar, cancelar, reverter, estado. */
+/** Uma ação do autodesenvolvimento: propor, confirmar, cancelar, aprovar, reverter, estado. */
 export async function autodev(acao: string, extra?: { pedido?: string }): Promise<AutodevResposta> {
   const ws = await connect()
   const id = `d${++askSeq}`
@@ -206,7 +206,9 @@ function scheduleReconnect() {
   attempt += 1
   clearTimeout(reconnectTimer)
   reconnectTimer = window.setTimeout(() => {
-    void connect().catch(() => {})
+    // Um discado que falha não abre socket, então o onclose não reagenda: sem
+    // isto a página desistia na primeira tentativa, antes de a ponte voltar.
+    void connect().catch(scheduleReconnect)
   }, delay)
 }
 

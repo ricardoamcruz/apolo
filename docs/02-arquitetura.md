@@ -109,22 +109,27 @@ Escolha com `APOLO_VOZ_PROVEDOR`. Ferramentas da voz: `executar_tarefa`,
 | Agir (web, e-mail, navegador, painéis) | agente de tarefas Claude, na ponte |
 | Ativação | ligado após INICIAR; espera após 90 s; Espaço ou palmas acordam |
 
-## Autodesenvolvimento (ADR 0011)
+## Autodesenvolvimento (ADR 0011 e 0015)
 
 ```
 voz/chat → proposta → confirmação humana → worktree + Claude Code → checagens
-         → supervisor troca a branch e reinicia a ponte → observa 60 s
-                                                        ├─ estável: fica
-                                                        └─ quebrou: rollback
+         → supervisor troca a branch e reinicia a ponte → EM TESTE (sem prazo)
+                              ├─ aprovado: fase-x.x/nome, volta à main
+                              └─ descartado, queda ou partida sem aprovação:
+                                 apaga a autodev, volta à main
 ```
 
 | Peça | Arquivo |
 |---|---|
 | Regras do que pode mudar | `bridge/autodev/politica.mjs` |
+| O gate, que `server.mjs` usa e não define | `bridge/gate.mjs` |
+| Nome da branch e título do commit | `bridge/autodev/entrega.mjs` |
+| VS Code opcional | `bridge/autodev/editor.mjs` |
 | Agente (único ponto que conhece o provedor) | `bridge/autodev/agente.mjs` |
 | Ciclo do trabalho e checagens | `bridge/autodev/index.mjs` |
-| Troca, observação e rollback | `scripts/supervisor.mjs` |
+| Troca, teste, aprovação e rollback | `scripts/supervisor.mjs` |
 | Rollback manual | `scripts/rollback.mjs` |
+| Ciclo real com Chrome mudo | `scripts/e2e/autodev.mjs` |
 | Chat e acompanhamento na tela | `src/ui/Autodev.tsx`, `src/lib/autodev.ts` |
 
 A ponte e o supervisor conversam pelo canal IPC do `npm start`. Fora dele, a

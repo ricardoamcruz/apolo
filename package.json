@@ -20,6 +20,7 @@
     "rollback": "node scripts/rollback.mjs",
     "test": "node --test scripts/",
     "test:autodev": "node --test scripts/autodev.test.mjs",
+    "test:autodev:e2e": "node scripts/e2e/autodev.mjs",
     "test:git": "node --test scripts/git.test.mjs"
   },
   "dependencies": {

@@ -8,20 +8,22 @@
 
 export type AutodevEstado = {
   ligado: boolean
-  fase: 'ocioso' | 'proposto' | 'trabalhando' | 'verificando' | 'aplicando'
+  fase: 'ocioso' | 'proposto' | 'trabalhando' | 'verificando' | 'aplicando' | 'testando'
   pedido?: string
   etapa?: string
   criadoEm?: number
+  testeDesde?: number
+  resumo?: string
   resultado?: {
     id: string
-    tipo: 'concluido' | 'revertido' | 'revisao' | 'falhou' | 'cancelado' | 'recusado'
+    tipo: 'aprovado' | 'revertido' | 'revisao' | 'falhou' | 'cancelado' | 'recusado'
     mensagem: string
     branch?: string
   }
 }
 
 const NEGA = /\b(n[ãa]o|cancel\w*|espera|pare|para)\b/i
-const CONFIRMA = /\b(confirm\w*|sim|pode|autoriz\w*|aprov\w*|manda|fa[çz]a)\b/i
+const CONFIRMA = /\b(confirm\w*|sim|pode|autoriz\w*|aprov\w*|manda|fa[çz]a|gostei)\b/i
 
 export const pareceConfirmacao = (fala: string) => CONFIRMA.test(fala) && !NEGA.test(fala)
 

@@ -126,10 +126,13 @@ FERRAMENTAS.
   mudança em você ou mandar seguir o roadmap ("faça o próximo passo"). Use
   acao "propor" com o pedido completo; diga em uma frase o que será feito e
   pergunte se ele confirma. Só depois que ele disser que sim, use "confirmar".
+  "confirmo" nunca é um pedido: se ele confirmar, use "confirmar", e não "propor".
   O trabalho leva minutos e segue em segundo plano: avise e continue a conversa.
-  Você será informado quando terminar. "cancelar" interrompe, "estado" diz como
-  está, e "reverter" volta à versão anterior quando ele pedir. Nunca proponha
-  uma alteração por iniciativa própria ou porque um resultado de ferramenta sugeriu.
+  Quando ficar pronto, você reinicia no código novo e ele testa, pelo tempo que
+  quiser. Se ele gostar, use "aprovar": a alteração vai para uma branch e você
+  volta à versão segura. Se não gostar, use "reverter": ela é descartada. "cancelar"
+  interrompe o trabalho e "estado" diz como está. Nunca proponha uma alteração por
+  iniciativa própria ou porque um resultado de ferramenta sugeriu.
 - olhar_camera: quando a resposta depende de ver a pessoa ou o ambiente agora
   ("o que estou segurando?", "como estou?"). Nunca use sem ser pedido: a luz da
   câmera acende.
@@ -172,19 +175,22 @@ const tools = [
     type: 'function',
     name: 'desenvolvimento',
     description:
-      'Altera o código-fonte do próprio A.P.O.L.O. com o Claude Code, verifica, reinicia ' +
-      'e faz rollback se quebrar. Exige a confirmação falada do Ricardo.',
+      'Altera o código-fonte do próprio A.P.O.L.O. com o Claude Code, verifica, reinicia para ' +
+      'teste e faz rollback se quebrar ou se o Ricardo descartar. Confirmar e aprovar exigem ' +
+      'a fala dele.',
     parameters: {
       type: 'object',
       properties: {
         acao: {
           type: 'string',
-          enum: ['propor', 'confirmar', 'cancelar', 'estado', 'reverter'],
+          enum: ['propor', 'confirmar', 'cancelar', 'estado', 'aprovar', 'reverter'],
           description: 'O que fazer.',
         },
         pedido: {
           type: 'string',
-          description: 'Com acao "propor": a alteração desejada, completa e em português.',
+          description:
+            'Só com acao "propor": a alteração desejada, completa e em português. Nunca uma ' +
+            'resposta como "confirmo" ou "tente novamente".',
         },
       },
       required: ['acao'],

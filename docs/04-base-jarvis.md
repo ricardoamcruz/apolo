@@ -17,7 +17,8 @@ Dois processos:
 
 | Arquivo/pasta | O que faz | Destino no A.P.O.L.O |
 |---|---|---|
-| `bridge/server.mjs` (1.463 linhas) | WebSocket, HTTP, gate `decideTool`, persona, sessão do Agent SDK | desmontar em `core/gateway`, `core/orchestrator`, `core/permissions`, `core/providers/claude-agent` |
+| `bridge/server.mjs` | WebSocket, HTTP, persona, sessão do Agent SDK | desmontar em `core/gateway`, `core/orchestrator`, `core/permissions`, `core/providers/claude-agent` |
+| `bridge/gate.mjs` | Gate: `decideTool` e origens permitidas (ADR 0015) |
 | `bridge/panels.mjs` | ferramenta `display`: o modelo desenha painéis do HUD | manter; vira serviço do core para módulos |
 | `bridge/ui.mjs` | ferramentas `ui_*` (tema, reator, efeitos) | manter |
 | `bridge/chrome.mjs`, `page.mjs`, `net.mjs` | controla o Chrome e busca páginas com proteção SSRF | virar **módulo** `navegador` |

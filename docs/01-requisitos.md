@@ -22,7 +22,7 @@ Fase: ver `05-roadmap.md`.
 | RF-12 | **Painel de status**: módulos carregados, provedor de IA em uso, consumo/limites, erros | S | 1 | proposto |
 | RF-13 | **Registro de auditoria** de toda ação com efeito (quem pediu, qual módulo, resultado) | M | 1 | proposto |
 | RF-14 | **Configuração** por arquivo + variáveis de ambiente, com segredos fora do Git | M | 1 | proposto |
-| RF-15 | **Autodesenvolvimento**: por voz ou chat, alterar o próprio código com o Claude Code, seguir o roadmap, reiniciar e fazer rollback automático se quebrar (ADR 0011) | S | 2 | em andamento |
+| RF-15 | **Autodesenvolvimento**: por voz ou chat, alterar o próprio código com o Claude Code, seguir o roadmap, reiniciar para teste, voltar à `main` se quebrar ou se o Ricardo descartar, e guardar em `fase-x.x/nome` se ele aprovar (ADR 0011, ADR 0015) | S | 2 | em andamento |
 | RF-16 | **Limpar a tela por comando**: entender pedidos como "limpe a bagunça" como fechar os popups abertos (painéis e artigos), preservando a conversa; "apague o histórico" e "limpe tudo" são os outros dois escopos. O A.P.O.L.O. diz o que saiu, ou que a tela já estava limpa | S | próxima versão | feito (03/11/2026) |
 | RF-17 | **Sub-módulo git**: fazer commits e gerar pull requests para a própria `main`, passando pelo gate de permissões; o merge continua sendo revisado pelo Ricardo (ADR 0014) | S | próxima versão | em andamento |
 | RF-18 | **Contexto compartilhado**: avaliar salvar informações importantes em uma branch local ou em um arquivo de contexto compartilhado, para uso futuro (relacionado a RF-06) | S | próxima versão | proposto |

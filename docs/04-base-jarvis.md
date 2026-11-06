@@ -21,12 +21,13 @@ Dois processos:
 | `bridge/panels.mjs` | ferramenta `display`: o modelo desenha painéis do HUD | manter; vira serviço do core para módulos |
 | `bridge/ui.mjs` | ferramentas `ui_*` (tema, reator, efeitos) | manter |
 | `bridge/chrome.mjs`, `page.mjs`, `net.mjs` | controla o Chrome e busca páginas com proteção SSRF | virar **módulo** `navegador` |
+| `bridge/navegador.mjs` + `src/lib/navegador.ts` | ferramentas `browser_*`: em que navegador e sistema a interface está, abrir aba, popup em aba (código novo, ADR 0012) | entra no mesmo **módulo** `navegador` |
 | `bridge/vision.mjs` | câmera | virar **módulo** `visao` |
 | `src/lib/bridge.ts` | cliente do agente de tarefas no navegador | manter, apontando para o gateway novo (`brain.ts` removido em 03/11/2026) |
 | `src/lib/voice.ts`, `vad.ts`, `tts.ts`, `kokoro.ts` | voz | **removidos** (03/11/2026): substituídos por `src/lib/realtime.ts` e `src/lib/voz/` |
 | `src/lib/anthropic.ts` | modo "direto" (navegador chama a API) | **removido** (03/11/2026): expunha chave no navegador |
 | `src/lib/hands.ts`, `camera.ts`, `clap.ts` | gestos, câmera, palmas | manter como recursos opcionais do rosto |
-| `src/ui/*`, `src/scene/*` | HUD, boot, reator | manter; trocar identidade visual e textos para A.P.O.L.O |
+| `src/ui/*`, `src/scene/*` | HUD, boot, reator | manter; identidade visual em troca desde 05/11/2026 (ADR 0013): cor e tipografia em tokens no `:root` de `src/index.css`, cromo de enfeite removido, marca própria. O núcleo 3D ainda é o reator |
 | `public/audio/*` | trilhas e apresentação falada | **atenção a direitos autorais**: a fala do filme em `boot-music.mp3` foi removida (02/11/2026); a origem de `ambient.mp3` não está confirmada — ver `CREDITS.md` |
 
 ## Já adaptado (01/11/2026)

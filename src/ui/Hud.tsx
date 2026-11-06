@@ -154,7 +154,6 @@ export function Hud() {
   const activeTool = useStore((s) => s.activeTool)
   const connected = useStore((s) => s.connected)
   const error = useStore((s) => s.error)
-  const level = useStore((s) => s.level)
   const voice = useStore((s) => s.voice)
   const bootNote = useStore((s) => s.bootNote)
   const gestures = useStore((s) => s.gestures)
@@ -226,14 +225,11 @@ export function Hud() {
         </aside>
       )}
 
-      {/* Right rail: live telemetry, mostly for flavour */}
-      <aside className="rail rail-right">
-        <div className="rail-title">SINAL</div>
-        <div className="meter">
-          <div className="meter-fill" style={{ height: `${level * 100}%` }} />
-        </div>
-        <div className="rail-item mono">{(level * 100).toFixed(0).padStart(3, '0')}%</div>
-      </aside>
+      {/* A barra da direita ("SINAL") era um medidor do microfone, herdado do
+          JARVIS: enfeite que não dizia nada que o anel central já não diga, e
+          que custava caro — era a única coisa aqui assinada em `level`, então o
+          HUD inteiro re-renderizava a cada quadro de áudio. O nível continua no
+          store e continua pulsando o reator; só a leitura saiu. */}
 
       <AnimatePresence>
         {activeTool && ui.chrome.toolBadge && (

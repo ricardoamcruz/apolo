@@ -308,8 +308,13 @@ const SCREEN_DESCRIPTION = `Clear the display.
   all        = both.
 
 Use it when the user says clear the screen, or when a topic is finished and the
-leftovers from the last one would confuse what comes next. It does not touch the
-theme, the reactor or the orbits — \`ui_reset\` does that.`
+leftovers from the last one would confuse what comes next.
+
+"Clear the mess", "close these popups", "get that off the screen" mean \`panels\`:
+the conversation is not clutter, and wiping it is a separate request. Only use
+\`all\` when the user asks for the log to go too.
+
+It does not touch the theme, the reactor or the orbits — \`ui_reset\` does that.`
 
 const RESET_DESCRIPTION = `Put the entire interface back to stock.
 
@@ -472,14 +477,15 @@ export function uiServer(emit) {
         'ui_screen',
         SCREEN_DESCRIPTION,
         {
+          // Defaults to the scope that cannot lose anything the user said.
           what: z
             .enum(['all', 'panels', 'transcript'])
-            .default('all')
-            .catch('all')
-            .describe('What to clear.'),
+            .default('panels')
+            .catch('panels')
+            .describe('What to clear. Omitted means the popups only.'),
         },
         async (args) => {
-          const what = args.what ?? 'all'
+          const what = args.what ?? 'panels'
           emit('screen', { what })
           return ok('Cleared.')
         },

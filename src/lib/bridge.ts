@@ -1,6 +1,7 @@
 import type { Blade, Panel } from '../store'
 import { BRIDGE_WS_URL } from '../config'
 import type { AutodevEstado } from './autodev'
+import type { BrowserReply, BrowserRequest } from './navegador'
 
 /** O que um pedido ao agente de tarefas recebe enquanto ele trabalha. */
 export type AskHandlers = {
@@ -45,6 +46,13 @@ type Frame = {
   resposta?: string
   ok?: boolean
   mensagem?: string
+  action?: string
+  url?: string
+  as?: string
+  width?: number
+  height?: number
+  /** Qual janela aberta pelo A.P.O.L.O. — não confundir com o `id` do pedido. */
+  windowId?: string
 }
 
 /** Every question gets an id so its answer can be told from anyone else's. */
@@ -91,6 +99,19 @@ export type CaptureResult = { data?: string; mimeType?: string; error?: string }
 let onCapture: ((req: CaptureRequest) => Promise<CaptureResult>) | null = null
 export function watchCapture(fn: (req: CaptureRequest) => Promise<CaptureResult>) {
   onCapture = fn
+}
+
+/**
+ * O outro pedido que a ponte faz à interface: o navegador (RF-19).
+ *
+ * Mesmo motivo da câmera. Em que navegador e em que sistema isto está aberto é
+ * uma pergunta que só a página responde, e abrir uma aba no navegador da pessoa
+ * só a página faz — então a resposta tem que voltar por aqui, contra o id do
+ * pedido. O que cada ação significa está em `./navegador`.
+ */
+let onBrowser: ((req: BrowserRequest) => Promise<BrowserReply>) | null = null
+export function watchBrowser(fn: (req: BrowserRequest) => Promise<BrowserReply>) {
+  onBrowser = fn
 }
 
 /** Blades arrive the same way panels do — pushed mid-turn, so the article is
@@ -204,6 +225,13 @@ function dispatch(ws: WebSocket) {
       return
     }
 
+    /** A resposta a um pedido da ponte, marcada com o id dele. */
+    const responder = (id: string, payload: Record<string, unknown>) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'reply', id, ...payload }))
+      }
+    }
+
     if (msg.type === 'ready') {
       // The bridge announces immediately on connect from Claude Code's config,
       // then again with live status once the agent initialises. Keep listening
@@ -219,11 +247,7 @@ function dispatch(ws: WebSocket) {
       onBlade?.(msg.blade)
     } else if (msg.type === 'capture' && msg.id) {
       const id = msg.id
-      const reply = (payload: Record<string, unknown>) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'reply', id, ...payload }))
-        }
-      }
+      const reply = (payload: Record<string, unknown>) => responder(id, payload)
       if (!onCapture) {
         reply({ error: 'A interface não tem acesso à câmera.' })
       } else {
@@ -238,6 +262,24 @@ function dispatch(ws: WebSocket) {
         })
           .then(reply)
           .catch((err) => reply({ error: String(err?.message ?? err) }))
+      }
+    } else if (msg.type === 'browser' && msg.id) {
+      const id = msg.id
+      if (!onBrowser) {
+        responder(id, { error: 'A interface não está pronta para mexer no navegador.' })
+      } else {
+        // Sempre responde, mesmo falhando: a ponte está com um turno parado
+        // esperando por isto.
+        onBrowser({
+          action: (msg.action ?? 'environment') as BrowserRequest['action'],
+          url: msg.url,
+          id: msg.windowId,
+          as: msg.as === 'popup' ? 'popup' : 'tab',
+          width: msg.width,
+          height: msg.height,
+        })
+          .then((payload) => responder(id, payload))
+          .catch((err) => responder(id, { error: String(err?.message ?? err) }))
       }
     } else if (msg.type === 'autodev') {
       if (msg.estado) onAutodev?.(msg.estado)

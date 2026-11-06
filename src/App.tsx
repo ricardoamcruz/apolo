@@ -18,6 +18,7 @@ import {
   watchPanels,
   watchBlades,
   watchCapture,
+  watchBrowser,
   watchUi,
   watchConnection,
   watchAutodev,
@@ -27,6 +28,7 @@ import {
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
 import { startAnalyser, micLevel } from './lib/audio'
 import { ouviuConfirmacao, registrarFala } from './lib/autodev'
+import { handleBrowser } from './lib/navegador'
 
 /**
  * A conversa, agora em speech-to-speech (docs/adr/0009).
@@ -51,6 +53,35 @@ const newId = () =>
 
 /** `mcp__apolo_navegador__chrome_open` -> `navegador · chrome open` */
 const prettyTool = (raw: string) => raw.replace(/_/g, ' ')
+
+/**
+ * O que a voz pede em `limpar_tela` e o que isso significa na tela (RF-16).
+ *
+ * "Limpe a bagunça" é um pedido sobre os popups, não sobre a conversa: apagar o
+ * histórico junto destrói o que estava sendo dito. Por isso qualquer valor que
+ * não seja explícito cai em `panels`, o escopo que não perde nada.
+ */
+const SCREEN_SCOPE: Record<string, 'all' | 'panels' | 'transcript'> = {
+  popups: 'panels',
+  historico: 'transcript',
+  tudo: 'all',
+}
+
+/**
+ * Limpa a tela e conta o que saiu — ou nada, se não havia o que limpar. A voz
+ * precisa dessa diferença: anunciar "tela limpa" diante de uma tela que já
+ * estava vazia soa como uma ordem que se perdeu no caminho.
+ */
+function clearScreenAndReport(what: 'all' | 'panels' | 'transcript'): string | null {
+  const s = useStore.getState()
+  const popups = what === 'transcript' ? 0 : s.panels.length + s.blades.length
+  const linhas = what === 'panels' ? 0 : s.turns.length
+  s.clearScreen(what)
+  const saiu: string[] = []
+  if (popups) saiu.push(popups === 1 ? 'um popup fechado' : `${popups} popups fechados`)
+  if (linhas) saiu.push('histórico apagado')
+  return saiu.length ? saiu.join(' e ') : null
+}
 
 export default function App() {
   const store = useStore
@@ -163,6 +194,8 @@ export default function App() {
 
     if (name === 'ajustar_interface') {
       const feito: string[] = []
+      /** Pedido de limpeza que não encontrou nada para limpar. */
+      let vazio: string | null = null
       if (args.restaurar) {
         s.resetUi()
         feito.push('interface restaurada')
@@ -177,11 +210,19 @@ export default function App() {
         feito.push(`efeito ${args.efeito}`)
       }
       if (args.limpar_tela) {
-        s.clearScreen('all')
-        feito.push('tela limpa')
+        const alvo = SCREEN_SCOPE[String(args.limpar_tela)] ?? 'panels'
+        const saiu = clearScreenAndReport(alvo)
+        if (saiu) feito.push(saiu)
+        else {
+          vazio =
+            alvo === 'transcript' ? 'O histórico já estava vazio.' : 'A tela já estava limpa.'
+        }
       }
       armIdle()
-      return { output: feito.length ? `Feito: ${feito.join(', ')}.` : 'Nada foi alterado.' }
+      const partes: string[] = []
+      if (feito.length) partes.push(`Feito: ${feito.join(', ')}.`)
+      if (vazio) partes.push(vazio)
+      return { output: partes.join(' ') || 'Nada foi alterado.' }
     }
 
     if (name === 'dormir') {
@@ -389,6 +430,11 @@ export default function App() {
       }
     })
 
+    // O agente de tarefas querendo saber em que navegador está, ou abrir uma
+    // aba nele (ferramentas browser_*). Quem responde é a página: ninguém no
+    // servidor sabe o que tem do outro lado da tela.
+    watchBrowser(handleBrowser)
+
     // A interface é dele para mexer (ferramentas ui_* do agente de tarefas).
     watchUi((op, args) => {
       const s = store.getState()
@@ -409,7 +455,8 @@ export default function App() {
           s.resetUi()
           break
         case 'screen':
-          s.clearScreen(a.what ?? 'all')
+          // Sem escopo, só os popups: ver SCREEN_SCOPE.
+          s.clearScreen(a.what ?? 'panels')
           break
         default:
           console.warn('[apolo] operação de interface desconhecida:', op, args)

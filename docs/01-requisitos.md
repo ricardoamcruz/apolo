@@ -15,7 +15,7 @@ Fase: ver `05-roadmap.md`.
 | RF-05 | **Confirmação de ações** pelo canal ativo (tela do PC ou celular), com resumo do que será feito | M | 1 | proposto |
 | RF-06 | **Memória persistente**: histórico de conversas, preferências e fatos do usuário, consultável pelos módulos com permissão | M | 1 | proposto |
 | RF-07 | **Agendador e eventos** (base do "Preditivo"): tarefas recorrentes, gatilhos por horário/evento e briefings proativos | M | 1 | proposto |
-| RF-08 | **Canal PC**: interface web atual (HUD), adaptada ao A.P.O.L.O | M | 1 | proposto |
+| RF-08 | **Canal PC**: interface web atual (HUD), adaptada ao A.P.O.L.O | M | 1 | em andamento |
 | RF-09 | **Canal celular**: **app nativo** (voz, notificações, confirmação de ações) conectado ao core | M | 2 | aprovado |
 | RF-10 | **Voz em tempo real gratuita**: conversa speech-to-speech em pt-BR, sem custo por padrão (Gemini Live — ADR 0009 e 0010) | M | 2 | feito (03/11/2026) |
 | RF-11 | **Palavra de ativação** "Apolo" no PC e Android; no iPhone via Siri/Atalhos (limite do iOS). Hoje: microfone aberto após INICIAR, espera após 90 s, Espaço ou palmas acordam (ADR 0009) | S | 2 | proposto |
@@ -23,10 +23,10 @@ Fase: ver `05-roadmap.md`.
 | RF-13 | **Registro de auditoria** de toda ação com efeito (quem pediu, qual módulo, resultado) | M | 1 | proposto |
 | RF-14 | **Configuração** por arquivo + variáveis de ambiente, com segredos fora do Git | M | 1 | proposto |
 | RF-15 | **Autodesenvolvimento**: por voz ou chat, alterar o próprio código com o Claude Code, seguir o roadmap, reiniciar e fazer rollback automático se quebrar (ADR 0011) | S | 2 | em andamento |
-| RF-16 | **Limpar a tela por comando**: entender pedidos como "limpe a bagunça" como fechar os popups abertos | S | próxima versão | proposto |
-| RF-17 | **Sub-módulo git**: fazer commits e gerar pull requests para a própria `main`, passando pelo gate de permissões; o merge continua sendo revisado pelo Ricardo | S | próxima versão | proposto |
+| RF-16 | **Limpar a tela por comando**: entender pedidos como "limpe a bagunça" como fechar os popups abertos (painéis e artigos), preservando a conversa; "apague o histórico" e "limpe tudo" são os outros dois escopos. O A.P.O.L.O. diz o que saiu, ou que a tela já estava limpa | S | próxima versão | feito (03/11/2026) |
+| RF-17 | **Sub-módulo git**: fazer commits e gerar pull requests para a própria `main`, passando pelo gate de permissões; o merge continua sendo revisado pelo Ricardo (ADR 0014) | S | próxima versão | em andamento |
 | RF-18 | **Contexto compartilhado**: avaliar salvar informações importantes em uma branch local ou em um arquivo de contexto compartilhado, para uso futuro (relacionado a RF-06) | S | próxima versão | proposto |
-| RF-19 | **Controle do navegador**: detectar em qual navegador e sistema está rodando, abrir novas abas e transformar uma popup aberta em aba | S | próxima versão | proposto |
+| RF-19 | **Controle do navegador**: detectar em qual navegador e sistema está rodando, abrir novas abas e transformar uma popup aberta em aba (ADR 0012) | S | próxima versão | em andamento |
 | RF-20 | **Comandos por voz**: todo atalho de teclado da interface (`Espaço`, `Esc`, `G`, `D`, `[`, `]`, `E`, `X`) também acionável por voz, com ativação e desativação; entrar em espera ao fim de uma conversa sem se intrometer quando o Ricardo falar com outra pessoa; explicar e lembrar os comandos quando pedido. A câmera do modo mãos só liga por ordem explícita do Ricardo | S | próxima versão | proposto |
 
 ## Requisitos funcionais — módulos futuros (fora do escopo atual)

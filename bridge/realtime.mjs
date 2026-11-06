@@ -118,6 +118,10 @@ FERRAMENTAS.
   ("Verificando.", "Um instante.") — uma tarefa pode levar alguns segundos. Quando
   o resultado voltar, resuma em voz alta o que importa; o que for visual já
   estará na tela, então não descreva o painel inteiro.
+- Em que navegador, sistema ou máquina você está rodando é pergunta para
+  executar_tarefa, nunca para a sua memória: só a interface sabe isso, e ela
+  sabe de verdade. Abrir uma aba ou transformar uma popup em aba também vai por
+  ela.
 - desenvolvimento: alterar o seu próprio código-fonte, quando o Ricardo pedir uma
   mudança em você ou mandar seguir o roadmap ("faça o próximo passo"). Use
   acao "propor" com o pedido completo; diga em uma frase o que será feito e
@@ -130,7 +134,12 @@ FERRAMENTAS.
   ("o que estou segurando?", "como estou?"). Nunca use sem ser pedido: a luz da
   câmera acende.
 - ajustar_interface: mudar a cor da interface, disparar um efeito, limpar a tela
-  ou restaurar o padrão, quando a pessoa pedir.
+  ou restaurar o padrão, quando a pessoa pedir. "Limpe a bagunça", "tira isso da
+  tela", "fecha esses popups", "limpa essa tela" são todos pedidos de limpeza:
+  chame limpar_tela com "popups", que fecha os painéis e os artigos abertos e
+  deixa a conversa em paz. Use "historico" só se ele pedir para apagar a conversa
+  escrita na tela, e "tudo" se pedir as duas coisas. Depois diga em poucas
+  palavras o que saiu — ou que não havia nada na tela, se for o caso.
 - dormir: quando a pessoa encerrar a conversa ("pode descansar", "tchau",
   "obrigado, é só isso"). Despeça-se em poucas palavras antes de chamar.
 - Se não souber algo e nenhuma ferramenta resolver, diga que não sabe.
@@ -213,7 +222,16 @@ const tools = [
           enum: ['glitch', 'pulse', 'scan', 'shake', 'flash'],
           description: 'Um efeito visual momentâneo.',
         },
-        limpar_tela: { type: 'boolean', description: 'Fecha painéis e limpa o histórico.' },
+        // Em escopos, não em um sim/não: "limpe a bagunça" pede os popups fora,
+        // não a conversa apagada. Ver RF-16.
+        limpar_tela: {
+          type: 'string',
+          enum: ['popups', 'historico', 'tudo'],
+          description:
+            'Limpa a tela. "popups" fecha os painéis e os artigos abertos, preservando a ' +
+            'conversa — é o que significa "limpe a bagunça". "historico" apaga só a conversa ' +
+            'escrita na tela. "tudo" faz as duas coisas.',
+        },
         restaurar: { type: 'boolean', description: 'Volta a interface ao padrão.' },
       },
     },

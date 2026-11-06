@@ -406,19 +406,20 @@ export const useStore = create<State>((set) => ({
   // meant "survive the next turn boundary"; when someone says "clear the
   // screen", a card staying up because an earlier turn asked nicely reads as
   // the interface ignoring the instruction.
-  clearScreen: (what) =>
-    set((s) => {
-      const panels = what === 'transcript' ? s.panels : []
-      const turns = what === 'panels' ? s.turns : []
-      // Blades clear with the panels. "Clear the screen" said out loud means the
-      // screen, and leaving a full-height article standing while the cards
-      // around it vanish is the interface arguing with the instruction.
-      const blades = what === 'transcript' ? s.blades : []
-      const cleared = { panels, turns, blades, focusedBlade: null, expandedBlade: null }
-      return what === 'all'
-        ? { ...cleared, caption: '', activeTool: null }
-        : cleared
-    }),
+  clearScreen: (what) => {
+    // Wiping the log leaves the popups exactly as they are — including which
+    // one is in front and which one is full screen. Resetting the focus here
+    // closed the article the user was reading because they asked for the
+    // *conversation* to go.
+    if (what === 'transcript') return set({ turns: [] })
+    // Blades clear with the panels. "Clear the screen" said out loud means the
+    // screen, and leaving a full-height article standing while the cards
+    // around it vanish is the interface arguing with the instruction.
+    const cleared = { panels: [], blades: [], focusedBlade: null, expandedBlade: null }
+    return set(
+      what === 'all' ? { ...cleared, turns: [], caption: '', activeTool: null } : cleared,
+    )
+  },
 }))
 
 /** Colour identity per phase — shared by the 3D scene and the 2D HUD. */
@@ -448,17 +449,20 @@ export function accentFor(phase: Phase, ui: UiState): string {
 
 // Handy while dressing the scene for camera: in the dev server you can drive
 // the visuals from the console without talking, e.g.
-//   __jarvis.setPhase('tooling'); __jarvis.setLevel(0.8)
-//   __jarvis.applyUi({ accent: '#ff5a3c', reactor: { style: 'wire', spin: 3 } })
-//   __jarvis.addOrbit({ id: 'moon', src: '/vite.svg', radius: 0.6, speed: 8,
-//                       size: 90, tilt: 25, opacity: 1, phase: 0 })
-//   __jarvis.fireEffect('glitch'); __jarvis.resetUi()
+//   __apolo.setPhase('tooling'); __apolo.setLevel(0.8)
+//   __apolo.applyUi({ accent: '#ff5a3c', reactor: { style: 'wire', spin: 3 } })
+//   __apolo.addOrbit({ id: 'moon', src: '/vite.svg', radius: 0.6, speed: 8,
+//                      size: 90, tilt: 25, opacity: 1, phase: 0 })
+//   __apolo.fireEffect('glitch'); __apolo.resetUi()
+//
+// Chamava-se `__jarvis` até 05/11/2026. É o nome que o Ricardo digita no
+// console, então faz parte da identidade como qualquer texto na tela.
 if (import.meta.env.DEV) {
   // Not `useStore.getState()` directly: zustand replaces the state object on
   // every set, so a captured snapshot's *actions* keep working while every
-  // data field reads forever as it was at module load. `__jarvis.phase` said
+  // data field reads forever as it was at module load. `__apolo.phase` said
   // 'offline' no matter what was on screen.
-  ;(window as unknown as Record<string, unknown>).__jarvis = new Proxy(
+  ;(window as unknown as Record<string, unknown>).__apolo = new Proxy(
     {} as Record<string, unknown>,
     {
       get: (_t, key) => (useStore.getState() as Record<string | symbol, unknown>)[key],

@@ -32,7 +32,7 @@ com o core.** Canais nunca chamam módulos diretamente.
 | **Gate de permissões** | `livre` / `confirmar` / `negado` por ferramenta; pede confirmação pelo canal; grava auditoria | evolui `decideTool()` |
 | **Memória** | SQLite local: conversas, preferências, fatos, estado dos módulos | **novo** |
 | **Agendador/eventos** | cron, gatilhos e barramento interno de eventos (módulos publicam/assinam) | **novo** |
-| **Config/segredos** | `apolo.config.json` + `.env.local`; segredos nunca no Git | evolui `.env.example` |
+| **Config/segredos** | `apolo.config.json` + `.env.local`; segredos nunca no Git; quem lê o `.env.local` é `bridge/env.mjs`, o primeiro import de todo ponto de entrada (ponte, `npm start`, `npm run rollback`), para que nenhum módulo leia configuração antes de ela existir | evolui `.env.example` |
 
 ## Estrutura de pastas alvo
 
@@ -129,6 +129,19 @@ voz/chat → proposta → confirmação humana → worktree + Claude Code → ch
 
 A ponte e o supervisor conversam pelo canal IPC do `npm start`. Fora dele, a
 alteração fica na branch e nada reinicia.
+
+## Sub-módulo git (ADR 0014)
+
+`bridge/git.mjs` expõe as ferramentas `git_*` sobre o repositório do próprio
+A.P.O.L.O.: `git_status` e `git_diff` leem; `git_commit` guarda o trabalho
+pendente numa branch e `git_pull_request` propõe o merge para a `main`. As duas
+últimas só existem com `JARVIS_ALLOW_WRITES=1` — o gate acontece na construção
+do servidor, como no `chrome.mjs`.
+
+Não há merge, push na `main`, `--force` nem rebase: o merge é do Ricardo. A
+conferência de segredos é a mesma do autodesenvolvimento (`classificar()` em
+`bridge/autodev/politica.mjs`), e a credencial do GitHub nunca passa pela ponte
+— quem autentica são o `git` e o `gh` da máquina. Testes: `npm run test:git`.
 
 ## Protocolo de canal (RNF-11)
 

@@ -17,11 +17,16 @@
  *   node bridge/server.mjs
  */
 
+// Primeiro de todos: o .env.local tem de estar na memória antes de qualquer
+// módulo que leia configuração ao ser avaliado (ver bridge/env.mjs).
+import './env.mjs'
 import { WebSocketServer } from 'ws'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { displayServer } from './panels.mjs'
 import { uiServer } from './ui.mjs'
 import { chromeAvailable, chromeServer } from './chrome.mjs'
+import { navegadorServer } from './navegador.mjs'
+import { gitServer } from './git.mjs'
 import { visionServer } from './vision.mjs'
 import { homedir, tmpdir } from 'node:os'
 import { readFileSync, realpathSync } from 'node:fs'
@@ -32,15 +37,6 @@ import { probeUrl, renderPage } from './page.mjs'
 import { createRealtimeSession, realtimeKey, realtimeModel, voiceProvider } from './realtime.mjs'
 import { fileURLToPath } from 'node:url'
 import { criarAutodev } from './autodev/index.mjs'
-
-// O .env.local também vale para a ponte, para a chave da OpenAI ficar só aqui
-// (o Vite só repassa ao navegador o que começa com VITE_). Variáveis já
-// definidas no terminal têm prioridade.
-try {
-  process.loadEnvFile(fileURLToPath(new URL('../.env.local', import.meta.url)))
-} catch {
-  /* sem .env.local: tudo bem */
-}
 
 const PORT = Number(process.env.JARVIS_BRIDGE_PORT ?? 8787)
 
@@ -288,6 +284,25 @@ function decideTool(name) {
     // withhold the one tool the whole server is for.
     if (server === 'apolo_navegador') return true
 
+    // O ambiente: em que navegador e em que sistema a interface está, e as abas
+    // que o A.P.O.L.O. abriu nela. Permitido pelo mesmo critério do servidor
+    // acima — abrir uma aba é tão visível e tão reversível quanto navegar numa,
+    // que já passa aqui, e nada disto escreve em disco, envia nada nem preenche
+    // formulário. Nomeado em vez de deixado às regras de verbo porque
+    // `browser_open_tab` não começa com verbo de leitura e ficaria preso atrás
+    // de ALLOW_WRITES, o que tiraria do ar a metade útil do requisito. Agir
+    // DENTRO de uma página continua sendo assunto de apolo_navegador, com o
+    // gate dele.
+    if (server === 'apolo_ambiente') return true
+
+    // O repositório do próprio A.P.O.L.O. (RF-17, ADR 0014). Mesmo critério do
+    // servidor do navegador: gitServer() só constrói `git_commit` e
+    // `git_pull_request` quando ALLOW_WRITES está ligado, então o que chega
+    // aqui já passou pela mesma política. Decidir de novo pelo nome erraria nas
+    // duas pontas — `git_status` não começa com verbo de leitura e ficaria
+    // atrás do gate, e `git_commit` não contém nenhum verbo da lista de efeito.
+    if (server === 'apolo_git') return true
+
     // The camera. Not withheld behind ALLOW_WRITES: looking changes nothing,
     // and the real gate is the browser's own camera permission plus an
     // indicator the user can see for as long as it is live.
@@ -427,6 +442,35 @@ coisa envolvendo navegador ou página web:
 - Antes de qualquer coisa que envie, compre, apague ou publique, diga numa frase
   o que vai fazer. Depois, diga o que aconteceu.
 - Se o navegador estiver inacessível, diga uma vez e siga sem ele.
+
+Onde você está — as ferramentas \`browser_*\`:
+- \`browser_environment\` diz em que navegador a interface está aberta, em que
+  sistema ele roda e em que sistema roda o seu núcleo. Use antes de falar de
+  tecla de atalho (Command e Control não são a mesma coisa) e sempre que a
+  resposta depender do navegador ou da máquina. Não adivinhe isso.
+- \`browser_open_tab\` abre uma aba no navegador em que o Ricardo está olhando.
+  Só quando ele pedir aba ou janela. O que é para VER continua indo para um
+  painel: a aba é outro lugar para olhar, e ele está olhando para cá.
+- \`browser_popup_to_tab\` transforma uma popup em aba. É quase sempre o que a
+  pessoa quer com uma popup. \`browser_windows\` lista o que você abriu.
+- Se o navegador bloquear a janela, diga em uma frase o que a resposta da
+  ferramenta explicar e não tente de novo.
+- As \`chrome_*\` são a mão dentro das páginas; as \`browser_*\` são o lugar onde
+  você está. Precisa ler ou clicar numa página? \`chrome_*\`.
+
+O seu próprio código — as ferramentas \`git_*\`:
+- \`git_status\` diz em que branch a cópia em execução está, o que ainda não foi
+  commitado e quais branches esperam revisão. Use antes de falar do estado do
+  código, e nunca adivinhe isso.
+- \`git_diff\` mostra o que mudou. Leia antes de escrever mensagem de commit ou
+  descrição de pull request: descreva o que está lá, não o que você supõe.
+- \`git_commit\` guarda o trabalho pendente numa branch. Diga numa frase o que
+  vai commitar antes de chamar. Na \`main\` nada é commitado direto: se a cópia
+  estiver nela, informe o nome de uma branch nova.
+- \`git_pull_request\` propõe o merge para a \`main\`. Quem decide o merge é
+  sempre o Ricardo — você nunca junta nada, e não existe ferramenta para isso.
+- Se as duas últimas não aparecerem, a escrita está bloqueada nesta máquina.
+  Diga isso em uma frase e siga sem elas.
 
 Seus olhos:
 - \`look\` tira um quadro e deixa você vê-lo. \`watch\` capta alguns segundos e
@@ -887,8 +931,11 @@ const broadcast = (msg) => {
     if (client.readyState === client.OPEN) client.send(JSON.stringify(msg))
   }
 }
+/** A cópia do projeto que está no ar. O autodev e o sub-módulo git partem dela. */
+const REPO = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '')
+
 const autodev = criarAutodev({
-  repo: fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, ''),
+  repo: REPO,
   ligado: process.env.APOLO_AUTODEV === '1',
   supervisor: process.send ? (msg) => process.send(msg) : null,
   avisar: (estado) => broadcast({ type: 'autodev', estado }),
@@ -1116,6 +1163,24 @@ wss.on('connection', (socket) => {
         // holds no per-connection state, but it is built here with the rest so
         // the write gate is read once, at the same point as everything else.
         apolo_navegador: chromeServer({ allowWrites: ALLOW_WRITES }),
+        // O navegador em que a interface está aberta: qual é ele, qual o
+        // sistema embaixo dele, e as abas e popups que o A.P.O.L.O. abriu lá
+        // (RF-19, ADR 0012). Como a câmera, pergunta à interface e espera.
+        apolo_ambiente: navegadorServer(ask),
+        // O repositório do próprio A.P.O.L.O. (RF-17, ADR 0014): ver o que está
+        // pendente, commitar numa branch e abrir pull request para a main. Como
+        // o navegador, ele se fecha sozinho quando a escrita está bloqueada:
+        // sem --writes, só as duas ferramentas de leitura existem.
+        apolo_git: gitServer({
+          repo: REPO,
+          allowWrites: ALLOW_WRITES,
+          // Commitar ou criar branch no meio de uma troca de versão mexeria no
+          // repositório debaixo do supervisor, que está comparando shas.
+          ocupado: () =>
+            ['trabalhando', 'verificando', 'aplicando'].includes(autodev.estado().fase)
+              ? 'o autodesenvolvimento está no meio de um trabalho'
+              : null,
+        }),
         // The camera, which unlike everything else here has to ask and wait.
         apolo_visao: visionServer(ask),
       },

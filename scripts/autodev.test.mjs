@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -151,10 +151,30 @@ test('política classifica o que importa', () => {
     '.env.example',
     'src/App.tsx',
     'bridge/server.mjs',
+    'bridge/env.mjs',
     'scripts/start.mjs',
   ])
   assert.deepEqual(proibidos, ['.env.local'])
-  assert.deepEqual(sensiveis, ['bridge/server.mjs', 'scripts/start.mjs'])
+  assert.deepEqual(sensiveis, ['bridge/server.mjs', 'bridge/env.mjs', 'scripts/start.mjs'])
+})
+
+/**
+ * Em ESM o módulo importado roda antes do corpo de quem importa. Se qualquer
+ * import vier antes do env.mjs, APOLO_AUTODEV_* e JARVIS_MODEL voltam a ser
+ * lidos com o .env.local ainda fora da memória — e silenciosamente ignorados.
+ */
+test('o .env.local é lido antes de tudo em quem lê configuração', () => {
+  const raiz = new URL('../', import.meta.url)
+  const pontos = [
+    ['bridge/server.mjs', "import './env.mjs'"],
+    ['scripts/start.mjs', "import '../bridge/env.mjs'"],
+    ['scripts/rollback.mjs', "import '../bridge/env.mjs'"],
+  ]
+  for (const [arquivo, esperado] of pontos) {
+    const fonte = readFileSync(new URL(arquivo, raiz), 'utf8')
+    const primeiro = fonte.match(/^import .*$/m)?.[0]
+    assert.equal(primeiro, esperado, `o primeiro import de ${arquivo}`)
+  }
 })
 
 test('comandos: só um, simples e de leitura ou conferência', () => {

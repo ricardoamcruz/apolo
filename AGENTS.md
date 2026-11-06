@@ -26,10 +26,21 @@ detalhe está em `docs/`.
 - **Fase 0 — Fundação: concluída** (02/11/2026), exceto o Android, adiado.
   Próxima: **Fase 1 — Core**. Ver `docs/05-roadmap.md`.
 - **Próxima versão:** 6 pontos do backlog têm prioridade sobre a ordem das fases
-  (seção "Próxima versão" de `docs/05-roadmap.md`, RF-15 a RF-20).
+  (seção "Próxima versão" de `docs/05-roadmap.md`, RF-15 a RF-20). O primeiro,
+  limpar a tela por voz (RF-16), está feito desde 03/11/2026.
+- **Sub-módulo git (ADR 0014):** `bridge/git.mjs` dá ao A.P.O.L.O. as ferramentas
+  `git_*` sobre o próprio repositório — ler o estado, commitar numa branch e
+  abrir pull request para a `main`. Commitar e propor merge exigem
+  `npm start -- --writes`; merge, push na `main` e `--force` não existem.
 - O código ainda é o fork do JARVIS (`bridge/`, `src/`), já renomeado para
   A.P.O.L.O. e em pt-BR (persona, ativação "Apolo", voz masculina do sistema).
   O core (`core/`) ainda não existe. Variáveis de ambiente seguem `JARVIS_*`.
+- **Identidade visual (ADR 0013, 05/11/2026):** começada. Cor e tipografia são
+  tokens no `:root` de `src/index.css` (`--interface`, `--bg`, `--font-ui`,
+  `--font-mono`) — CSS novo usa os tokens, não valores escritos à mão. A cor por
+  fase fica em `phaseColor`/`accentFor()` (`src/store.ts`), porque a cena 3D e o
+  HUD precisam da mesma resposta. Faltam fontes locais, a paleta definitiva e a
+  geometria do núcleo; a decisão da paleta é do Ricardo.
 - **App mobile:** `apps/mobile` (Expo SDK 58, RN 0.88), app "olá" validado no
   iPhone (bundle `com.ricardocruz.apolo`, Personal Team `9F2MVYQ9SF`). Ainda não
   conversa com o core: depende do gateway com token (Fase 1). CocoaPods usa o
@@ -96,6 +107,8 @@ npm run setup        # confere Node, Claude Code e a chave da voz (Gemini ou Ope
 npm start -- --autodev  # permite o autodesenvolvimento (ADR 0011)
 npm run rollback     # volta a última alteração do autodesenvolvimento (com tudo parado)
 npm run test:autodev # testes da política e do rollback
+npm run test:git     # testes do sub-módulo git (commit e pull request)
+npm test             # todos os testes de scripts/
 ```
 
 ## Ambiente

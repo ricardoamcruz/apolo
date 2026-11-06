@@ -1,10 +1,11 @@
 /**
- * O que sai de um trabalho aprovado: a branch `fase-x.x/nome` e o commit com
- * título de verdade (docs/adr/0015). Só texto, sem Git: testável sem repositório.
+ * O que sai de um trabalho aprovado: o nome da branch e o commit com título de
+ * verdade (docs/adr/0015). Só texto, sem Git: testável sem repositório. O número
+ * da fase vem de bridge/branches.mjs (docs/adr/0016).
  */
 
-const FASE = process.env.APOLO_AUTODEV_FASE?.trim() || '2.2'
 const NOME = /^fase-\d+(\.\d+)*\/[a-z0-9]+(-[a-z0-9]+)*$/
+const APELIDO = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
 export const branchValida = (nome) => NOME.test(String(nome ?? ''))
 
@@ -18,11 +19,12 @@ function apelido(texto) {
 /** Separa do texto do agente o resumo falado, a branch e o título do commit. */
 export function lerEntrega(texto, pedido) {
   const bruto = String(texto ?? '')
-  const branch = bruto.match(/^BRANCH:\s*(\S+)\s*$/im)?.[1]
+  // Se o agente mandar o número mesmo assim, vale só o nome: quem conta é a ponte.
+  const nome = bruto.match(/^BRANCH:\s*(\S+)\s*$/im)?.[1].replace(/^fase-[\d.]+\//, '')
   const titulo = bruto.match(/^COMMIT:\s*(.+?)\s*$/im)?.[1]
   return {
     resumo: bruto.replace(/^(BRANCH|COMMIT):.*$/gim, '').trim(),
-    branch: branchValida(branch) ? branch : `fase-${FASE}/${apelido(pedido)}`,
+    branch: APELIDO.test(nome ?? '') ? nome : apelido(pedido),
     titulo: titulo?.slice(0, 72) || pedido.slice(0, 72),
   }
 }

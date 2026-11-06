@@ -19,10 +19,13 @@ const FASES = {
 export function Autodev() {
   const estado = useStore((s) => s.autodev)
   const phase = useStore((s) => s.phase)
+  const exibirPonte = useStore((s) => s.exibicao.exibirPonte)
   const setError = useStore((s) => s.setError)
   const [pedido, setPedido] = useState('')
 
   if (!estado?.ligado || phase === 'offline' || phase === 'boot') return null
+  // Oculto só em repouso: com proposta ou teste em aberto, o botão tem de existir.
+  if (estado.fase === 'ocioso' && !exibirPonte) return null
 
   const agir = async (acao: string, extra?: { pedido: string }) => {
     try {

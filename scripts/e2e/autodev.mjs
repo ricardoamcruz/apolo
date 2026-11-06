@@ -29,7 +29,7 @@ export async function rodarAgente({ pedido, pasta }) {
   else if (pedido.includes('QUEBRAR-NO-TESTE')) somar('bridge/ui.mjs', "\\nsetTimeout(() => { throw new Error('quebra') }, 40000)\\n")
   else if (pedido.includes('ERRO-DE-TIPOS')) somar('src/ui/Hud.tsx', "\\nexport const quebrado: number = 'texto'\\n")
   else somar('src/index.css', '\\n.e2e-' + Date.now() + ' { color: red; }\\n')
-  return { ok: true, texto: 'Mudei a tela.\\nBRANCH: fase-9.9/teste-e2e\\nCOMMIT: Altera a tela no teste de ponta a ponta' }
+  return { ok: true, texto: 'Mudei a tela.\\nBRANCH: teste-e2e\\nCOMMIT: Altera a tela no teste de ponta a ponta' }
 }
 `
 
@@ -218,8 +218,8 @@ const cenarios = {
     assert.match(branchAtual(), /^autodev\//)
     assert.equal((await acao('aprovar')).ok, true)
     const e = await ociosoCom('aprovado')
-    assert.equal(e.resultado.branch, 'fase-9.9/teste-e2e')
-    assert.equal(git('log', '-1', '--format=%s', 'fase-9.9/teste-e2e'), 'Altera a tela no teste de ponta a ponta')
+    assert.match(e.resultado.branch, /^fase-\d+(\.\d+)?\/teste-e2e$/)
+    assert.equal(git('log', '-1', '--format=%s', e.resultado.branch), 'Altera a tela no teste de ponta a ponta')
     naVersaoSegura()
   },
   async 'descartar volta à main e apaga a alteração'() {

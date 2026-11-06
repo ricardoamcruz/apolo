@@ -72,6 +72,7 @@ os distribui. O módulo de briefing, por exemplo, só assina eventos de outros
 módulos: não depende deles diretamente.
 
 ## Checklist para criar um módulo
+- [ ] Aparece como linha própria na aba SISTEMAS, com estado (RF-56, ADR 0018)
 
 1. Copiar `modules/_exemplo/` (será criado na Fase 1).
 2. Preencher o manifesto; ferramentas com efeito ficam em `confirmar`.

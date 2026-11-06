@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { classificar } from './autodev/politica.mjs'
+import { historicoDeBranches, proximaFase } from './branches.mjs'
 
 /**
  * Sub-módulo git (RF-17, ADR 0014): o A.P.O.L.O. faz commits do próprio código
@@ -145,6 +146,7 @@ export function criarGit({ repo, ocupado = () => null, criarPr = prPeloGh }) {
 
     const remoto = await talvez(['remote', 'get-url', 'origin'])
     const gh = await temGh()
+    const fase = proximaFase(await historicoDeBranches(git, BASE))
 
     const linhas = [
       atual === 'HEAD'
@@ -162,6 +164,7 @@ export function criarGit({ repo, ocupado = () => null, criarPr = prPeloGh }) {
       esperando.length
         ? `Branches à espera de revisão: ${esperando.join('; ')}.`
         : `Nenhuma branch à frente da ${BASE}.`,
+      `Uma branch nova agora se chamaria fase-${fase}/<nome-criativo>.`,
       remoto
         ? 'Remoto origin: configurado.'
         : 'Remoto origin: ausente — sem ele não dá para abrir pull request, só guardar em branch local.',
@@ -438,7 +441,7 @@ export function gitServer({ repo, allowWrites, ocupado, criarPr }) {
             .string()
             .optional()
             .catch(undefined)
-            .describe('Create this NEW branch and commit there. Required when on main.'),
+            .describe('Create this NEW branch and commit there. Required when on main. Use the name git_status suggests: fase-x.y/<broad-creative-name>.'),
         },
         proteger((args) => g.commit({ message: args.message, branch: args.branch })),
       ),

@@ -2,16 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useStore, accentFor, type Phase } from '../store'
 import { Suggestions } from './Suggestions'
-import { BladeSweep, Blades } from './Blades'
+import { BladeSweep, Blades, BladeTray } from './Blades'
 import { Effects } from './Effects'
 import { Pointer } from './Pointer'
 import { GestureGuide } from './GestureGuide'
 import { Autodev } from './Autodev'
+import { Sistemas } from './Sistemas'
+import { chamadaDisponivel } from '../lib/chamada'
 
 const statusText: Record<Phase, string> = {
   offline: 'DESCONECTADO',
   boot: 'INICIALIZANDO',
-  dormant: 'EM ESPERA — ESPAÇO OU PALMAS',
+  dormant: 'EM ESPERA',
   waking: 'ATIVANDO',
   listening: 'OUVINDO',
   thinking: 'PROCESSANDO',
@@ -151,8 +153,8 @@ export function Hud() {
   const phase = useStore((s) => s.phase)
   const caption = useStore((s) => s.caption)
   const turns = useStore((s) => s.turns)
+  const exibirChat = useStore((s) => s.exibicao.exibirChat)
   const activeTool = useStore((s) => s.activeTool)
-  const connected = useStore((s) => s.connected)
   const error = useStore((s) => s.error)
   const voice = useStore((s) => s.voice)
   const bootNote = useStore((s) => s.bootNote)
@@ -191,7 +193,6 @@ export function Hud() {
         {ui.chrome.brand && (
           <div className="brand">
             <span className="brand-mark">A.P.O.L.O.</span>
-            <span className="brand-sub">Assistente Preditivo Operacional Logístico e Otimizado</span>
           </div>
         )}
 
@@ -207,23 +208,7 @@ export function Hud() {
         </div>
       </header>
 
-      {/* Left rail: which integrations are live */}
-      {ui.chrome.systems && (
-        <aside className="rail rail-left">
-          <div className="rail-title">SISTEMAS</div>
-          {connected.length === 0 && <div className="rail-item dim">nenhum conectado</div>}
-          {connected.map((c) => (
-            <div key={c} className="rail-item">
-              <span className="tick" />
-              {c}
-            </div>
-          ))}
-          <div className="rail-item">
-            <span className="tick" />
-            Web
-          </div>
-        </aside>
-      )}
+      <Sistemas />
 
       {/* A barra da direita ("SINAL") era um medidor do microfone, herdado do
           JARVIS: enfeite que não dizia nada que o anel central já não diga, e
@@ -258,7 +243,7 @@ export function Hud() {
       </AnimatePresence>
 
       {/* Conversation log — last few turns, fading upward */}
-      {ui.chrome.transcript && (
+      {ui.chrome.transcript && exibirChat && (
         <div className="log">
           <AnimatePresence initial={false}>
             {turns.slice(-4).map((t) => (
@@ -284,7 +269,7 @@ export function Hud() {
       )}
 
       <AnimatePresence>
-        {caption && (
+        {caption && exibirChat && (
           <motion.div
             className="caption"
             initial={{ opacity: 0 }}
@@ -302,6 +287,7 @@ export function Hud() {
           here now; Panels.tsx is unmounted rather than deleted so the design
           system it documents stays findable. */}
       <Blades />
+      <BladeTray />
 
       {ui.chrome.suggestions && <Suggestions />}
 
@@ -313,7 +299,8 @@ export function Hud() {
         <span className="hint">
           {phase === 'dormant' ? (
             <>
-              <kbd>Espaço</kbd> ou palmas para acordar
+              {chamadaDisponivel() ? 'diga “Apolo” ou ' : 'palmas ou '}
+              <kbd>Espaço</kbd> para acordar
             </>
           ) : (
             <>

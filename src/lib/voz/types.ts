@@ -7,6 +7,8 @@ export type ToolResult = {
   image?: string
   /** Não pedir uma nova resposta depois (ex.: ao dormir). */
   silent?: boolean
+  /** Descarta o que o modelo ainda disser nesta vez (ex.: fala que não era para ele). */
+  descartar?: boolean
 }
 
 export type RealtimeHandlers = {

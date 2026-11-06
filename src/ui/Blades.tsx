@@ -584,6 +584,7 @@ export function Blades() {
   const focusBlade = useStore((s) => s.focusBlade)
   const expandBlade = useStore((s) => s.expandBlade)
   const closeBlade = useStore((s) => s.closeBlade)
+  const abertos = useMemo(() => blades.filter((b) => !b.minimized), [blades])
 
   /**
    * Newest first, then whichever the user pulled forward lifted to the front.
@@ -593,14 +594,14 @@ export function Blades() {
    * that" a meaningful thing to ask for.
    */
   const ordered = useMemo(() => {
-    const newestFirst = [...blades].reverse()
+    const newestFirst = [...abertos].reverse()
     if (!focusedBlade) return newestFirst
     const hit = newestFirst.findIndex((b) => b.id === focusedBlade)
     if (hit <= 0) return newestFirst
     const copy = [...newestFirst]
     const [lifted] = copy.splice(hit, 1)
     return [lifted, ...copy]
-  }, [blades, focusedBlade])
+  }, [abertos, focusedBlade])
 
   const front = ordered[0]
 
@@ -617,7 +618,7 @@ export function Blades() {
   // Bound here rather than in App, and only while something is open, so E and X
   // are free for anything else the moment the last blade closes.
   const live = useRef(false)
-  live.current = blades.length > 0
+  live.current = abertos.length > 0
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -644,7 +645,7 @@ export function Blades() {
     return () => window.removeEventListener('keydown', onKey)
   }, [front, expandedBlade, expandBlade, closeBlade, cycle])
 
-  if (!blades.length) return null
+  if (!abertos.length) return null
 
   return (
     <div className={`blades-stack${expandedBlade ? ' blades-stack-full' : ''}`}>
@@ -669,11 +670,45 @@ export function Blades() {
         })}
       </AnimatePresence>
 
-      {blades.length > 1 && !expandedBlade && (
+      {abertos.length > 1 && !expandedBlade && (
         <div className="bl-hint">
           <kbd>[</kbd> <kbd>]</kbd> alternar · <kbd>E</kbd> tela cheia · <kbd>X</kbd> fechar
         </div>
       )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------- a bandeja */
+
+/**
+ * Os popups minimizados ao entrar em espera: quadradinhos à direita da tela. Ficam
+ * aqui ao acordar, e só saem se forem abertos ou fechados de vez.
+ */
+export function BladeTray() {
+  const blades = useStore((s) => s.blades)
+  const restoreBlades = useStore((s) => s.restoreBlades)
+  const closeBlade = useStore((s) => s.closeBlade)
+  const minimizados = blades.filter((b) => b.minimized)
+  if (!minimizados.length) return null
+
+  return (
+    <div className="bl-tray" aria-label="Popups minimizados">
+      {minimizados.map((b) => (
+        <div key={b.id} className="bl-mini">
+          <button
+            className="bl-mini-abrir"
+            title={b.title}
+            aria-label={`Abrir ${b.title}`}
+            onClick={() => restoreBlades(b.id)}
+          >
+            {b.title.trim().charAt(0).toUpperCase() || '·'}
+          </button>
+          <button className="bl-mini-x" aria-label={`Fechar ${b.title}`} onClick={() => closeBlade(b.id)}>
+            ×
+          </button>
+        </div>
+      ))}
     </div>
   )
 }

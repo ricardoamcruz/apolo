@@ -16,6 +16,8 @@ import {
 import { branchValida, lerEntrega, nomeLivre, pedidoVago } from '../bridge/autodev/entrega.mjs'
 import { criarAutodev } from '../bridge/autodev/index.mjs'
 import { criarSupervisor } from './supervisor.mjs'
+import { historicoDeBranches, proximaFase } from '../bridge/branches.mjs'
+import { foraDeHora, ouviuConfirmacao, pareceConfirmacao, registrarFala } from '../src/lib/autodev.ts'
 
 const esperar = async (cond) => {
   for (let i = 0; i < 400 && !cond(); i++) await new Promise((ok) => setTimeout(ok, 5))
@@ -311,10 +313,10 @@ test('gateIntacto reconhece o server.mjs atual e percebe o gate removido', () =>
 })
 
 test('entrega: lê branch e commit do agente, com alternativa segura', () => {
-  const e = lerEntrega('Mudei a tela.\nBRANCH: fase-2.2/nova-tela\nCOMMIT: Troca a cor da tela', 'trocar a cor')
-  assert.deepEqual(e, { resumo: 'Mudei a tela.', branch: 'fase-2.2/nova-tela', titulo: 'Troca a cor da tela' })
+  const e = lerEntrega('Mudei a tela.\nBRANCH: nova-tela\nCOMMIT: Troca a cor da tela', 'trocar a cor')
+  assert.deepEqual(e, { resumo: 'Mudei a tela.', branch: 'nova-tela', titulo: 'Troca a cor da tela' })
   const sem = lerEntrega('Feito.\nBRANCH: ../main', 'Remover a Ação Rápida da tela inicial agora')
-  assert.equal(sem.branch, 'fase-2.2/remover-a-acao-rapida-da')
+  assert.equal(sem.branch, 'remover-a-acao-rapida-da')
   assert.equal(sem.titulo, 'Remover a Ação Rápida da tela inicial agora')
   assert.equal(branchValida('main'), false)
   assert.equal(branchValida('autodev/1'), false)
@@ -448,7 +450,7 @@ test('ciclo completo: teste, aprovação e branch definitiva, sem tocar a main',
   const r = repositorio()
   const agente = async ({ pasta }) => {
     writeFileSync(join(pasta, 'novo.txt'), 'novo\n')
-    return { ok: true, texto: 'Criei o arquivo.\nBRANCH: fase-2.2/arquivo-novo\nCOMMIT: Cria o arquivo novo' }
+    return { ok: true, texto: 'Criei o arquivo.\nBRANCH: arquivo-novo\nCOMMIT: Cria o arquivo novo' }
   }
   const g = gerente(r, { agente })
   const antes = r.git('rev-parse', 'main')
@@ -469,12 +471,12 @@ test('ciclo completo: teste, aprovação e branch definitiva, sem tocar a main',
   assert.equal((await g.a.acao('propor', { pedido: 'outra coisa' })).ok, false)
 
   assert.equal((await g.a.acao('aprovar')).ok, true)
-  assert.deepEqual(g.pedidos[1], { type: 'autodev:aprovar', id, branch: 'fase-2.2/arquivo-novo' })
-  g.a.resultado({ id, tipo: 'aprovado', mensagem: 'Guardei.', branch: 'fase-2.2/arquivo-novo' })
+  assert.deepEqual(g.pedidos[1], { type: 'autodev:aprovar', id, branch: 'fase-2/arquivo-novo' })
+  g.a.resultado({ id, tipo: 'aprovado', mensagem: 'Guardei.', branch: 'fase-2/arquivo-novo' })
   const e = g.a.estado()
   assert.equal(e.fase, 'ocioso')
   assert.equal(e.resultado.mensagem, 'Criei o arquivo. Guardei.')
-  assert.equal(e.resultado.branch, 'fase-2.2/arquivo-novo')
+  assert.equal(e.resultado.branch, 'fase-2/arquivo-novo')
 })
 
 test('descartar pela interface passa pelo supervisor', async () => {
@@ -547,7 +549,7 @@ test('arquivo sensível para na branch, sem checagem e sem troca', async () => {
   await g.a.acao('confirmar')
   const e = await g.fim()
   assert.equal(e.resultado.tipo, 'revisao')
-  assert.equal(e.resultado.branch, 'fase-2.2/dependencia')
+  assert.equal(e.resultado.branch, 'fase-2/dependencia')
   assert.equal(checou, false)
   assert.equal(g.pedidos.length, 0)
   assert.equal(autodevs(r), '')
@@ -598,4 +600,82 @@ test('um cancelamento que chega como erro continua sendo cancelamento', async ()
   while (g.a.estado().etapa !== 'editando') await new Promise((ok) => setTimeout(ok, 10))
   await g.a.acao('cancelar')
   assert.equal((await g.fim()).resultado.tipo, 'cancelado')
+})
+
+test('confirmar sem proposta explica a causa em vez de pedir um botão que não existe', () => {
+  const ocioso = foraDeHora('confirmar', { ligado: true, fase: 'ocioso' })
+  assert.match(ocioso, /Não há proposta/)
+  assert.match(ocioso, /propor/)
+  assert.doesNotMatch(ocioso, /não foi ouvida/)
+  assert.match(foraDeHora('confirmar', { ligado: false, fase: 'ocioso' }), /desligado/)
+  assert.match(foraDeHora('confirmar', null), /desligado/)
+  assert.match(foraDeHora('confirmar', { ligado: true, fase: 'testando' }), /aprovar/)
+  assert.match(foraDeHora('confirmar', { ligado: true, fase: 'trabalhando' }), /andamento/)
+  assert.match(foraDeHora('aprovar', { ligado: true, fase: 'ocioso' }), /em teste/)
+})
+
+test('com proposta ou alteração em teste, a fala continua sendo conferida', () => {
+  assert.equal(foraDeHora('confirmar', { ligado: true, fase: 'proposto' }), null)
+  assert.equal(foraDeHora('aprovar', { ligado: true, fase: 'testando' }), null)
+})
+
+test('"para" como preposição não anula a confirmação, mas sozinho nega', () => {
+  for (const f of ['confirmo', 'sim, pode mandar para a branch', 'confirmo, pode fazer para mim']) {
+    assert.equal(pareceConfirmacao(f), true, f)
+  }
+  for (const f of ['para, não faça', 'para, pode parar', 'confirmo... para!', 'não confirmo', 'pode cancelar']) {
+    assert.equal(pareceConfirmacao(f), false, f)
+  }
+})
+
+test('a transcrição que chega depois da chamada ainda vale, dentro da espera', async () => {
+  const desde = Date.now() - 1000
+  registrarFala('')
+  setTimeout(() => registrarFala('confirmo'), 400)
+  assert.equal(await ouviuConfirmacao(desde, 1000), true)
+})
+
+test('fala anterior à proposta não confirma', async () => {
+  registrarFala('confirmo')
+  await new Promise((ok) => setTimeout(ok, 5))
+  assert.equal(await ouviuConfirmacao(Date.now(), 200), false)
+})
+
+test('cada branch nova soma 0.1 à maior já usada', () => {
+  assert.equal(proximaFase('fase-2.2/a\nfase-2.3/voz-e-verniz\norigin/fase-1/b', ''), '2.4')
+  assert.equal(proximaFase('fase-2/a', ''), '2.1')
+  assert.equal(proximaFase('fase-2.9/a', ''), '2.10')
+  assert.equal(proximaFase('fase-3/a\nfase-2.9/b', ''), '3.1')
+})
+
+test('branch apagada depois do merge continua contando', () => {
+  assert.equal(proximaFase('main\nMerge pull request #7 from ricardoamcruz/fase-2.5/x', ''), '2.6')
+})
+
+test('só o Ricardo muda de fase: fase-x e depois fase-x.1', () => {
+  assert.equal(proximaFase('fase-2.5/a', '3'), '3')
+  assert.equal(proximaFase('fase-2.5/a\nfase-3/b', '3'), '3.1')
+  assert.equal(proximaFase('fase-2.5/a', '2.2'), '2.6')
+  assert.equal(proximaFase('', ''), '2')
+})
+
+test('o número mandado pelo agente é ignorado: vale só o nome', () => {
+  assert.equal(lerEntrega('Feito.\nBRANCH: fase-9.9/voz-e-verniz', 'x').branch, 'voz-e-verniz')
+})
+
+test('a conta lê branches locais e merges, e sobrevive a um git que falha', async () => {
+  const r = repositorio()
+  r.git('branch', 'fase-2.7/antiga')
+  const rodar = async (args) => r.git(...args)
+  assert.equal(proximaFase(await historicoDeBranches(rodar, 'main'), ''), '2.8')
+  assert.equal(await historicoDeBranches(() => Promise.reject(new Error('x')), 'main'), '\n')
+})
+
+test('o autodev numera a branch pela maior já usada', async () => {
+  const r = repositorio()
+  r.git('branch', 'fase-2.7/antiga')
+  const g = gerente(r, { agente: edita('package.json') })
+  await g.a.acao('propor', { pedido: 'dependência' })
+  await g.a.acao('confirmar')
+  assert.equal((await g.fim()).resultado.branch, 'fase-2.8/dependencia')
 })

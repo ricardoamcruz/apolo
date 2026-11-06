@@ -1,6 +1,7 @@
-import type { Blade, Panel } from '../store'
+import type { Blade, Exibicao, Panel } from '../store'
 import { BRIDGE_WS_URL } from '../config'
 import type { AutodevEstado } from './autodev'
+import type { Servidor } from './sistemas'
 import type { BrowserReply, BrowserRequest } from './navegador'
 
 /** O que um pedido ao agente de tarefas recebe enquanto ele trabalha. */
@@ -41,8 +42,9 @@ type Frame = {
   mode?: string
   seconds?: number
   when?: string
-  servers?: Array<string | { name?: string }>
+  servers?: Array<string | { name?: string; status?: string }>
   estado?: AutodevEstado
+  valores?: Exibicao
   resposta?: string
   ok?: boolean
   mensagem?: string
@@ -62,13 +64,13 @@ let socket: WebSocket | null = null
 let connecting: Promise<WebSocket> | null = null
 
 /** Server names reported by the bridge, for the HUD readout. */
-let servers: string[] = []
+let servers: Servidor[] = []
 export const bridgeServers = () => servers
 
 /** The list arrives twice — once from config, once with live status — so the
  *  HUD subscribes rather than reading it a single time at boot. */
-let onServers: ((s: string[]) => void) | null = null
-export function watchServers(fn: (s: string[]) => void) {
+let onServers: ((s: Servidor[]) => void) | null = null
+export function watchServers(fn: (s: Servidor[]) => void) {
   onServers = fn
 }
 
@@ -129,6 +131,16 @@ export function watchBlades(fn: (blade: Blade) => void) {
 let onUi: ((op: string, args: any) => void) | null = null
 export function watchUi(fn: (op: string, args: any) => void) {
   onUi = fn
+}
+
+/** O que ele lembra entre execuções. Vem da ponte ao conectar e a cada mudança. */
+let onPreferencias: ((valores: Exibicao) => void) | null = null
+export function watchPreferencias(fn: (valores: Exibicao) => void) {
+  onPreferencias = fn
+}
+export async function salvarPreferencias(valores: Partial<Exibicao>) {
+  const ws = await connect()
+  ws.send(JSON.stringify({ type: 'preferencias', valores }))
 }
 
 /** O andamento do autodesenvolvimento. O estado vem ao conectar e a cada mudança. */
@@ -239,8 +251,8 @@ function dispatch(ws: WebSocket) {
       // then again with live status once the agent initialises. Keep listening
       // so the later, more accurate list wins.
       servers = (msg.servers ?? [])
-        .map((s) => (typeof s === 'string' ? s : (s.name ?? '')))
-        .filter(Boolean)
+        .map((s) => (typeof s === 'string' ? { nome: s } : { nome: s.name ?? '', estado: s.status }))
+        .filter((s) => s.nome)
       onServers?.(servers)
       firstReady.resolve()
     } else if (msg.type === 'panel' && msg.panel) {
@@ -283,6 +295,8 @@ function dispatch(ws: WebSocket) {
           .then((payload) => responder(id, payload))
           .catch((err) => responder(id, { error: String(err?.message ?? err) }))
       }
+    } else if (msg.type === 'preferencias' && msg.valores) {
+      onPreferencias?.(msg.valores)
     } else if (msg.type === 'autodev') {
       if (msg.estado) onAutodev?.(msg.estado)
       if (msg.resposta) {

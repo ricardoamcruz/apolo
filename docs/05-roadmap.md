@@ -9,12 +9,12 @@ sobre a ordem das fases abaixo.
 - [x] **1. Limpar a tela (RF-16):** "limpe a bagunça", "tira isso da tela" e "fecha esses popups" fecham os painéis e os artigos abertos sem apagar a conversa; "apague o histórico" e "limpe tudo" são os outros escopos, e ele informa o que saiu ou que a tela já estava limpa (03/11/2026). Falta validar por voz no navegador
 - [ ] **2. Sub-módulo git (RF-17):** o A.P.O.L.O. faz commits e gera pull requests para a própria `main` — **em andamento**: ferramentas `git_*` implementadas (ADR 0014, 05/11/2026), com commit só fora da `main`, conferência de segredos, sem merge e sem `--force`, testes offline em `npm run test:git`; falta validar na máquina do Ricardo o push no `origin` e o `gh pr create`
 - [ ] **3. Contexto compartilhado (RF-18):** avaliar salvar informações importantes em uma branch local ou em um arquivo de contexto compartilhado, para uso futuro
-- [ ] **4. Gerar código para si próprio (RF-15):** ciclo de teste com aprovação (ADR 0015, 06/11/2026), verificado de ponta a ponta com agente falso em `npm run test:autodev:e2e`; falta validar por voz com o agente real
+- [ ] **4. Gerar código para si próprio (RF-15):** ciclo de teste com aprovação (ADR 0015, 06/11/2026), verificado de ponta a ponta com agente falso em `npm run test:autodev:e2e`; confirmar sem proposta ativa agora é recusado com a causa real, sem pedir de novo um botão que não existe (06/11/2026); falta validar por voz com o agente real
   - [ ] **4.a** Essa habilidade funciona em conjunto com a de se auto-reiniciar
   - [ ] **4.b** Se algo der errado, o rollback automático entra em ação
 - [ ] **5. Navegador (RF-19):** detectar em qual navegador e sistema está rodando, abrir novas abas e transformar uma popup aberta em aba — **em andamento**: ferramentas `browser_*` implementadas (ADR 0012, 04/11/2026); falta validar no navegador do Mac, liberar pop-ups para o endereço da interface e decidir se vale criar aba pela extensão do Claude quando o bloqueador recusar
 - [ ] **6. Comandos por voz (RF-20):** tudo o que hoje tem atalho de teclado também pode ser acionado por voz
-  - [ ] **6.a** Em espera: "Apolo, em espera", ou entrar em espera sozinho ao fim de uma conversa, da forma mais natural possível e sem se intrometer quando o Ricardo falar com outra pessoa ao lado
+  - [ ] **6.a** Em espera: "Apolo, em espera", ou entrar em espera sozinho ao fim de uma conversa, da forma mais natural possível e sem se intrometer quando o Ricardo falar com outra pessoa ao lado — **em andamento**: `dormir` cobre "em espera", "já volto" e "boa noite" de despedida; em espera só o nome acorda por voz, com visual próprio; fim de fala mais paciente e `ignorar_fala` (ADR 0017, 06/11/2026). Falta validar por voz
   - [ ] **6.b** Popups: alternar por voz (hoje `[` e `]`), além de tela cheia (`E`) e fechar (`X`)
   - [ ] **6.c** Modo mãos: ativar e desativar por voz (hoje `G`)
   - [ ] **6.d** Demais comandos, com ativação e desativação por voz: diagnóstico (`D`), interromper a fala e acordar (`Espaço`), cancelar tarefa (`Esc`)
@@ -36,19 +36,22 @@ sobre a ordem das fases abaixo.
 - [ ] Roteador com fallback e registro de consumo
 - [ ] Host de módulos com manifesto v1 + `modules/_exemplo`
 - [ ] Gate de permissões por manifesto + confirmação na interface + auditoria
-- [ ] Memória em SQLite
+- [ ] Memória em SQLite (hoje só as preferências de exibição persistem, em arquivo: RF-57; migrar para cá)
 - [ ] Agendador e barramento de eventos
 - [ ] Gateway com token de acesso (logo depois: chat por texto no app iPhone conectado a ele, antes da voz no celular)
 - [ ] Persona A.P.O.L.O em pt-BR; identidade visual básica — **em andamento**: nome, persona e textos da interface em pt-BR feitos (01/11/2026); voz em tempo real speech-to-speech em pt-BR (ADR 0009/0010, 03/11/2026); abertura reduzida à barra de status e aos anéis com o nome, sem o reator e o esquema da armadura herdados do JARVIS (03/11/2026); identidade visual começada (ADR 0013, 05/11/2026): barra lateral direita "SINAL" removida, tipografia e cor em tokens no `:root`, marca própria no favicon, `__jarvis` → `__apolo` no console. Faltam as fontes locais (sem o Google Fonts), a decisão da paleta, a geometria do núcleo 3D, o painel de status (RF-12) e as variáveis `JARVIS_*`
-- [ ] Painel de status (módulos, provedor, consumo)
+- [ ] Painel de status (módulos, provedor, consumo) — **em andamento**: aba SISTEMAS sob demanda, com o C.O.R.E. e a cor de alerta contrastante (ADR 0018, RF-56, 06/11/2026). Falta validar o pedido por voz e somar provedor e consumo
 
 ## Fase 2 — Voz e celular
 - [ ] Autodesenvolvimento por voz e chat, com teste, aprovação e rollback para a `main` (ADR 0011, ADR 0015, RF-15) — **em andamento**: implementado e testado; o `.env.local` passou a ser lido antes de qualquer módulo que leia configuração (`bridge/env.mjs`), então `APOLO_AUTODEV_*` e `JARVIS_MODEL` valem nesse arquivo, e não só no terminal (03/11/2026); falta validar por voz no navegador
 - [x] Voz pt-BR gratuita em tempo real — speech-to-speech pelo Gemini Live, OpenAI como opção (ADR 0009 e 0010, 03/11/2026)
-- [ ] Palavra de ativação "Apolo" (hoje: Espaço ou palmas acordam)
+- [ ] Palavra de ativação "Apolo" — **em andamento**: no PC, pela Web Speech API do navegador, só em espera (ADR 0017, 06/11/2026). Falta validar por voz e levar ao celular
 - [ ] Voz no app de celular usando o mesmo `POST /realtime/sessao` da ponte
 - [ ] Protocolo de canal versionado (RNF-11)
 - [ ] App nativo React Native + Expo (MVP: texto, voz, notificações, confirmações), iPhone primeiro — ADR 0006
+
+## Em todas as fases seguintes
+- [ ] **Tudo o que for plugável aparece na aba SISTEMAS (RF-56):** cada skill, sub-sistema plugável, extensão, API e conector novo entra como uma linha própria, com estado e a cor de alerta quando degradado. Faz parte de concluir o item, não é um extra
 
 ## Fase 3 — Primeiros módulos
 - [ ] E-mail (Gmail + Outlook) · [ ] Agenda (Google + Outlook) · [ ] Briefing diário

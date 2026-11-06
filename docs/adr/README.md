@@ -17,6 +17,9 @@
 | 0013 | Identidade visual do A.P.O.L.O. na interface | proposta |
 | 0014 | Sub-módulo git: commit e pull request do próprio código | proposta |
 | 0015 | Ciclo de teste do autodesenvolvimento | aceita |
+| 0016 | Numeração e nome das branches | aceita |
+| 0017 | Em Espera: acordar pelo nome e não se intrometer | aceita |
+| 0018 | Aba SISTEMAS, C.O.R.E. e cor de alerta | aceita |
 
 ## Em aberto
 

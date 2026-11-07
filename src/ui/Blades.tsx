@@ -528,7 +528,7 @@ function Card({
           <span className="bl-title">{blade.title}</span>
           <span className="bl-kind">{blade.kind}</span>
           <span className="bl-acts">
-            {(size || pos.x || pos.y) && !expanded && (
+            {(size || pos.x !== 0 || pos.y !== 0) && !expanded && (
               <button
                 className="bl-btn"
                 onClick={(e) => {

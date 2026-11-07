@@ -2,6 +2,7 @@ import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Drive } from './Scene'
+import { particlesFragment, particlesVertex } from './shaders'
 
 /**
  * A shell of points around the core. Each one drifts on its own orbit and gets
@@ -9,74 +10,6 @@ import type { Drive } from './Scene'
  */
 
 const COUNT = 4000
-
-const vertex = /* glsl */ `
-  uniform float uTime;
-  uniform float uLevel;
-  uniform float uSize;
-  uniform float uStandby;
-  uniform float uRing;
-
-  attribute float aSeed;
-  attribute float aRadius;
-
-  varying float vAlpha;
-
-  void main() {
-    float t = uTime * (0.06 + aSeed * 0.05);
-
-    // Rotate each point about Y at its own rate — cheap parallax.
-    float c = cos(t), s = sin(t);
-    vec3 p = vec3(position.x * c - position.z * s, position.y, position.x * s + position.z * c);
-
-    // Loudness pushes the shell out and adds a little jitter.
-    float push = 1.0 + uLevel * 0.35 + sin(uTime * 2.0 + aSeed * 12.0) * 0.02;
-    p *= push;
-
-    // Em espera, cada ponto vai para um halo colado ao círculo, no plano dele, em
-    // vez de uma casca: uma esfera vista de frente encheria o círculo por dentro.
-    vec2 dir = p.xy / max(length(p.xy), 0.001);
-    vec3 halo = vec3(dir * uRing * (1.08 + aRadius * 0.34 + aSeed * 0.05), (aSeed - 0.5) * 0.12);
-    p = mix(p, halo, uStandby);
-
-    vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    gl_Position = projectionMatrix * mv;
-
-    // Fade the far side so the cloud reads as volumetric, and thin it out
-    // toward the outer edge of the shell.
-    //
-    // The range is the actual geometry: the camera sits 6.2 out and the shell
-    // spans 1.9 to 4.5, so view depth runs from about -1.7 at the front to
-    // -10.7 at the back. The old window closed at -3.5, which put nine tenths
-    // of the cloud at alpha zero while still shading and rasterising every one
-    // of those points.
-    vAlpha = smoothstep(-11.5, -2.5, mv.z)
-           * (0.30 + uLevel * 0.35)
-           * (1.0 - aRadius * 0.55)
-           * mix(1.0, 0.55, uStandby);
-
-    // Perspective-correct sizing. The constant is tuned for the default 6-unit
-    // camera distance — bigger values make the cloud read as fog, not points.
-    gl_PointSize = uSize * (1.0 + uLevel * 0.7) * (13.0 / -mv.z) * mix(1.0, 0.7, uStandby);
-  }
-`
-
-const fragment = /* glsl */ `
-  uniform vec3 uColor;
-  uniform float uIntensity;
-  varying float vAlpha;
-
-  void main() {
-    // Round, soft-edged points.
-    vec2 d = gl_PointCoord - 0.5;
-    float r = length(d);
-    if (r > 0.5) discard;
-    float falloff = 1.0 - smoothstep(0.0, 0.5, r);
-    // The dust belongs to the orb: turning the reactor down and leaving its own
-    // atmosphere at full brightness reads as a bug, not as a dimmer.
-    gl_FragColor = vec4(uColor, vAlpha * falloff * uIntensity);
-  }
-`
 
 export function Particles({ drive }: { drive: Drive }) {
   const mat = useRef<THREE.ShaderMaterial>(null)
@@ -143,8 +76,8 @@ export function Particles({ drive }: { drive: Drive }) {
       <shaderMaterial
         ref={mat}
         uniforms={uniforms}
-        vertexShader={vertex}
-        fragmentShader={fragment}
+        vertexShader={particlesVertex}
+        fragmentShader={particlesFragment}
         transparent
         blending={THREE.AdditiveBlending}
         depthWrite={false}

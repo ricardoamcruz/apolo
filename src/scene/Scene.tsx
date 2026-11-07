@@ -12,7 +12,7 @@ import * as THREE from 'three'
 import { Core } from './Core'
 import { Particles } from './Particles'
 import { Orbits } from './Orbits'
-import { useStore, phaseColor, accentFor, type Phase } from '../store'
+import { useStore, phaseColor, accentFor, atividadeAtual, type Phase } from '../store'
 
 /** Velocidade da transição para a espera: cerca de dois segundos. */
 const STANDBY_RATE = 1.6
@@ -147,12 +147,13 @@ function Rig() {
 
   useFrame((state, dt) => {
     // Read imperatively rather than subscribing — see the note on Drive.
-    const { phase, level, ui } = useStore.getState()
+    const estado = useStore.getState()
+    const { phase, level, ui } = estado
 
     // accentFor owns the accent -> palette -> phase resolution order. The scene
     // asking the store for the answer rather than working it out again is what
     // keeps the orb and the HUD from ever disagreeing about the colour.
-    const accent = accentFor(phase, ui)
+    const accent = accentFor(phase, ui, atividadeAtual(estado))
     drive.color.lerp(aim(target, accent), Math.min(1, dt * 2.5))
 
     const r = ui.reactor

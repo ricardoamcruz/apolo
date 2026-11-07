@@ -12,5 +12,7 @@ function str(raw: unknown): string | undefined {
 }
 
 /** Onde a ponte escuta. Mudar a porta é uma edição só. */
-export const BRIDGE_WS_URL = str(import.meta.env.VITE_BRIDGE_URL) ?? 'ws://localhost:8787'
-export const BRIDGE_HTTP_URL = BRIDGE_WS_URL.replace(/^ws/, 'http')
+export const BRIDGE_WS_URL = str(import.meta.env.VITE_BRIDGE_URL) ?? 'wss://localhost:8787'
+/** Nos popups do app, quem define é o app: o endereço só existe depois de parear. */
+const PONTE_DO_CELULAR = (globalThis as { __APOLO_PONTE__?: string }).__APOLO_PONTE__
+export const BRIDGE_HTTP_URL = PONTE_DO_CELULAR ?? BRIDGE_WS_URL.replace(/^ws/, 'http')

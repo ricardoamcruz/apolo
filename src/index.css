@@ -8,7 +8,7 @@
    significava que trocar a fonte era trocar onze lugares e descobrir o décimo
    segundo em produção. A cor já era um token; agora a fonte também.
 
-   O que ainda não é token de propósito: a cor por fase (`phaseColor` em
+   O que ainda não é token de propósito: a cor por fase (`src/lib/estados.ts`, via `phaseColor` em
    `src/store.ts`), porque o cenário 3D e o HUD precisam da mesma resposta e só
    o TypeScript atravessa a borda do canvas. Ver ADR 0013.
    --------------------------------------------------------------------------- */

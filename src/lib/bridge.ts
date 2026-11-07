@@ -7,7 +7,8 @@ import type { BrowserReply, BrowserRequest } from './navegador'
 /** O que um pedido ao agente de tarefas recebe enquanto ele trabalha. */
 export type AskHandlers = {
   onText: (delta: string) => void
-  onTool: (name: string) => void
+  /** `bruto` é o nome real da ferramenta, para saber o que ela faz. */
+  onTool: (name: string, bruto: string) => void
 }
 
 /**
@@ -27,6 +28,8 @@ export type AskHandlers = {
 /** Anything the bridge sends. Deliberately loose — a frame from a future
  *  bridge build should be ignored, not crash the turn. */
 type Frame = {
+  extensao?: string
+  dados?: unknown
   type?: string
   delta?: string
   name?: string
@@ -303,12 +306,28 @@ function dispatch(ws: WebSocket) {
         respostas.get(msg.resposta)?.({ ok: msg.ok === true, mensagem: msg.mensagem ?? '' })
         respostas.delete(msg.resposta)
       }
+    } else if (msg.type === 'extensao' && msg.extensao) {
+      ouvintesDeExtensao.get(msg.extensao)?.(msg.dados)
     } else if (msg.type === 'ui' && msg.op) {
       // A `ui` frame with no args is normal — reset and clear take none — so an
       // absent args object is an empty one, not a reason to drop the command.
       onUi?.(msg.op, (msg.args ?? {}) as Record<string, unknown>)
     }
   })
+}
+
+/** Ponto de extensão entre dispositivos (docs/adr/0022). Nada usa ainda. */
+const ouvintesDeExtensao = new Map<string, (dados: unknown) => void>()
+
+export function ouvirExtensao(extensao: string, ouvir: (dados: unknown) => void) {
+  ouvintesDeExtensao.set(extensao, ouvir)
+  return () => void ouvintesDeExtensao.delete(extensao)
+}
+
+export function enviarExtensao(extensao: string, dados: unknown) {
+  if (socket?.readyState !== WebSocket.OPEN) return false
+  socket.send(JSON.stringify({ type: 'extensao', extensao, dados }))
+  return true
 }
 
 function connect(): Promise<WebSocket> {
@@ -537,7 +556,7 @@ export async function ask(
           case 'tool':
             if (!msg.name) break
             tools.push(msg.name)
-            handlers.onTool(prettyToolName(msg.name))
+            handlers.onTool(prettyToolName(msg.name), msg.name)
             break
 
           case 'done':

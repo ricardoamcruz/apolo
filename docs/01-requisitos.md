@@ -16,7 +16,7 @@ Fase: ver `05-roadmap.md`.
 | RF-06 | **Memória persistente**: histórico de conversas, preferências e fatos do usuário, consultável pelos módulos com permissão | M | 1 | proposto |
 | RF-07 | **Agendador e eventos** (base do "Preditivo"): tarefas recorrentes, gatilhos por horário/evento e briefings proativos | M | 1 | proposto |
 | RF-08 | **Canal PC**: interface web atual (HUD), adaptada ao A.P.O.L.O | M | 1 | em andamento |
-| RF-09 | **Canal celular**: **app nativo** (voz, notificações, confirmação de ações) conectado ao core | M | 2 | aprovado |
+| RF-09 | **Canal celular**: **app nativo** (voz, notificações, confirmação de ações) conectado ao core | M | 2 | em andamento |
 | RF-10 | **Voz em tempo real gratuita**: conversa speech-to-speech em pt-BR, sem custo por padrão (Gemini Live — ADR 0009 e 0010) | M | 2 | feito (03/11/2026) |
 | RF-11 | **Palavra de ativação** "Apolo" no PC e Android; no iPhone via Siri/Atalhos (limite do iOS). Hoje: microfone aberto após INICIAR, espera após 90 s; em espera, o nome ou Espaço acordam (ADR 0009 e 0017) | S | 2 | em andamento |
 | RF-12 | **Painel de status**: módulos carregados, provedor de IA em uso, consumo/limites, erros | S | 1 | proposto |
@@ -41,6 +41,12 @@ Fase: ver `05-roadmap.md`.
 | RF-55 | **Intro de boas-vindas personalizada**: ao ativar depois de muitas horas fora (ex.: ao acordar, ou ao voltar à noite), tocar um trecho de rock das playlists do Ricardo (Spotify, YouTube Music, Apple Music) junto com a saudação falada. Frequência ainda a definir; até lá, só a voz | C | 3–4 |
 | RF-56 | **Aba SISTEMAS**: sob demanda (tecla D ou voz), mostra o C.O.R.E. e, no futuro, cada skill, sub-sistema plugável, extensão, API e conector; o que estiver degradado usa a cor mais contrastante com a da interface no momento, e o modelo narra o estado | M | 1 em diante | em andamento |
 | RF-57 | **Exibição sob demanda**: ponte e chat ocultos por padrão, exibidos por voz (inclusive "modo detalhado"); a escolha persiste ao religar | M | 1 | em andamento |
+| RF-58 | **Sinal de escuta no celular**: círculo e partículas reagem à voz da pessoa, com rótulo de estado e as palavras ouvidas na tela por alguns segundos | M | 2 | em andamento |
+| RF-59 | **Telemetria do celular**: tempos de conexão, voz e tarefas gravados no Mac, consultáveis por `npm run logs:celular`, sem guardar a fala (ADR 0020) | S | 2 | em andamento |
+| RF-60 | **Uso dirigindo**: voz em segundo plano com o som do carro; CarPlay nativo depende de conta paga e aprovação da Apple (ADR 0020) | S | 2–3 | em andamento |
+| RF-61 | **Padrão de cores por atividade** na web e no app: ouvindo verde, processando amarelo, script lilás, código vermelho, pausa azul claro (ADR 0021) | M | 2 | em andamento |
+| RF-62 | **HTTPS em toda conexão** entre servidor, web e app (ADR 0021) | M | 2 | em andamento |
+| RF-63 | **Comandos entre dispositivos** (mobile, servidor e web): ponto de extensão pronto; a extensão vem depois (ADR 0022) | S | 3 | em andamento |
 
 ## Requisitos não funcionais
 

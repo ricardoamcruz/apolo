@@ -15,6 +15,7 @@
  *   descartada → a branch autodev some e o A.P.O.L.O. volta à main
  */
 
+import { obterLocal } from '../bridge/tls.mjs'
 import { execFile } from 'node:child_process'
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -338,15 +339,11 @@ export function criarSupervisor({
 
 /** A saúde real: a ponte responde e o Vite consegue transformar a interface. */
 export async function saudeHttp({ portaPonte, portaInterface }) {
-  const ponte = await fetch(`http://localhost:${portaPonte}/health`, {
-    signal: AbortSignal.timeout(2000),
-  })
+  const ponte = await obterLocal(`https://localhost:${portaPonte}/health`, { prazoMs: 2000 })
   if (!ponte.ok) return { ok: false, motivo: `a ponte respondeu ${ponte.status}` }
   const { interfaces = 0 } = await ponte.json()
   for (const arquivo of ['/src/main.tsx', '/src/App.tsx']) {
-    const r = await fetch(`http://localhost:${portaInterface}${arquivo}`, {
-      signal: AbortSignal.timeout(5000),
-    })
+    const r = await obterLocal(`https://localhost:${portaInterface}${arquivo}`)
     if (!r.ok) return { ok: false, motivo: `a interface não compilou (${arquivo}: ${r.status})` }
   }
   return { ok: true, interfaces }

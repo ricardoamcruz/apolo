@@ -20,6 +20,10 @@
 | 0016 | Numeração e nome das branches | aceita |
 | 0017 | Em Espera: acordar pelo nome e não se intrometer | aceita |
 | 0018 | Aba SISTEMAS, C.O.R.E. e cor de alerta | aceita |
+| 0019 | Gateway do celular e acesso fora de casa pelo Tailscale | proposta |
+| 0020 | Telemetria do celular e voz para usar dirigindo | proposta |
+| 0021 | Padrão de cores e HTTPS em toda conexão | proposta |
+| 0022 | Ponto de extensão entre dispositivos | proposta |
 
 ## Em aberto
 

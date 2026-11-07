@@ -41,11 +41,29 @@ detalhe está em `docs/`.
   fase fica em `phaseColor`/`accentFor()` (`src/store.ts`), porque a cena 3D e o
   HUD precisam da mesma resposta. Faltam fontes locais, a paleta definitiva e a
   geometria do núcleo; a decisão da paleta é do Ricardo.
-- **App mobile:** `apps/mobile` (Expo SDK 58, RN 0.88), app "olá" validado no
-  iPhone (bundle `com.ricardocruz.apolo`, Personal Team `9F2MVYQ9SF`). Ainda não
-  conversa com o core: depende do gateway com token (Fase 1). CocoaPods usa o
+- **App mobile (ADR 0019):** `apps/mobile` (Expo SDK 58, RN 0.88, bundle
+  `com.ricardocruz.apolo`, Personal Team `9F2MVYQ9SF`). Ele ouve e responde por
+  voz, como o PC, sem conversa escrita, pelo gateway com token (`bridge/gateway.mjs`,
+  porta própria só com o canal e a mídia dos popups, publicada pelo Tailscale). A
+  voz (`src/lib/voz/celular.ts`) e os `Panels` e `Blades` da web são compilados por
+  `npm run popups` e rodam numa WebView; os shaders ficam em `src/scene/shaders.ts`.
+  Mudar esse código muda o app. Popup é só para conteúdo visual, nunca para a
+  resposta. `ios/` e
+  `popups.gerado.ts` são gerados: não edite. CocoaPods usa o
   Ruby portátil do Homebrew (`scripts/setup-mobile.command`); no Homebrew,
   Intel + macOS 26 compila LLVM por horas — sempre responder `n`.
+- **Telemetria e direção (ADR 0020):** o app grava tempos no Mac por `telemetria`
+  (`bridge/telemetria.mjs`, `npm run logs:celular`), nunca a fala. A voz segue em
+  segundo plano (`UIBackgroundModes: audio`). CarPlay nativo exige conta paga e
+  aprovação da Apple; o espelhamento não existe. No celular, as partículas usam
+  `particlesOrbitVertex`, e o shader do PC fica como está.
+- **Cores e HTTPS (ADR 0021):** a cor por atividade vem de `src/lib/estados.ts`, para
+  web e app (ouvindo verde, processando amarelo, script lilás, código vermelho, pausa
+  azul claro); não escreva cor de estado à mão. Toda conexão é HTTPS: a página fica em
+  `https://localhost:5173`, a ponte só aceita origem `https`, e `npm run https` confia
+  no certificado de `~/.apolo/tls`.
+- **Extensão entre dispositivos (ADR 0022):** `bridge/extensoes.mjs` é só a tomada;
+  nenhuma extensão está registrada. O que vier por ela passa pelo gate.
 - **Em Espera (ADR 0017):** é a fase `dormant`, por Esc, ociosidade ou voz
   (`dormir`: "em espera", "já volto", "boa noite" de despedida). Nela, só o nome
   ou Espaço acordam: `src/lib/chamada.ts` usa a Web Speech API, com o microfone do
@@ -123,15 +141,20 @@ Ao concluir uma tarefa, atualize **no mesmo commit**:
 npm install          # dependências
 npm start            # sobe bridge (cérebro) + interface juntos
 npm run bridge       # só o cérebro, modo somente leitura
-npm run dev          # só a interface (Vite, http://localhost:5173)
+npm run dev          # só a interface (Vite, https://localhost:5173)
 npm run lint         # oxlint
 npm run build        # checagem de tipos + build
 npm run setup        # confere Node, Claude Code e a chave da voz (Gemini ou OpenAI)
 npm start -- --autodev  # permite o autodesenvolvimento (ADR 0011)
+npm run https        # confia no certificado local e liga o HTTPS do Tailscale (uma vez)
+npm run celular      # pareia o iPhone: token, Tailscale e código de pareamento
+npm run logs:celular # resume as medições do app (-- 7 para sete dias, --eventos para quedas)
+npm run popups       # compila os popups da web para o app do iPhone
 npm run rollback     # descarta a alteração em teste e volta à main (com tudo parado)
 npm run test:autodev # testes da política e do rollback
 npm run test:autodev:e2e # ciclo real com Chrome headless mudo (leva minutos, fora do npm test)
 npm run test:git     # testes do sub-módulo git (commit e pull request)
+npm run test:gateway # testes do gateway do celular e do canal do app
 npm test             # todos os testes de scripts/
 ```
 

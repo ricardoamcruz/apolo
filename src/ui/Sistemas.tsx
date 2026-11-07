@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { accentFor, useStore } from '../store'
+import { accentFor, atividadeAtual, useStore } from '../store'
 import { contrastante, corEmHex } from '../lib/cor'
 import { sistemasAgora } from '../lib/estadoDosSistemas'
 
@@ -21,9 +21,10 @@ export function Sistemas() {
     return () => clearInterval(id)
   }, [aberta])
 
+  const atividade = useStore(atividadeAtual)
   if (!aberta || !visivel) return null
 
-  const alerta = contrastante(corEmHex(accentFor(phase, ui)))
+  const alerta = contrastante(corEmHex(accentFor(phase, ui, atividade)))
   return (
     <aside className="rail rail-left" style={{ ['--alerta' as string]: alerta }}>
       <div className="rail-title">SISTEMAS</div>

@@ -1,3 +1,4 @@
+import { atividadeDaFerramenta } from './lib/estados'
 import { useEffect, useRef } from 'react'
 import { Scene } from './scene/Scene'
 import { Hud } from './ui/Hud'
@@ -137,12 +138,17 @@ export default function App() {
       s.clearBlades()
       s.setPhase('tooling')
       s.setActiveTool('agente de tarefas')
+      s.setAtividade('processando')
       sfx.play('tool')
       music.working(true)
       try {
         const { text } = await ask(pedido, {
           onText: () => {},
-          onTool: (tool) => store.getState().setActiveTool(prettyTool(tool)),
+          onTool: (tool, bruto) => {
+            const atual = store.getState()
+            atual.setActiveTool(prettyTool(tool))
+            atual.setAtividade(atividadeDaFerramenta(bruto))
+          },
         })
         return { output: text || 'Tarefa concluída, sem nada a relatar.' }
       } catch (err) {
@@ -152,6 +158,7 @@ export default function App() {
         }
       } finally {
         store.getState().setActiveTool(null)
+        store.getState().setAtividade(null)
         music.working(false)
         if (store.getState().phase === 'tooling') store.getState().setPhase('thinking')
         armIdle()

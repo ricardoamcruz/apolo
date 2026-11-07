@@ -22,6 +22,12 @@ export async function getMic(): Promise<MediaStream> {
   return stream
 }
 
+/** Fecha o microfone de vez. O indicador do iOS só apaga quando a faixa original para. */
+export function soltarMic() {
+  stream?.getTracks().forEach((faixa) => faixa.stop())
+  stream = null
+}
+
 export async function startAnalyser(): Promise<void> {
   if (analyser) return
   const s = await getMic()

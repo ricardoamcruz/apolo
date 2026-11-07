@@ -42,6 +42,11 @@ export const SENSIVEIS = [
   /^bridge\/autodev\//,
   // O gate, a proteção SSRF e o saneamento do HTML.
   /^bridge\/gate\.mjs$/,
+  // Autentica o celular: quem muda isto decide quem fala com o agente de fora.
+  /^bridge\/gateway\.mjs$/,
+  // A criptografia da conexão e a tomada entre dispositivos.
+  /^bridge\/tls\.mjs$/,
+  /^bridge\/extensoes\.mjs$/,
   // Roda antes de todo o resto e decide a configuração que o gate lê.
   /^bridge\/env\.mjs$/,
   // Commita e envia código do próprio projeto: quem pode mexer nele pode
@@ -55,6 +60,7 @@ export const SENSIVEIS = [
   // CSP e o que roda como código de configuração, fora do navegador.
   /^index\.html$/,
   /^vite\.config\.ts$/,
+  /^vite\.popups\.config\.ts$/,
   /^\.oxlintrc\.json$/,
   // Dependências: `npm install` roda scripts de terceiros nesta máquina.
   /^package(-lock)?\.json$/,

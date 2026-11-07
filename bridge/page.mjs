@@ -17,7 +17,7 @@ import { fetchText, peek, proxyError } from './net.mjs'
  * All three are the *origin server's* rules about who may load its content, and
  * all three are enforced against the browser. So we take the browser out of it.
  * The bridge fetches the document server-side and serves it back from
- * http://localhost:8787, and at that point the page in the iframe is, as far as
+ * https://localhost:8787, and at that point the page in the iframe is, as far as
  * the browser is concerned, ours. There is no cross-origin request to refuse, no
  * frame-ancestors to violate, and no CORS preflight to fail. The publisher's
  * headers are not bypassed so much as made irrelevant — they were never about
@@ -389,7 +389,8 @@ function toLive(html, pageUrl) {
  *
  * @param {string} url
  * @param {'reader'|'live'} mode
- * @param {string} bridgeOrigin  e.g. http://localhost:8787
+ * @param {string} bridgeOrigin  e.g. https://localhost:8787, ou o endereço com caminho
+ *   do gateway do celular
  */
 export async function renderPage(url, mode, bridgeOrigin) {
   const page = await fetchText(url, {
@@ -422,7 +423,7 @@ export async function renderPage(url, mode, bridgeOrigin) {
       "style-src 'unsafe-inline' https: http: data:; font-src https: http: data:; " +
       `media-src https: http: data:; script-src 'nonce-${nonce}'; form-action 'none'; ` +
       "frame-src 'none'; object-src 'none'; base-uri 'none'"
-    : `default-src 'none'; img-src ${bridgeOrigin} data:; ` +
+    : `default-src 'none'; img-src ${new URL(bridgeOrigin).origin} data:; ` +
       `style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; form-action 'none'; ` +
       "frame-src 'none'; object-src 'none'; base-uri 'none'"
 

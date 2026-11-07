@@ -42,6 +42,8 @@ const BARGE_RMS = 0.05
 const BARGE_CHUNKS = 3
 /** Blocos guardados enquanto ele fala, para não cortar o começo da sua frase. */
 const PREROLL = 6
+/** Abaixo disto é o chiado do microfone, não alguém falando. */
+const PISO_DO_MIC = 0.006
 
 const CAPTURE_WORKLET = `
 class ApoloCaptura extends AudioWorkletProcessor {
@@ -231,8 +233,10 @@ export async function connectGemini(
   const preroll: ArrayBuffer[] = []
   let loudRun = 0
   let bargeOpen = false
+  let rmsDoMic = 0
 
   capture.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
+    rmsDoMic = micOn ? rms(new Int16Array(e.data)) : 0
     if (!micOn || closed || reconnecting || ws?.readyState !== WebSocket.OPEN) return
     const buf = e.data
     const sendChunk = (b: ArrayBuffer) =>
@@ -491,6 +495,14 @@ export async function connectGemini(
       let sum = 0
       for (let i = 2; i < levels.length; i++) sum += levels[i]
       return Math.min(1, (sum / (levels.length - 2) / 255) * 3)
+    },
+    nivelDoMic() {
+      // A raiz abre a faixa de baixo, onde fica quase toda fala a um braço do celular.
+      return Math.min(1, Math.sqrt(Math.max(0, rmsDoMic - PISO_DO_MIC)) * 1.8)
+    },
+    retomar() {
+      void inCtx.resume()
+      void outCtx.resume()
     },
     close: finish,
   }

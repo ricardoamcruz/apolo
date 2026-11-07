@@ -8,6 +8,7 @@
  * Fora do `npm test` porque leva minutos e depende do Chrome instalado.
  */
 
+import { obterLocal } from '../../bridge/tls.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -75,7 +76,7 @@ const ambiente = {
   ...process.env,
   JARVIS_BRIDGE_PORT: String(PONTE),
   PORT: String(PAGINA),
-  VITE_BRIDGE_URL: `ws://localhost:${PONTE}`,
+  VITE_BRIDGE_URL: `wss://localhost:${PONTE}`,
   APOLO_AUTODEV_PASTA: pasta,
   APOLO_AUTODEV_VSCODE: '0',
 }
@@ -88,8 +89,8 @@ async function subir() {
     env: ambiente,
     stdio: 'ignore',
   })
-  await ate('a ponte subir', async () => (await fetch(`http://localhost:${PONTE}/health`)).ok)
-  await ate('o Vite subir', async () => (await fetch(`http://localhost:${PAGINA}/`)).ok)
+  await ate('a ponte subir', async () => (await obterLocal(`https://localhost:${PONTE}/health`)).ok)
+  await ate('o Vite subir', async () => (await obterLocal(`https://localhost:${PAGINA}/`)).ok)
 }
 
 async function descer(sinal = 'SIGTERM') {
@@ -114,6 +115,7 @@ async function abrirChrome() {
     [
       '--headless=new',
       '--mute-audio',
+      '--ignore-certificate-errors',
       `--remote-debugging-port=${DEPURACAO}`,
       '--remote-allow-origins=*',
       `--user-data-dir=${join(raiz, 'chrome')}`,
@@ -158,13 +160,13 @@ async function naPagina(expressao) {
 }
 
 async function abrirPagina() {
-  await cdp('Page.navigate', { url: `http://localhost:${PAGINA}/` })
+  await cdp('Page.navigate', { url: `https://localhost:${PAGINA}/` })
   await ate('a página carregar', () => naPagina(`!!document.querySelector('.ignition')`))
   await naPagina(`document.querySelector('.ignition').click()`)
   await ate('a página conectar', async () => (await saude()).interfaces > 0)
 }
 
-const saude = async () => (await fetch(`http://localhost:${PONTE}/health`)).json()
+const saude = async () => (await obterLocal(`https://localhost:${PONTE}/health`)).json()
 const estado = async () =>
   JSON.parse(
     (await naPagina(`import('/src/store.ts').then((m) => JSON.stringify(m.useStore.getState().autodev))`)) ?? 'null',

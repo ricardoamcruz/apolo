@@ -1,5 +1,6 @@
 import type { AutodevEstado } from './lib/autodev'
 import type { Servidor } from './lib/sistemas'
+import { CORES_DE_ESTADO, type Atividade } from './lib/estados'
 import { create } from 'zustand'
 
 export type Phase =
@@ -225,6 +226,8 @@ type State = {
   caption: string
   turns: Turn[]
   activeTool: string | null
+  /** O que a tarefa em andamento está fazendo: decide a cor de `tooling`. */
+  atividade: Atividade | null
   error: string | null
   connected: Servidor[]
   exibicao: Exibicao
@@ -272,6 +275,7 @@ type State = {
   setLevel: (l: number) => void
   setCaption: (c: string) => void
   setActiveTool: (t: string | null) => void
+  setAtividade: (a: Atividade | null) => void
   setError: (e: string | null) => void
   setConnected: (c: Servidor[]) => void
   setSistemas: (s: State['sistemas']) => void
@@ -294,6 +298,7 @@ export const useStore = create<State>((set, get) => ({
   caption: '',
   turns: [],
   activeTool: null,
+  atividade: null,
   error: null,
   connected: [],
   sistemas: 'fechado',
@@ -395,6 +400,7 @@ export const useStore = create<State>((set, get) => ({
   setLevel: (level) => set({ level }),
   setCaption: (caption) => set({ caption }),
   setActiveTool: (activeTool) => set({ activeTool }),
+  setAtividade: (atividade) => set({ atividade }),
   setError: (error) => set({ error }),
   setConnected: (connected) => set({ connected }),
   setSistemas: (sistemas) => set({ sistemas }),
@@ -465,14 +471,26 @@ export const useStore = create<State>((set, get) => ({
 
 /** Colour identity per phase — shared by the 3D scene and the 2D HUD. */
 export const phaseColor: Record<Phase, string> = {
-  offline: '#0d4a4a',
+  offline: CORES_DE_ESTADO.desconectado,
   boot: '#17b3b3',
-  dormant: '#12908f',
+  dormant: CORES_DE_ESTADO.repouso,
   waking: '#5cf2ef',
-  listening: '#19d8d2',
-  thinking: '#f0a93c',
-  tooling: '#a97bff',
-  speaking: '#3ef2a8',
+  listening: CORES_DE_ESTADO.ouvindo,
+  thinking: CORES_DE_ESTADO.processando,
+  tooling: CORES_DE_ESTADO.processando,
+  speaking: CORES_DE_ESTADO.respondendo,
+}
+
+const AUTODEV_TRABALHANDO = new Set(['trabalhando', 'verificando', 'aplicando'])
+
+/** O que ele está fazendo além da fase. O autodesenvolvimento vale em qualquer fase. */
+export function atividadeAtual(s: {
+  phase: Phase
+  atividade: Atividade | null
+  autodev: AutodevEstado | null
+}): Atividade | null {
+  if (s.autodev && AUTODEV_TRABALHANDO.has(s.autodev.fase)) return 'codificando'
+  return s.phase === 'tooling' ? s.atividade : null
 }
 
 /**
@@ -484,8 +502,12 @@ export const phaseColor: Record<Phase, string> = {
  * instead of being reimplemented either side of the canvas boundary. A blanket
  * accent wins over a per-phase override, which wins over the built-in map.
  */
-export function accentFor(phase: Phase, ui: UiState): string {
-  return ui.accent ?? ui.palette[phase] ?? phaseColor[phase]
+export function accentFor(phase: Phase, ui: UiState, atividade: Atividade | null = null): string {
+  return (
+    ui.accent ??
+    ui.palette[phase] ??
+    (atividade ? CORES_DE_ESTADO[atividade] : phaseColor[phase])
+  )
 }
 
 // Handy while dressing the scene for camera: in the dev server you can drive

@@ -1,0 +1,60 @@
+/*
+ * Os popups no retrato do iPhone. Só o que o tamanho exige: a aparência continua
+ * vindo do index.css. A cena mora no app, atrás desta página transparente.
+ */
+html,
+body,
+#root {
+  background: transparent;
+}
+body::after {
+  display: none;
+}
+
+.panels {
+  left: 0;
+  right: 0;
+  top: auto;
+  bottom: 0;
+  width: auto;
+  max-height: 100%;
+  padding: 8px;
+  overflow-y: auto;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+.panels-wide > * {
+  width: auto;
+}
+
+/* Em vw e vh, como no index.css: o popup fica num slot sem tamanho próprio. */
+.bl-compact,
+.bl-tall,
+.bl-wide,
+.bl-full,
+.bl-expanded {
+  width: calc(100vw - 16px);
+  height: calc(100vh - 16px);
+}
+.bl-compact {
+  height: 58vh;
+}
+
+/* Sem isto, o toque no título rolaria a página em vez de arrastar o popup. */
+.bl-head,
+.bl-grip {
+  touch-action: none;
+}
+.bl-btn {
+  min-width: 34px;
+  min-height: 34px;
+}
+.bl-body {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Atalhos de teclado que não existem aqui. */
+.bl-hint {
+  display: none;
+}

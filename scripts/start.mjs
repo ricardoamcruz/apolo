@@ -22,6 +22,7 @@ import process from 'node:process'
 import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { criarSupervisor, saudeHttp } from './supervisor.mjs'
 import { PASTA_AUTODEV } from '../bridge/autodev/politica.mjs'
+import { certificadoConfiavel, garantirCertificado } from '../bridge/tls.mjs'
 
 /**
  * Put MediaPipe's WebAssembly where the page can actually load it.
@@ -125,7 +126,7 @@ const bridgeEnv = {
   ...(selfDev ? { APOLO_AUTODEV: '1' } : {}),
 }
 if (port) {
-  bridgeEnv.JARVIS_ALLOWED_ORIGINS = `http://localhost:${port},http://127.0.0.1:${port}`
+  bridgeEnv.JARVIS_ALLOWED_ORIGINS = `https://localhost:${port},https://127.0.0.1:${port}`
   console.log(`  interface na porta ${port}; a ponte vai aceitá-la.\n`)
 }
 
@@ -166,6 +167,11 @@ function stopStale() {
 
 stopStale()
 vendorWasm()
+
+// Sem confiança, a página até abre com um aviso, mas a conexão com a ponte falha calada.
+if (certificadoConfiavel(garantirCertificado().caminho) === false) {
+  console.warn('\n  O sistema ainda não confia no certificado: rode npm run https uma vez.\n')
+}
 
 /** A ponte em execução. Ela troca a cada autodesenvolvimento; o Vite fica. */
 let bridge = null

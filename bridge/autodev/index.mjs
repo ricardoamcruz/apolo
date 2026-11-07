@@ -14,6 +14,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
+import { obterLocal } from '../tls.mjs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { BASE, PASTA_AUTODEV, classificar, gateIntacto } from './politica.mjs'
@@ -64,7 +65,7 @@ async function ponteSobe(pasta) {
   try {
     const limite = Date.now() + 20_000
     while (Date.now() < limite && !saiu) {
-      const r = await fetch(`http://127.0.0.1:${porta}/health`).catch(() => null)
+      const r = await obterLocal(`https://127.0.0.1:${porta}/health`).catch(() => null)
       if (r?.ok) return
       await new Promise((ok) => setTimeout(ok, 300))
     }

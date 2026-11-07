@@ -13,7 +13,7 @@
  * A WebSocket handshake is not subject to the same-origin policy: the browser
  * sends it on behalf of whatever page asked, no preflight stands in the way,
  * and the page reads every byte that comes back. Without a check here, any tab
- * the user happens to have open could open a socket to ws://localhost:8787,
+ * the user happens to have open could open a socket to wss://localhost:8787,
  * drive the agent with every MCP server on this machine, and read back every
  * token and panel. The Origin header is the only thing that separates our own
  * dev server from someone else's page, so it is checked explicitly.
@@ -50,7 +50,8 @@ export function originAllowed(origin) {
   } catch {
     return false
   }
-  if (url.protocol !== 'http:') return false
+  // Só HTTPS: uma página em http pode ter sido alterada no caminho (docs/adr/0021).
+  if (url.protocol !== 'https:') return false
   if (!LOCAL_HOSTS.has(url.hostname)) return false
   return isDevPort(Number(url.port))
 }

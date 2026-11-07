@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { useStore, accentFor, type Phase } from '../store'
+import { useStore, accentFor, atividadeAtual, type Phase } from '../store'
+import { ROTULO_DE_ATIVIDADE } from '../lib/estados'
 import { Suggestions } from './Suggestions'
 import { BladeSweep, Blades, BladeTray } from './Blades'
 import { Effects } from './Effects'
@@ -165,7 +166,8 @@ export function Hud() {
   // accentFor folds JARVIS's overrides in over the phase colour, so one
   // variable on the root carries a theme change into every .hud-* rule without
   // a single component knowing a theme exists.
-  const colour = accentFor(phase, ui)
+  const atividade = useStore(atividadeAtual)
+  const colour = accentFor(phase, ui, atividade)
 
   useEffect(() => {
     // The ground has to be set on the document, not painted here: the HUD sits
@@ -203,7 +205,11 @@ export function Hud() {
                 the right thing to show during boot — as a general fallback a
                 note that never got cleared (a stuck 'voice 97%') sits over
                 LISTENING and PROCESSING for the rest of the session. */}
-            {phase === 'boot' && bootNote ? bootNote : statusText[phase]}
+            {phase === 'boot' && bootNote
+              ? bootNote
+              : atividade
+                ? ROTULO_DE_ATIVIDADE[atividade]
+                : statusText[phase]}
           </span>
         </div>
       </header>

@@ -46,6 +46,10 @@ import { createRealtimeSession, realtimeKey, realtimeModel, voiceProvider } from
 import { fileURLToPath } from 'node:url'
 import { criarAutodev } from './autodev/index.mjs'
 import { criarPreferencias } from './preferencias.mjs'
+import { MENSAGENS_DO_CELULAR, PORTA_PADRAO, criarGateway } from './gateway.mjs'
+import { criarTelemetria } from './telemetria.mjs'
+import { garantirCertificado } from './tls.mjs'
+import { criarCentral } from './extensoes.mjs'
 
 const PORT = Number(process.env.JARVIS_BRIDGE_PORT ?? 8787)
 
@@ -81,6 +85,8 @@ const MODEL = process.env.JARVIS_MODEL ?? 'claude-opus-5'
  * dead air shows.
  */
 const EFFORT = process.env.JARVIS_EFFORT ?? 'high'
+/** No celular, responder logo vale mais que a segunda olhada (docs/adr/0020). */
+const ESFORCO_DO_CELULAR = process.env.APOLO_CELULAR_ESFORCO ?? 'low'
 
 /**
  * Every MCP server Claude Code has configured, read out of its own config.
@@ -115,6 +121,13 @@ function configuredServers() {
 }
 
 const MCP_SERVERS = configuredServers()
+
+/** Estado do gateway para a aba SISTEMAS. null: não há celular pareado. */
+let canalCelular = null
+
+/** A lista de servidores que vai à interface, com o canal do celular junto. */
+const comCanais = (servers) =>
+  canalCelular ? [...servers, { name: 'celular', status: canalCelular }] : servers
 
 const SYSTEM_PROMPT = `Você é o A.P.O.L.O., Assistente Preditivo Operacional Logístico e Otimizado,
 assistente pessoal do Ricardo — mais precisamente, o agente de tarefas dele.
@@ -504,9 +517,9 @@ function corsFor(req) {
 }
 
 // One HTTP server for both the speech proxy and the WebSocket upgrade.
-const http = await import('node:http')
+const https = await import('node:https')
 
-const handleRequest = async (req, res) => {
+const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
   const origin = req.headers.origin
   if (origin && !originAllowed(origin)) {
     console.warn(`[apolo] requisição recusada da origem ${origin}`)
@@ -642,7 +655,7 @@ const handleRequest = async (req, res) => {
     const target = asked.searchParams.get('url') ?? ''
     const mode = asked.searchParams.get('mode') === 'live' ? 'live' : 'reader'
     try {
-      const page = await renderPage(target, mode, `http://localhost:${PORT}`)
+      const page = await renderPage(target, mode, base)
       res.writeHead(200, { ...cors, ...page.headers })
       return res.end(page.body)
     } catch (err) {
@@ -671,16 +684,29 @@ const handleRequest = async (req, res) => {
   res.end()
 }
 
-const server = http.createServer((req, res) => {
-  // The handler is async, so anything it throws would otherwise become an
-  // unhandled rejection and leave the browser waiting on a socket that is
-  // never going to answer.
-  handleRequest(req, res).catch((err) => {
+/**
+ * O que muda quando quem pergunta é o app do iPhone (docs/adr/0019). Vem depois
+ * do texto principal porque a persona é a mesma: só o palco é outro.
+ */
+const PROMPT_DO_CELULAR = `
+
+CANAL DESTA CONVERSA. O Ricardo fala com a voz pelo app do iPhone. Painéis e popups
+aparecem numa tela de celular em retrato, e câmera e controle da interface não
+existem nesta conversa. O resto continua igual: a voz fala o seu texto final.`
+
+// The handler is async, so anything it throws would otherwise become an
+// unhandled rejection and leave the browser waiting on a socket that is never
+// going to answer.
+const responder = (req, res, base) => {
+  handleRequest(req, res, base).catch((err) => {
     console.error('[apolo] requisição falhou:', err)
     if (!res.headersSent) res.writeHead(500)
     res.end()
   })
-})
+}
+
+const tls = garantirCertificado()
+const server = https.createServer(tls, (req, res) => responder(req, res))
 
 const wss = new WebSocketServer({
   server,
@@ -730,6 +756,9 @@ const broadcast = (msg) => {
   }
 }
 const preferencias = criarPreferencias()
+const telemetria = criarTelemetria()
+/** Ponto de extensão entre dispositivos (docs/adr/0022). Nenhuma registrada ainda. */
+const central = criarCentral()
 
 /** A cópia do projeto que está no ar. O autodev e o sub-módulo git partem dela. */
 const REPO = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '')
@@ -745,7 +774,7 @@ process.on('message', (msg) => {
   if (msg?.type === 'autodev:resultado') autodev.resultado(msg)
 })
 
-console.log(`[apolo] ponte ouvindo em ws://localhost:${PORT}`)
+console.log(`[apolo] ponte ouvindo em wss://localhost:${PORT}`)
 console.log(
   realtimeKey()
     ? `[apolo] voz em tempo real: ${voiceProvider()} · ${realtimeModel()}`
@@ -789,16 +818,23 @@ const RESULT_FAILURES = {
   default: 'A tarefa terminou sem resposta.',
 }
 
-wss.on('connection', (socket) => {
-  console.log('[apolo] interface conectada')
+/**
+ * Uma conexão, uma sessão do agente. O celular usa o mesmo caminho do HUD, com o
+ * mesmo gate, e perde o que depende do navegador: a câmera, o ambiente e o controle
+ * da interface. Os painéis e popups continuam, desenhados pelo app.
+ */
+const atender = (socket, { celular = false } = {}) => {
+  console.log(`[apolo] ${celular ? 'celular' : 'interface'} conectado`)
 
   // Answer the HUD straight away rather than making it wait for the agent's
   // first turn. Refined later by the real init message.
   socket.send(
-    JSON.stringify({ type: 'ready', servers: Object.keys(MCP_SERVERS) }),
+    JSON.stringify({ type: 'ready', servers: comCanais(Object.keys(MCP_SERVERS)) }),
   )
-  socket.send(JSON.stringify({ type: 'autodev', estado: autodev.estado() }))
-  socket.send(JSON.stringify({ type: 'preferencias', valores: preferencias.valores() }))
+  if (!celular) {
+    socket.send(JSON.stringify({ type: 'autodev', estado: autodev.estado() }))
+    socket.send(JSON.stringify({ type: 'preferencias', valores: preferencias.valores() }))
+  }
 
   /** Resolves the pending user message into the SDK's input generator. */
   let deliver = null
@@ -824,6 +860,7 @@ wss.on('connection', (socket) => {
   const send = (msg) => {
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(msg))
   }
+  const dispositivo = central.conectar({ tipo: celular ? 'celular' : 'web', enviar: send })
 
   /**
    * Which question the agent is currently answering.
@@ -836,7 +873,28 @@ wss.on('connection', (socket) => {
    * listener over there has already heard.
    */
   let answering = null
-  const sendTurn = (msg) => send({ ...msg, ask: answering })
+  /** Quando o celular pediu a tarefa em andamento: separa o agente da rede no log. */
+  let tarefaDoCelularEm = 0
+  let ferramentasDaTarefa = 0
+  const conectouEm = Date.now()
+  const sendTurn = (msg) => {
+    if (tarefaDoCelularEm && msg.type === 'tool') {
+      // A primeira mostra o que veio antes de agir: pensar, e não executar.
+      if (!ferramentasDaTarefa++) {
+        telemetria.evento('tarefa_primeira_ferramenta', Date.now() - tarefaDoCelularEm)
+      }
+    }
+    if (tarefaDoCelularEm && (msg.type === 'done' || msg.type === 'error')) {
+      telemetria.evento(
+        'tarefa_agente',
+        Date.now() - tarefaDoCelularEm,
+        `${msg.type === 'error' ? 'erro ' : ''}ferramentas: ${ferramentasDaTarefa}`,
+      )
+      tarefaDoCelularEm = 0
+      ferramentasDaTarefa = 0
+    }
+    send({ ...msg, ask: answering })
+  }
 
   /**
    * Asking the browser for something and waiting for the answer.
@@ -955,19 +1013,25 @@ wss.on('connection', (socket) => {
           (panel) => send({ type: 'panel', panel }),
           (blade) => send({ type: 'blade', blade }),
         ),
-        // The interface controls, on the same socket. A separate key because
-        // MCP tool names are `mcp__<key>__<tool>` and one key can only carry
-        // one server; the underscore in it is why decideTool and announceTool
-        // both name `apolo_ui` explicitly.
-        apolo_ui: uiServer((op, args) => send({ type: 'ui', op, args })),
+        ...(celular
+          ? {}
+          : {
+              // The interface controls, on the same socket. A separate key
+              // because MCP tool names are `mcp__<key>__<tool>` and one key can
+              // only carry one server; the underscore in it is why decideTool
+              // and announceTool both name `apolo_ui` explicitly.
+              apolo_ui: uiServer((op, args) => send({ type: 'ui', op, args })),
+              // O navegador em que a interface está aberta: qual é ele, qual o
+              // sistema embaixo dele, e as abas e popups que o A.P.O.L.O. abriu
+              // lá (RF-19, ADR 0012). Como a câmera, pergunta à interface e espera.
+              apolo_ambiente: navegadorServer(ask),
+              // The camera, which unlike everything else here has to ask and wait.
+              apolo_visao: visionServer(ask),
+            }),
         // The user's own Chrome, over the extension's native-host socket. It
         // holds no per-connection state, but it is built here with the rest so
         // the write gate is read once, at the same point as everything else.
         apolo_navegador: chromeServer({ allowWrites: ALLOW_WRITES }),
-        // O navegador em que a interface está aberta: qual é ele, qual o
-        // sistema embaixo dele, e as abas e popups que o A.P.O.L.O. abriu lá
-        // (RF-19, ADR 0012). Como a câmera, pergunta à interface e espera.
-        apolo_ambiente: navegadorServer(ask),
         // O repositório do próprio A.P.O.L.O. (RF-17, ADR 0014): ver o que está
         // pendente, commitar numa branch e abrir pull request para a main. Como
         // o navegador, ele se fecha sozinho quando a escrita está bloqueada:
@@ -982,14 +1046,12 @@ wss.on('connection', (socket) => {
               ? 'o autodesenvolvimento está no meio de um trabalho'
               : null,
         }),
-        // The camera, which unlike everything else here has to ask and wait.
-        apolo_visao: visionServer(ask),
       },
       // A plain system prompt, not the claude_code preset. The preset is
       // tuned for a coding agent — verbose, file-oriented, and a large chunk
       // of input tokens on every turn. Replacing it makes the persona stick,
       // keeps answers short enough to speak, and cuts cost per turn.
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: celular ? SYSTEM_PROMPT + PROMPT_DO_CELULAR : SYSTEM_PROMPT,
       // Run from the home directory so project-scoped MCP servers don't shadow
       // the global ones, and so file tools have a sane root.
       cwd: homedir(),
@@ -1015,7 +1077,7 @@ wss.on('connection', (socket) => {
       // the settings files `settingSources: []` deliberately stops loading, so
       // without this line nothing in the project has a say at all.
       model: MODEL,
-      effort: EFFORT,
+      effort: celular ? ESFORCO_DO_CELULAR : EFFORT,
       maxTurns: 24,
       permissionMode: 'default',
       // Without this the SDK only emits whole assistant messages, and JARVIS
@@ -1122,7 +1184,7 @@ wss.on('connection', (socket) => {
               // O estado vai junto: é assim que a aba SISTEMAS sabe o que falhou.
               const servers = (msg.mcp_servers ?? []).map(({ name, status }) => ({ name, status }))
               const usable = servers.filter((s) => s.status !== 'needs-auth' && s.status !== 'failed')
-              send({ type: 'ready', servers })
+              send({ type: 'ready', servers: comCanais(servers) })
               console.log(`[apolo] ${usable.length} servidores MCP disponíveis`)
             }
             break
@@ -1149,6 +1211,9 @@ wss.on('connection', (socket) => {
     } catch {
       return
     }
+    if (celular && !MENSAGENS_DO_CELULAR.has(msg.type)) return
+    if (celular && msg.type === 'telemetria') return telemetria.registrar(msg.eventos)
+    if (msg.type === 'extensao') return void dispositivo.receber(msg)
 
     if (msg.type === 'ask' && typeof msg.text === 'string') {
       /**
@@ -1166,6 +1231,7 @@ wss.on('connection', (socket) => {
        */
       const text = msg.text
       const id = typeof msg.id === 'string' ? msg.id : null
+      if (celular) tarefaDoCelularEm = Date.now()
       void settling.then(() => {
         answering = id
         if (deliver) {
@@ -1176,6 +1242,13 @@ wss.on('connection', (socket) => {
           inbox.push(text)
         }
       })
+    }
+
+    // A credencial da voz, que o HUD pede por HTTP. Aqui vem pelo canal autenticado.
+    if (celular && msg.type === 'voz_sessao' && typeof msg.id === 'string') {
+      createRealtimeSession({ celular: true })
+        .then((sessao) => send({ type: 'voz_sessao', id: msg.id, sessao }))
+        .catch((err) => send({ type: 'voz_sessao', id: msg.id, erro: err.message }))
     }
 
     if (msg.type === 'preferencias') {
@@ -1213,9 +1286,39 @@ wss.on('connection', (socket) => {
   })
 
   socket.on('close', () => {
-    console.log('[apolo] interface desconectada')
+    console.log(`[apolo] ${celular ? 'celular' : 'interface'} desconectado`)
+    if (celular) telemetria.evento('canal_aberto', Date.now() - conectouEm)
+    dispositivo.sair()
     closed = true
     deliver?.(null)
     session.close?.()
   })
-})
+}
+
+wss.on('connection', (socket) => atender(socket))
+
+/**
+ * O gateway só existe com token: quem nunca pareou um celular não abre porta
+ * nenhuma. Uma falha aqui fica na aba SISTEMAS; o PC continua funcionando.
+ */
+const tokenDoCelular = process.env.APOLO_GATEWAY_TOKEN?.trim()
+if (tokenDoCelular) {
+  try {
+    const gateway = criarGateway({
+      token: tokenDoCelular,
+      host: process.env.APOLO_GATEWAY_HOST?.trim() || undefined,
+      porta: Number(process.env.APOLO_GATEWAY_PORT ?? PORTA_PADRAO),
+      atender: (socket) => atender(socket, { celular: true }),
+      tls,
+      servirMidia: responder,
+    })
+    const porta = await gateway.ligar()
+    canalCelular = 'connected'
+    console.log(`[apolo] gateway do celular ouvindo na porta ${porta}`)
+  } catch (err) {
+    canalCelular = 'failed'
+    console.error(`[apolo] gateway do celular desligado: ${err.message}`)
+  }
+} else {
+  console.log('[apolo] gateway do celular desligado — rode npm run celular para parear')
+}

@@ -9,7 +9,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ricardocruz.apolo",
-      "appleTeamId": "9F2MVYQ9SF"
+      "appleTeamId": "9F2MVYQ9SF",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "O A.P.O.L.O. usa o microfone para ouvir o que você diz.",
+        "UIBackgroundModes": ["audio"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,6 +27,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

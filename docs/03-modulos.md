@@ -79,3 +79,9 @@ módulos: não depende deles diretamente.
 3. Implementar o servidor MCP; nomes de ferramenta em `snake_case`, verbos claros.
 4. Declarar segredos no manifesto e documentá-los no README do módulo.
 5. Registrar o módulo em `docs/01-requisitos.md` e, se houver decisão nova, em uma ADR.
+
+## Comunicação entre dispositivos
+
+Módulos poderão levar mensagens entre celular, servidor e web pelo ponto de extensão
+de `bridge/extensoes.mjs` (ADR 0022). Ele só transporta: o que uma mensagem mandar
+fazer passa pelo gate, com as mesmas permissões de qualquer ferramenta.

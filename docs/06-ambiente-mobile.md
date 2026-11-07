@@ -71,6 +71,35 @@ npx expo run:android --device    # instala no Android conectado
 `ios/*.xcworkspace` no Xcode → **Signing & Capabilities** → Team = *Personal
 Team*, ajuste o Bundle Identifier e rode pelo botão ▶.
 
+## 5. Usar o app fora do Wi-Fi (ADR 0019)
+
+Uma vez, nesta ordem:
+
+1. Instale o **Tailscale** pela App Store no Mac e no iPhone e entre com a mesma
+   conta nos dois. Não use `brew install tailscale`: no Intel + macOS 26 ele tenta
+   compilar por horas.
+2. `npm run celular`. Ele gera o token no `.env.local`, publica o gateway e copia
+   o código de pareamento. Na primeira vez, o Tailscale mostra um link para ativar
+   o HTTPS: abra, ative e rode de novo.
+3. `npm start` (reinicie se já estava rodando).
+4. Instale a versão **Release**, que leva o código dentro do app. A de
+   desenvolvimento depende do Metro no Mac e só abre na mesma rede:
+   ```bash
+   cd apps/mobile
+   npm run ios -- --device --configuration Release
+   ```
+   Use `npm run ios`, e não `npx expo run:ios`: ele recompila antes os popups
+   (`npm run popups`), que vêm dos componentes da web e não vão para o Git.
+5. No app, cole o código e toque em **CONECTAR**. Pressionar o estado, no alto à
+   direita, apaga o pareamento.
+
+No dia a dia: Mac acordado com `npm start` rodando e Tailscale ligado no iPhone.
+Para o Mac não dormir na tomada: **Ajustes do Sistema → Bateria → Opções →
+Impedir suspensão automática quando a tela estiver desligada**.
+
+Para instalar pelo Wi-Fi, sem cabo: Xcode → **Window → Devices and Simulators**,
+com o iPhone no cabo, marcar **Connect via network**.
+
 ## Problemas comuns
 
 | Sintoma | Solução |
@@ -84,4 +113,19 @@ Team*, ajuste o Bundle Identifier e rode pelo botão ▶.
 | `invalid code signature ... not been explicitly trusted` ao abrir | Confiar no certificado no iPhone (passo 2.4) |
 | iPhone aparece como *Offline* no `xctrace` | Desbloquear, confiar no Mac e manter no cabo; o Modo de Desenvolvedor precisa estar ativo |
 | `adb devices` vazio | Trocar o cabo/porta, reativar Depuração USB, aceitar a chave RSA |
-| App sumiu do iPhone após 7 dias | Rodar `npx expo run:ios --device` de novo |
+| App sumiu do iPhone após 7 dias | Em `apps/mobile`, rodar `npm run ios -- --device --configuration Release` de novo |
+| Falta `popups.gerado` ao compilar ou no `tsc` | `npm run popups` na raiz |
+| Círculo não aparece no simulador | Abrir a janela do Simulator e esperar: no Intel, o shader roda na CPU, a cerca de 1 quadro por segundo |
+| App mostra DESCONECTADO | Tailscale ligado no iPhone? Mac acordado? `npm start` rodando e reiniciado depois de atualizar o código? Em `tailscale serve status`, a porta 8788 aparece? |
+| App pede o código de novo: "O Mac recusou este token" | O token mudou no `.env.local`: rode `npm run celular` e pareie de novo |
+| Ele não ouve | Ajustes → A.P.O.L.O → Microfone. Em espera, toque na tela para acordar |
+
+## Logs e uso no carro
+
+O app manda as medições ao Mac pelo próprio canal, em casa ou fora, e `npm run logs:celular`
+resume (`-- 7` para sete dias, `-- 1 --eventos` para ver quedas). Os arquivos ficam em
+`~/.apolo/logs`. Mudar `app.json` ou instalar pacote nativo exige `npx expo prebuild
+--platform ios --no-install`, `pod install` e nova compilação.
+
+No CarPlay o A.P.O.L.O. não aparece como app (ADR 0020): com o iPhone ligado ao carro,
+ele conversa em segundo plano, e a rota de áudio é escolhida pelo iOS.

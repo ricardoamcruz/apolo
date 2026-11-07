@@ -70,6 +70,11 @@ const TRANSCRIBE_MODEL = env('APOLO_REALTIME_TRANSCRICAO', 'gpt-4o-mini-transcri
 /** Silêncio, em milissegundos, que encerra a sua vez de falar. Menor responde
  *  mais rápido; maior corta menos quem faz pausas no meio da frase. */
 const SILENCE_MS = Number(env('APOLO_REALTIME_SILENCIO_MS', '1200'))
+/**
+ * No celular a pausa pesa mais que no PC: os logs mostraram 1,6 s até ele começar a
+ * falar, e 1,2 s disso era esta espera (docs/adr/0020).
+ */
+const SILENCIO_DO_CELULAR_MS = Number(env('APOLO_CELULAR_SILENCIO_MS', '700'))
 
 /** Modelos que aceitam o parâmetro de raciocínio. Os antigos o recusam. */
 const supportsReasoning = (model) => /realtime-2/.test(model)
@@ -398,10 +403,46 @@ function toGeminiSchema(schema) {
   return out
 }
 
-function geminiTools() {
+/**
+ * O que muda na voz pelo iPhone (docs/adr/0019). Fica só o que funciona sem o HUD:
+ * câmera, ajustes de interface e autodesenvolvimento dependem da tela do PC.
+ */
+const FERRAMENTAS_DO_CELULAR = new Set(['executar_tarefa', 'ajustar_interface', 'ignorar_fala', 'dormir'])
+const INSTRUCOES_DO_CELULAR = `
+
+CANAL DESTA SESSÃO. Agora o Ricardo fala com você pelo app do iPhone. Só existem as
+ferramentas executar_tarefa, ajustar_interface, ignorar_fala e dormir. Aqui,
+ajustar_interface só fecha popups: "limpe a bagunça", "fechar popup" e "fechar tudo"
+são limpar_tela com "popups". O que for dito acima sobre câmera, outros ajustes da
+interface, diagnóstico ou desenvolvimento não vale aqui, e se ele pedir algo disso,
+diga que só funciona no computador. Em espera, ele acorda você com
+um toque na tela, não pelo nome. O que for visual o agente de tarefas abre como popup
+na tela do celular.`
+
+/** No celular, o único ajuste que existe é fechar popups: o resto do esquema só confundiria. */
+function ferramentaDoCelular(ferramenta) {
+  if (ferramenta.name !== 'ajustar_interface') return ferramenta
+  return {
+    ...ferramenta,
+    description: 'Fecha os popups abertos na tela do celular.',
+    parameters: {
+      type: 'object',
+      properties: {
+        limpar_tela: {
+          type: 'string',
+          enum: ['popups'],
+          description: 'Fecha todos os painéis e artigos abertos.',
+        },
+      },
+    },
+  }
+}
+
+function geminiTools(celular) {
   return [
     {
-      functionDeclarations: tools.map((t) => {
+      functionDeclarations: tools.filter((t) => !celular || FERRAMENTAS_DO_CELULAR.has(t.name)).map((bruta) => {
+        const t = celular ? ferramentaDoCelular(bruta) : bruta
         const decl = { name: t.name, description: t.description }
         // Uma função sem parâmetros vai sem o campo: um objeto vazio é recusado.
         if (Object.keys(t.parameters?.properties ?? {}).length) {
@@ -414,15 +455,17 @@ function geminiTools() {
 }
 
 /** A mensagem de configuração que o navegador manda ao abrir o WebSocket. */
-function geminiSetup() {
+function geminiSetup({ celular = false } = {}) {
   return {
     model: `models/${GEMINI_MODEL}`,
     generationConfig: {
       responseModalities: ['AUDIO'],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_VOICE } } },
     },
-    systemInstruction: { parts: [{ text: instructions() }] },
-    tools: geminiTools(),
+    systemInstruction: {
+      parts: [{ text: celular ? instructions() + INSTRUCOES_DO_CELULAR : instructions() }],
+    },
+    tools: geminiTools(celular),
     inputAudioTranscription: {},
     outputAudioTranscription: {},
     realtimeInputConfig: {
@@ -433,7 +476,7 @@ function geminiSetup() {
         startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
         endOfSpeechSensitivity: 'END_SENSITIVITY_LOW',
         prefixPaddingMs: 300,
-        silenceDurationMs: SILENCE_MS,
+        silenceDurationMs: celular ? SILENCIO_DO_CELULAR_MS : SILENCE_MS,
       },
     },
     // Sem compressão, uma sessão só de áudio acaba em cerca de quinze minutos.
@@ -444,7 +487,7 @@ function geminiSetup() {
   }
 }
 
-async function createGeminiSession() {
+async function createGeminiSession(opcoes) {
   const key = geminiKey()
   if (!key) {
     const err = new Error(
@@ -479,10 +522,12 @@ async function createGeminiSession() {
     throw err
   }
   const data = JSON.parse(text)
-  return { provider: 'gemini', token: data.name, model: GEMINI_MODEL, setup: geminiSetup() }
+  return { provider: 'gemini', token: data.name, model: GEMINI_MODEL, setup: geminiSetup(opcoes) }
 }
 
 /** Emite a credencial temporária do provedor escolhido. */
-export function createRealtimeSession() {
-  return voiceProvider() === 'gemini' ? createGeminiSession() : createOpenAiSession()
+export async function createRealtimeSession(opcoes) {
+  if (voiceProvider() === 'gemini') return createGeminiSession(opcoes)
+  if (opcoes?.celular) throw new Error('A voz no celular só funciona com o Gemini.')
+  return createOpenAiSession()
 }

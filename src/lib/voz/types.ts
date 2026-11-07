@@ -41,6 +41,10 @@ export type RealtimeSession = {
   prompt: (instructions: string) => void
   /** Nível 0..1 da voz dele, para o reator pulsar junto. */
   level: () => number
+  /** Nível 0..1 do microfone: o quanto ele está captando de você agora. */
+  nivelDoMic?: () => number
+  /** Destrava o áudio dentro de um toque, para quem exige gesto (iOS). */
+  retomar?: () => void
   close: () => void
   readonly model: string
 }

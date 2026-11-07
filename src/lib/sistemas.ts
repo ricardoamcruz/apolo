@@ -19,7 +19,7 @@ export type Sistema = {
 }
 
 /** Servidores que não fazem parte do que o A.P.O.L.O. precisa para rodar. */
-const PLUGAVEIS = new Set(['rea'])
+const PLUGAVEIS = new Set(['rea', 'celular'])
 
 const FALHAS: Record<string, string> = { failed: 'falhou', 'needs-auth': 'precisa de autorização' }
 

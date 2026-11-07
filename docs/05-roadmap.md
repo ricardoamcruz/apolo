@@ -38,7 +38,7 @@ sobre a ordem das fases abaixo.
 - [ ] Gate de permissões por manifesto + confirmação na interface + auditoria
 - [ ] Memória em SQLite (hoje só as preferências de exibição persistem, em arquivo: RF-57; migrar para cá)
 - [ ] Agendador e barramento de eventos
-- [ ] Gateway com token de acesso (logo depois: chat por texto no app iPhone conectado a ele, antes da voz no celular)
+- [ ] Gateway com token de acesso — **em andamento**: `bridge/gateway.mjs`, porta própria só com o canal, publicada pelo Tailscale (ADR 0019, 06/11/2026). Falta validar fora de casa
 - [ ] Persona A.P.O.L.O em pt-BR; identidade visual básica — **em andamento**: nome, persona e textos da interface em pt-BR feitos (01/11/2026); voz em tempo real speech-to-speech em pt-BR (ADR 0009/0010, 03/11/2026); abertura reduzida à barra de status e aos anéis com o nome, sem o reator e o esquema da armadura herdados do JARVIS (03/11/2026); identidade visual começada (ADR 0013, 05/11/2026): barra lateral direita "SINAL" removida, tipografia e cor em tokens no `:root`, marca própria no favicon, `__jarvis` → `__apolo` no console. Faltam as fontes locais (sem o Google Fonts), a decisão da paleta, a geometria do núcleo 3D, o painel de status (RF-12) e as variáveis `JARVIS_*`
 - [ ] Painel de status (módulos, provedor, consumo) — **em andamento**: aba SISTEMAS sob demanda, com o C.O.R.E. e a cor de alerta contrastante (ADR 0018, RF-56, 06/11/2026). Falta validar o pedido por voz e somar provedor e consumo
 
@@ -46,9 +46,15 @@ sobre a ordem das fases abaixo.
 - [ ] Autodesenvolvimento por voz e chat, com teste, aprovação e rollback para a `main` (ADR 0011, ADR 0015, RF-15) — **em andamento**: implementado e testado; o `.env.local` passou a ser lido antes de qualquer módulo que leia configuração (`bridge/env.mjs`), então `APOLO_AUTODEV_*` e `JARVIS_MODEL` valem nesse arquivo, e não só no terminal (03/11/2026); falta validar por voz no navegador
 - [x] Voz pt-BR gratuita em tempo real — speech-to-speech pelo Gemini Live, OpenAI como opção (ADR 0009 e 0010, 03/11/2026)
 - [ ] Palavra de ativação "Apolo" — **em andamento**: no PC, pela Web Speech API do navegador, só em espera (ADR 0017, 06/11/2026). Falta validar por voz e levar ao celular
-- [ ] Voz no app de celular usando o mesmo `POST /realtime/sessao` da ponte
+- [ ] Voz no app de celular com a mesma credencial da ponte, pelo canal autenticado — **em andamento**: sessão aberta com o Google a partir da WebView (ADR 0019, 06/11/2026). Falta validar a conversa no iPhone
 - [ ] Protocolo de canal versionado (RNF-11)
-- [ ] App nativo React Native + Expo (MVP: texto, voz, notificações, confirmações), iPhone primeiro — ADR 0006
+- [ ] App nativo React Native + Expo (MVP: texto, voz, notificações, confirmações), iPhone primeiro — ADR 0006 — **em andamento**: voz, círculo e partículas da web e os mesmos popups, sem conversa na tela, pelo gateway (ADR 0019, 06/11/2026). Faltam validar a voz no iPhone, notificações, confirmações e manter a sessão quando o iOS suspende o app
+- [ ] Sinal de escuta, palavras ouvidas e partículas compostas para a tela do celular (RF-58) — **em andamento**: falta validar no iPhone
+- [ ] Telemetria do celular em `~/.apolo/logs` (RF-59, ADR 0020) — **em andamento**: falta validar no iPhone
+- [ ] Uso dirigindo (RF-60, ADR 0020) — **em andamento**: voz em segundo plano por validar no carro; CarPlay nativo depende de conta paga e aprovação da Apple
+- [ ] Padrão de cores na web e no app, e fechar popups por voz no celular (RF-61, ADR 0021) — **em andamento**: falta validar no iPhone
+- [ ] HTTPS em toda conexão (RF-62, ADR 0021) — **em andamento**: falta confiar no certificado com `npm run https`
+- [ ] Comandos entre dispositivos (RF-63, ADR 0022) — ponto de extensão pronto; a extensão vem depois
 
 ## Em todas as fases seguintes
 - [ ] **Tudo o que for plugável aparece na aba SISTEMAS (RF-56):** cada skill, sub-sistema plugável, extensão, API e conector novo entra como uma linha própria, com estado e a cor de alerta quando degradado. Faz parte de concluir o item, não é um extra

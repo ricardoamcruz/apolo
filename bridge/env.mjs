@@ -11,13 +11,14 @@
  *
  * Por isso isto é um módulo à parte, e tem de ser o **primeiro import** de todo
  * ponto de entrada que leia configuração: `bridge/server.mjs`,
- * `scripts/start.mjs` e `scripts/rollback.mjs`.
+ * `scripts/preparar.mjs` e `scripts/iphone.mjs`. A F.Ê.N.I.X. (fenix/) e o
+ * H.E.R.M.E.S. (hermes/) são serviços à parte e leem o ambiente por conta própria.
  *
  * O caminho sai da localização deste arquivo, e não do diretório de trabalho,
  * para valer igual quando a cópia em execução é uma worktree do
  * autodesenvolvimento. Variáveis já definidas no terminal continuam tendo
  * prioridade sobre o arquivo — é assim que `npm start -- --autodev` liga o
- * autodesenvolvimento só para aquela execução.
+ * autodesenvolvimento só para aquela execução (a Fênix passa APOLO_AUTODEV=1).
  */
 
 import { fileURLToPath } from 'node:url'

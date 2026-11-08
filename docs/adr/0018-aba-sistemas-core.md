@@ -51,6 +51,11 @@ pop, e aparece com pontos, como C.O.R.E.
 - **H.E.R.M.E.S.** é o canal do celular (gateway, ADR 0019). Hermes é o mensageiro
   dos deuses, que leva recados entre mundos, e irmão de Apolo, a quem deu a lira.
   Na aba, a sigla se lê Hub de Enlace Remoto Móvel, Escuta e Sincronia.
+- **F.Ê.N.I.X.** é a guardiã que sobe, vigia e faz o A.P.O.L.O. renascer depois
+  de uma queda ou de uma versão quebrada (ADR 0025). A fênix renasce das próprias
+  cinzas; a sigla se lê Fiadora da Estabilidade, do Nascimento, da Integridade e
+  da eXecução. HERMES chegou a ser cogitado para ela, mas já era o canal do
+  celular, e misturar os dois papéis juntaria o que a ADR 0025 separa.
 
 Servidores do Claude Code que não servem ao A.P.O.L.O. ficam de fora por
 `APOLO_MCP_IGNORAR`, no `.env.local`, sem que o repositório precise citá-los.

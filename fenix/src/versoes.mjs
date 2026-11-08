@@ -1,27 +1,24 @@
 /**
- * Supervisor do autodesenvolvimento: coloca uma alteração em teste e garante a
- * volta à versão segura (docs/adr/0011 e docs/adr/0015).
+ * As versões: coloca uma alteração em teste e garante a volta à versão segura
+ * (docs/adr/0011, 0015 e 0025).
  *
- * Vive fora da ponte porque a ponte é justamente o que ele derruba, e fica
- * carregado na memória do `npm start`: uma versão nova não muda quem a vigia
- * até a próxima partida manual — e estes arquivos são sensíveis (politica.mjs),
- * então só mudam por revisão humana.
+ * Vive na F.Ê.N.I.X., fora do projeto, porque o projeto é justamente o que ela
+ * derruba. As regras (o que exige revisão, que branch vale) vêm do
+ * fenix.config.json lido na partida: uma versão nova não muda quem a vigia até a
+ * próxima partida manual, e o arquivo de configuração só muda por revisão humana.
  *
  * Enquanto o Ricardo não aprova, a alteração é provisória, sem limite de tempo:
  * `transicao.json` fica em disco. Uma queda a qualquer momento, até o Mac
  * desligando, volta para a versão segura — na hora ou na próxima partida.
  *
- *   aprovada   → vira a branch fase-x.x/nome e o A.P.O.L.O. volta à main
- *   descartada → a branch autodev some e o A.P.O.L.O. volta à main
+ *   aprovada   → vira a branch fase-x.x/nome e o projeto volta à versão segura
+ *   descartada → a branch some e o projeto volta à versão segura
  */
 
-import { obterLocal } from '../bridge/tls.mjs'
 import { execFile } from 'node:child_process'
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { branchValida } from '../bridge/autodev/entrega.mjs'
-import { classificar, gateIntacto } from '../bridge/autodev/politica.mjs'
 
 const exec = promisify(execFile)
 
@@ -33,25 +30,46 @@ const lerJson = (arquivo, padrao) => {
   }
 }
 
-const dormir = (ms) => new Promise((r) => setTimeout(r, ms))
+/** Sem segurar o processo: quem o mantém vivo são os serviços e o canal. */
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms).unref())
 
 const FALHAS_SEGUIDAS = 3
 
 /**
+ * O que exige revisão humana: a alteração para na branch e não entra em teste.
+ * Devolve os arquivos que barram a troca, com o motivo.
+ */
+export async function barrados(protecao, nomes, conteudo) {
+  const revisao = nomes.filter((f) => !protecao.liberados.has(f) && protecao.revisao.some((re) => re.test(f)))
+  const quebrados = []
+  for (const { arquivo, contem } of protecao.invariantes) {
+    if (!nomes.includes(arquivo)) continue
+    const codigo = await conteudo(arquivo).catch(() => '')
+    if (!contem.every((re) => re.test(codigo))) quebrados.push(arquivo)
+  }
+  return { revisao, quebrados }
+}
+
+/**
  * @param repo      a cópia do projeto em execução
  * @param pasta     onde ficam o registro da transição e os eventos
- * @param ligar     sobe a ponte
- * @param desligar  derruba a ponte; resolve quando ela tiver saído
+ * @param ligar     sobe os serviços versionados
+ * @param desligar  derruba os serviços versionados; resolve quando tiverem saído
  * @param saude     `{ ok, motivo?, interfaces }` da versão no ar
- * @param notificar entrega um resultado à ponte em execução
+ * @param notificar entrega um resultado ao projeto em execução
+ * @param protecao  o que exige revisão (fenix.config.json)
+ * @param instalar  `{ comando, quando }`: reinstala as dependências numa atualização
  */
-export function criarSupervisor({
+export function criarVersoes({
   repo,
   pasta,
   ligar,
   desligar,
   saude,
   notificar = () => {},
+  protecao = { revisao: [], liberados: new Set(), invariantes: [], branch: /^[\w./-]+$/ },
+  versaoSegura = 'main',
+  instalar = null,
   log = console.log,
   subidaMs = 30_000,
   estabilidadeMs = 30_000,
@@ -72,6 +90,8 @@ export function criarSupervisor({
     }
   }
 
+  const branchValida = (nome) => protecao.branch.test(String(nome ?? ''))
+
   const git = async (...args) =>
     (await exec('git', args, { cwd: repo, maxBuffer: 16 * 1024 * 1024 })).stdout.trim()
 
@@ -91,6 +111,11 @@ export function criarSupervisor({
   /** A transição que aguarda a avaliação do Ricardo. */
   let emTeste = null
 
+  async function rodarInstalar() {
+    const [comando, ...args] = instalar.comando
+    await exec(comando, args, { cwd: repo, maxBuffer: 64 * 1024 * 1024, timeout: 15 * 60_000 })
+  }
+
   const apagarBranch = (ref) => git('branch', '-D', ref).catch(() => {})
 
   async function recusaAplicar({ sha, branch }) {
@@ -106,15 +131,15 @@ export function criarSupervisor({
     if ((await git('rev-parse', branch).catch(() => '')) !== sha) {
       return 'A branch da alteração não confere com o commit verificado; nada foi trocado.'
     }
-    // Conferido de novo aqui, e não só na ponte: é o que a ponte pede que precisa
-    // ser verificado, e a ponte é parte do que muda.
+    // Conferido de novo aqui, e não só no projeto: é o que o projeto pede que
+    // precisa ser verificado, e o projeto é parte do que muda.
     const nomes = (await git('diff', '--name-only', atual, sha)).split('\n').filter(Boolean)
-    const { proibidos, sensiveis } = classificar(nomes)
-    if (proibidos.length + sensiveis.length) {
-      return `A alteração toca arquivos protegidos (${[...proibidos, ...sensiveis].join(', ')}); exige revisão.`
+    const { revisao, quebrados } = await barrados(protecao, nomes, (f) => git('show', `${sha}:${f}`))
+    if (revisao.length) {
+      return `A alteração toca arquivos protegidos (${revisao.join(', ')}); exige revisão.`
     }
-    if (nomes.includes('bridge/server.mjs') && !gateIntacto(await git('show', `${sha}:bridge/server.mjs`))) {
-      return 'A alteração tira bridge/server.mjs do gate; exige revisão.'
+    if (quebrados.length) {
+      return `A alteração tira ${quebrados.join(', ')} do que precisa continuar valendo; exige revisão.`
     }
     return null
   }
@@ -161,21 +186,21 @@ export function criarSupervisor({
     queda = null
     ligar()
     if (falha) {
-      anotar(`[supervisor] ATENÇÃO: não consegui voltar para ${transicao.de.ref}: ${falha.message}`)
+      anotar(`[fenix] ATENÇÃO: não consegui voltar para ${transicao.de.ref}: ${falha.message}`)
       throw falha
     }
     rmSync(arqTransicao, { force: true })
-    anotar(`[supervisor] rollback para ${transicao.de.ref}: ${motivo}`)
+    anotar(`[fenix] rollback para ${transicao.de.ref}: ${motivo}`)
     // Não há para onde voltar depois disto, então a falha precisa ser gritada.
     const naoSubiu = await esperarSubida()
-    if (naoSubiu) anotar(`[supervisor] ATENÇÃO: a versão anterior também falhou: ${naoSubiu}`)
+    if (naoSubiu) anotar(`[fenix] ATENÇÃO: a versão anterior também falhou: ${naoSubiu}`)
   }
 
   /** Volta e apaga a branch. O sha fica no registro: é o que permite recuperar. */
   async function descartar(transicao, motivo) {
     await voltar(transicao, motivo)
     await apagarBranch(transicao.para.ref)
-    anotar(`[supervisor] ${transicao.para.ref} descartada (${transicao.para.sha})`)
+    anotar(`[fenix] ${transicao.para.ref} descartada (${transicao.para.sha})`)
   }
 
   /** Durante o teste: uma queda ou a saúde falhando volta sem esperar ninguém. */
@@ -222,7 +247,7 @@ export function criarSupervisor({
 
         const transicao = { id, de: await versaoAtual(), para: { ref: branch, sha } }
         writeFileSync(arqTransicao, JSON.stringify(transicao, null, 2))
-        anotar(`[supervisor] trocando ${transicao.de.ref} por ${branch}`)
+        anotar(`[fenix] trocando ${transicao.de.ref} por ${branch}`)
 
         await desligar()
         queda = null
@@ -240,13 +265,13 @@ export function criarSupervisor({
         }
 
         emTeste = transicao
-        anotar(`[supervisor] ${branch} em teste`)
+        anotar(`[fenix] ${branch} em teste`)
         notificar({ id, tipo: 'em_teste', mensagem: 'A alteração está no ar para você testar.' })
         void vigiar(transicao)
       } catch (err) {
-        anotar(`[supervisor] falha na troca: ${err.message}`)
+        anotar(`[fenix] falha na troca: ${err.message}`)
         const transicao = lerJson(arqTransicao, null)
-        if (transicao) await descartar(transicao, err.message).catch((e) => anotar(`[supervisor] ${e.message}`))
+        if (transicao) await descartar(transicao, err.message).catch((e) => anotar(`[fenix] ${e.message}`))
         notificar({ id, tipo: 'revertido', mensagem: `A troca falhou: ${err.message}` })
       } finally {
         ocupado = false
@@ -273,7 +298,7 @@ export function criarSupervisor({
         emTeste = null
         const aprovada = { ...transicao, aprovada: true, para: { ...transicao.para, ref: branch } }
         writeFileSync(arqTransicao, JSON.stringify(aprovada, null, 2))
-        anotar(`[supervisor] ${transicao.para.ref} aprovada como ${branch}`)
+        anotar(`[fenix] ${transicao.para.ref} aprovada como ${branch}`)
 
         await voltar(aprovada, 'alteração aprovada')
         notificar({
@@ -283,7 +308,7 @@ export function criarSupervisor({
           branch,
         })
       } catch (err) {
-        anotar(`[supervisor] falha ao aprovar: ${err.message}`)
+        anotar(`[fenix] falha ao aprovar: ${err.message}`)
         notificar({ id, tipo: 'recusado', mensagem: `Não consegui aprovar: ${err.message}` })
       } finally {
         ocupado = false
@@ -318,33 +343,87 @@ export function criarSupervisor({
     async recuperar() {
       const transicao = lerJson(arqTransicao, null)
       if (!transicao) return null
-      anotar(`[supervisor] troca sem aprovação encontrada; voltando para ${transicao.de.ref}`)
+      anotar(`[fenix] troca sem aprovação encontrada; voltando para ${transicao.de.ref}`)
       await trocarPara(transicao.de)
       if (!transicao.aprovada) {
         await apagarBranch(transicao.para.ref)
-        anotar(`[supervisor] ${transicao.para.ref} descartada (${transicao.para.sha})`)
+        anotar(`[fenix] ${transicao.para.ref} descartada (${transicao.para.sha})`)
       }
       rmSync(arqTransicao, { force: true })
       return transicao
     },
 
-    /** A ponte saiu. Devolve true se quem cuida disso é o supervisor. */
-    ponteSaiu(codigo) {
+    /** Um serviço versionado caiu. Devolve true se quem cuida disso é a troca. */
+    servicoCaiu(nome, motivo) {
       if (!ocupado && !emTeste) return false
-      queda = `A ponte caiu (código ${codigo}).`
+      queda = `O serviço ${nome} caiu: ${motivo}.`
       return true
     },
-  }
-}
 
-/** A saúde real: a ponte responde e o Vite consegue transformar a interface. */
-export async function saudeHttp({ portaPonte, portaInterface }) {
-  const ponte = await obterLocal(`https://localhost:${portaPonte}/health`, { prazoMs: 2000 })
-  if (!ponte.ok) return { ok: false, motivo: `a ponte respondeu ${ponte.status}` }
-  const { interfaces = 0 } = await ponte.json()
-  for (const arquivo of ['/src/main.tsx', '/src/App.tsx']) {
-    const r = await obterLocal(`https://localhost:${portaInterface}${arquivo}`)
-    if (!r.ok) return { ok: false, motivo: `a interface não compilou (${arquivo}: ${r.status})` }
+    /** Em troca ou em teste: a saúde e as quedas são desta parte, não da guardiã. */
+    emTroca: () => ocupado || Boolean(emTeste),
+
+    /** Há uma alteração no ar que ninguém revisou? */
+    emTeste: () => Boolean(emTeste),
+
+    estado() {
+      const t = emTeste ?? lerJson(arqTransicao, null)
+      return {
+        troca: emTeste ? 'testando' : ocupado ? 'aplicando' : null,
+        id: t?.id ?? null,
+        branch: t?.para?.ref ?? null,
+      }
+    },
+
+    /**
+     * Traz a versão segura mais nova do remoto e sobe com ela. Se a versão nova
+     * não ficar de pé, volta para o commit de antes — a remota continua lá, e a
+     * próxima atualização tenta de novo.
+     */
+    async atualizar() {
+      if (ocupado || emTeste) return { ok: false, mensagem: 'Há uma troca em andamento ou uma alteração em teste.' }
+      ocupado = true
+      try {
+        if (await git('status', '--porcelain')) {
+          return { ok: false, mensagem: 'A cópia em execução tem alterações não commitadas; nada foi atualizado.' }
+        }
+        const { ref } = await versaoAtual()
+        if (ref !== versaoSegura) {
+          return { ok: false, mensagem: `Só atualizo na ${versaoSegura}; agora estou em ${ref}.` }
+        }
+        const antes = await git('rev-parse', 'HEAD')
+        await git('pull', '--ff-only', '--quiet')
+        const depois = await git('rev-parse', 'HEAD')
+        if (antes === depois) return { ok: true, mensagem: 'Já estava na versão mais nova.' }
+        const mudados = (await git('diff', '--name-only', antes, depois)).split('\n').filter(Boolean)
+        const reinstalar = instalar && mudados.some((f) => instalar.quando.some((re) => re.test(f)))
+        anotar(`[fenix] atualizando ${versaoSegura} de ${antes.slice(0, 7)} para ${depois.slice(0, 7)}`)
+
+        await desligar()
+        if (reinstalar) await rodarInstalar()
+        queda = null
+        ligar()
+        const motivo = await observar(false)
+        if (!motivo) {
+          anotar(`[fenix] ${versaoSegura} atualizada para ${depois.slice(0, 7)}`)
+          return {
+            ok: true,
+            mensagem: `Atualizei de ${antes.slice(0, 7)} para ${depois.slice(0, 7)}, ${mudados.length} arquivos.`,
+          }
+        }
+        await desligar()
+        await git('reset', '--hard', '--quiet', antes)
+        if (reinstalar) await rodarInstalar()
+        queda = null
+        ligar()
+        anotar(`[fenix] a atualização falhou (${motivo}); de volta a ${antes.slice(0, 7)}`)
+        return { ok: false, mensagem: `${motivo} Voltei para a versão de antes, ${antes.slice(0, 7)}.` }
+      } catch (err) {
+        anotar(`[fenix] falha ao atualizar: ${err.message}`)
+        return { ok: false, mensagem: `Não consegui atualizar: ${err.message}` }
+      } finally {
+        ocupado = false
+      }
+    },
   }
-  return { ok: true, interfaces }
 }

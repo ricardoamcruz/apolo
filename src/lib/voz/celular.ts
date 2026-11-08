@@ -47,7 +47,6 @@ export function criarVozDoCelular(
 ) {
   let sessao: RealtimeSession | null = null
   let abrindo = false
-  let saudou = false
   let emEspera = false
   let falando = false
   /** Quando o microfone ouviu fala pela última vez, de quem for. */
@@ -258,10 +257,6 @@ export function criarVozDoCelular(
       emEspera = false
       fase('ouvindo')
       armarOcioso()
-      if (!saudou) {
-        saudou = true
-        sessao.prompt('O Ricardo abriu o app no celular. Diga em poucas palavras que está ouvindo.')
-      }
     } catch (err) {
       soltarMic()
       enviar({ aviso: err instanceof Error ? err.message : String(err) })

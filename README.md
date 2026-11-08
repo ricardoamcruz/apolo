@@ -21,13 +21,22 @@ confiável que cresce por **módulos plugáveis**. Visão e princípios em
  │ voz: Gemini Live (WebSocket) │            │ voz: mesma da web, numa WebView│
  └──────────────┬───────────────┘            └──────────────┬───────────────┘
                 │ áudio vai direto ao Google                │ HTTPS/WSS pelo Tailscale
-                │                                           │ (gateway com token, porta 8788)
-                ▼                                           ▼
+                │                                           ▼
+                │                              ┌────────────────────────┐
+                │                              │ H.E.R.M.E.S. (hermes/) │
+                │                              │ token do celular, 8788 │
+                │                              └───────────┬────────────┘
+                ▼                                          │ WSS /hermes
         ┌───────────────────────────────────────────────────────────────┐
-        │ Ponte local (bridge/, Node, porta 8787, HTTPS/WSS)            │
+        │ Ponte do A.P.O.L.O. (bridge/, Node, porta 8787, HTTPS/WSS)    │
         │ credencial temporária da voz · gate de permissões             │
         │ agente de tarefas: Claude Agent SDK + servidores MCP          │
         │ navegador · git · autodesenvolvimento · telemetria · extensões│
+        └──────────────────────────────┬────────────────────────────────┘
+                                       │ WSS /fenix
+        ┌──────────────────────────────▼────────────────────────────────┐
+        │ F.Ê.N.I.X. (fenix/, porta 8790): sobe e guarda os serviços,   │
+        │ troca de versão com rollback, rotinas e scripts confirmados    │
         └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -42,7 +51,17 @@ confiável que cresce por **módulos plugáveis**. Visão e princípios em
 - **A ponte** guarda as chaves. O navegador e o app só recebem uma credencial
   temporária da voz.
 - **O celular** usa o mesmo código de voz e os mesmos popups da web, compilados
-  para uma WebView. Ver [ADR 0019](docs/adr/0019-gateway-do-celular.md).
+  para uma WebView, e chega à ponte pelo H.E.R.M.E.S. Ver
+  [ADR 0019](docs/adr/0019-gateway-do-celular.md).
+- **A F.Ê.N.I.X.** é quem o `npm start` sobe. Ela sobe a ponte, a interface e o
+  H.E.R.M.E.S., reinicia o que cair ou travar, coloca no ar o código que o
+  A.P.O.L.O. escreveu e volta à `main` se quebrar. Também roda as rotinas da
+  máquina (testes, build, atualizar, app do iPhone, volume) e scripts bash que
+  você confirmar.
+- **A.P.O.L.O., F.Ê.N.I.X. e H.E.R.M.E.S. são independentes:** pastas próprias,
+  nenhum importa código do outro, e conversam só por WebSocket com TLS e token,
+  então podem ir para repositórios e máquinas diferentes. Ver
+  [ADR 0025](docs/adr/0025-fenix-hermes-servicos-independentes.md).
 
 ## Tecnologias
 
@@ -50,6 +69,7 @@ confiável que cresce por **módulos plugáveis**. Visão e princípios em
 |---|---|---|
 | Interface do PC (`src/`) | TypeScript, TSX, CSS, GLSL (shaders em `src/scene/shaders.ts`) | React 19, Three.js e React Three Fiber, Framer Motion, Zustand, MediaPipe (gestos), DOMPurify |
 | Ponte (`bridge/`) | JavaScript (ES modules, `.mjs`) em Node.js | Claude Agent SDK, `ws`, Zod |
+| F.Ê.N.I.X. (`fenix/`) e H.E.R.M.E.S. (`hermes/`) | JavaScript (`.mjs`) em Node.js | só `ws` e a biblioteca padrão do Node |
 | App do iPhone (`apps/mobile/`) | TypeScript, TSX | Expo SDK 58, React Native 0.88, `expo-gl`, `react-native-webview`, `expo-secure-store` |
 | Scripts e testes (`scripts/`) | JavaScript (`.mjs`) | `node:test`, Chrome headless no teste de ponta a ponta |
 | Ferramentas | — | Vite 8, TypeScript 6, oxlint, CocoaPods e Xcode no iOS |
@@ -69,9 +89,13 @@ apolo/
 │   ├── lib/voz/        clientes de voz: Gemini, OpenAI e a ponte do celular
 │   ├── scene/          núcleo 3D, partículas e shaders
 │   └── ui/             painéis, popups (blades), SISTEMAS, diagnóstico
-├── bridge/             a ponte: servidor, gate, gateway, git, navegador, autodev
+├── bridge/             a ponte: servidor, gate, git, navegador, autodev e os
+│                       lados do A.P.O.L.O. na F.Ê.N.I.X. e no H.E.R.M.E.S.
+├── fenix/              F.Ê.N.I.X.: guardiã, versões, rotinas (serviço à parte)
+├── hermes/             H.E.R.M.E.S.: a porta do celular (serviço à parte)
+├── fenix.config.json   o que a F.Ê.N.I.X. sabe do A.P.O.L.O.
 ├── apps/mobile/        app do iPhone (Expo); ios/ é gerado
-├── scripts/            npm start, setup, celular, https, rollback e os testes
+├── scripts/            preparar, setup, celular, https, iphone e os testes
 ├── docs/               visão, requisitos, arquitetura, roadmap e ADRs
 └── AGENTS.md           guia para agentes de IA (Claude Code, Gemini CLI, Copilot)
 ```
@@ -93,7 +117,7 @@ npm install
 cp .env.example .env.local     # e preencha GEMINI_API_KEY
 npm run setup                  # confere se está tudo pronto
 npm run https                  # uma vez: confia no certificado local
-npm start                      # ponte + interface
+npm start                      # a F.Ê.N.I.X. sobe ponte, interface e H.E.R.M.E.S.
 ```
 
 Abra **https://localhost:5173** no Chrome e fale normalmente: a interface liga
@@ -147,7 +171,7 @@ processando, lilás executando script, vermelho codificando e azul claro em espe
 
 | Comando | O que faz |
 |---|---|
-| `npm start` | ponte + interface (`-- --writes` e `-- --autodev` liberam ações) |
+| `npm start` | a F.Ê.N.I.X. com ponte, interface e H.E.R.M.E.S. (`-- --writes` e `-- --autodev` liberam ações) |
 | `npm run bridge` | só a ponte, somente leitura |
 | `npm run dev` | só a interface (Vite) |
 | `npm run setup` | confere Node, Claude Code e a chave da voz |
@@ -155,9 +179,11 @@ processando, lilás executando script, vermelho codificando e azul claro em espe
 | `npm run celular` | pareia o iPhone: token, Tailscale e código de pareamento |
 | `npm run popups` | compila os popups e a voz da web para o app |
 | `npm run logs:celular` | resume as medições do app (`-- 7` para sete dias) |
-| `npm run rollback` | descarta a alteração em teste e volta à `main` |
+| `npm run rollback` | com tudo parado, descarta a alteração em teste e volta à `main` |
+| `npm run hermes` | só o H.E.R.M.E.S. (a F.Ê.N.I.X. já o sobe) |
 | `npm run lint` · `npm run build` | oxlint · checagem de tipos e build |
-| `npm test` | todos os testes de `scripts/` |
+| `npm test` | todos os testes: `scripts/`, `fenix/test/` e `hermes/test/` |
+| `npm run test:fenix` · `npm run test:hermes` | só os da F.Ê.N.I.X. ou do H.E.R.M.E.S. |
 | `npm run test:autodev:e2e` | ciclo real do autodesenvolvimento, com Chrome headless mudo |
 
 ## Segurança
@@ -166,7 +192,11 @@ processando, lilás executando script, vermelho codificando e azul claro em espe
   e as que agem pedem `--writes`. A confirmação do autodesenvolvimento e o modo mãos
   conferem a fala do Ricardo na transcrição, e não só o que o modelo decidiu.
 - **Segredos** só em `.env.local` (ignorado pelo Git). Nunca vão ao navegador nem ao app.
-- **Celular:** o gateway só tem o canal do app, exige token e fica atrás do Tailscale.
+- **Celular:** o H.E.R.M.E.S. só tem o canal do app, exige token e fica atrás do
+  Tailscale; o que o celular pode pedir é decidido na ponte.
+- **F.Ê.N.I.X.:** rotinas são uma lista fixa, sem shell. Um script bash só roda com
+  `--writes`, com a sua confirmação (fala ou botão) e com o texto exato proposto,
+  nunca com uma versão sem revisão no ar, e sem nenhum segredo no ambiente.
 - **Telemetria** guarda tempos, nunca a fala ([ADR 0020](docs/adr/0020-telemetria-e-direcao-no-celular.md)).
 
 ## Documentação
@@ -180,7 +210,9 @@ processando, lilás executando script, vermelho codificando e azul claro em espe
 | [`docs/04-base-jarvis.md`](docs/04-base-jarvis.md) | o código herdado do JARVIS |
 | [`docs/05-roadmap.md`](docs/05-roadmap.md) | fases e backlog da próxima versão |
 | [`docs/06-ambiente-mobile.md`](docs/06-ambiente-mobile.md) | Xcode, iPhone, Tailscale e o app |
-| [`docs/adr/`](docs/adr/README.md) | as 24 decisões de arquitetura (ADRs) |
+| [`docs/adr/`](docs/adr/README.md) | as 25 decisões de arquitetura (ADRs) |
+| [`docs/poc/`](docs/poc/) | provas de conceito a testar, como avisos pelo WhatsApp |
+| [`fenix/README.md`](fenix/README.md) · [`hermes/README.md`](hermes/README.md) | o protocolo e o config de cada serviço |
 | [`AGENTS.md`](AGENTS.md) | regras para agentes de IA que trabalham neste repositório |
 
 ## Histórico de versões
@@ -190,7 +222,8 @@ Cada versão é uma branch `fase-x.y/<nome>` integrada à `main` por pull reques
 
 | Versão | Data | O que entrou |
 |---|---|---|
-| `fase-2.5/maos-livres` | em revisão | O canal do celular aparece na aba SISTEMAS como H.E.R.M.E.S., e servidores do Claude Code que não servem ao A.P.O.L.O. ficam de fora (`APOLO_MCP_IGNORAR`). Conversa contínua por 20 s depois do nome, sem a TV segurar a conversa aberta; o nome acorda também no iPhone (ADR 0024). A página do PC liga sozinha, sem a tela de INICIAR e a animação de carregamento. No iPhone, a voz desliga ao minimizar o app. Todas as teclas também por voz: popups um a um, modo mãos, diagnóstico completo, cancelar tarefa e explicar os comandos (RF-20, ADR 0023). `]` e `[` passam por todos os popups. Acordar pelo nome ficou mais rápido. README técnico |
+| `fase-2.6/das-cinzas` | em revisão | F.Ê.N.I.X., a guardiã: `npm start` passa a ser ela, que sobe e reinicia ponte, interface e H.E.R.M.E.S., troca de versão com rollback, atualiza a `main`, roda rotinas (testes, build, app do iPhone, volume) e scripts bash confirmados. O canal do celular vira o serviço H.E.R.M.E.S. Os três independentes, só pela rede (ADR 0025). Nota técnica da P.O.C. de avisos pelo WhatsApp |
+| `fase-2.5/maos-livres` (#9) | 08/11/2026 | O canal do celular aparece na aba SISTEMAS como H.E.R.M.E.S., e servidores do Claude Code que não servem ao A.P.O.L.O. ficam de fora (`APOLO_MCP_IGNORAR`). Conversa contínua por 20 s depois do nome, sem a TV segurar a conversa aberta; o nome acorda também no iPhone (ADR 0024). A página do PC liga sozinha, sem a tela de INICIAR e a animação de carregamento. No iPhone, a voz desliga ao minimizar o app. Todas as teclas também por voz: popups um a um, modo mãos, diagnóstico completo, cancelar tarefa e explicar os comandos (RF-20, ADR 0023). `]` e `[` passam por todos os popups. Acordar pelo nome ficou mais rápido. README técnico |
 | `fase-2.4/apolo-no-bolso` (#8) | 07/11/2026 | App do iPhone por voz, com sinal de escuta e palavras ouvidas; telemetria no Mac; voz em segundo plano; cor por atividade na web e no app; HTTPS em toda conexão; ponto de extensão entre dispositivos (ADRs 0019 a 0022) |
 | `fase-2.3/voz-e-verniz` (#7) | 06/11/2026 | Em Espera acordando pelo nome, `ignorar_fala` para não se intrometer, aba SISTEMAS com o C.O.R.E., ponte e chat só quando pedidos (ADRs 0017 e 0018) |
 | `fase-2.2/autodev-ciclo` (#6) | 06/11/2026 | Ciclo de teste do autodesenvolvimento: aprovar guarda numa branch, descartar ou cair volta à `main` (ADR 0015) |

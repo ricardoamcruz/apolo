@@ -10,8 +10,8 @@ sobre a ordem das fases abaixo.
 - [ ] **2. Sub-módulo git (RF-17):** o A.P.O.L.O. faz commits e gera pull requests para a própria `main` — **em andamento**: ferramentas `git_*` implementadas (ADR 0014, 05/11/2026), com commit só fora da `main`, conferência de segredos, sem merge e sem `--force`, testes offline em `npm run test:git`; falta validar na máquina do Ricardo o push no `origin` e o `gh pr create`
 - [ ] **3. Contexto compartilhado (RF-18):** avaliar salvar informações importantes em uma branch local ou em um arquivo de contexto compartilhado, para uso futuro
 - [ ] **4. Gerar código para si próprio (RF-15):** ciclo de teste com aprovação (ADR 0015, 06/11/2026), verificado de ponta a ponta com agente falso em `npm run test:autodev:e2e`; confirmar sem proposta ativa agora é recusado com a causa real, sem pedir de novo um botão que não existe (06/11/2026); falta validar por voz com o agente real
-  - [ ] **4.a** Essa habilidade funciona em conjunto com a de se auto-reiniciar
-  - [ ] **4.b** Se algo der errado, o rollback automático entra em ação
+  - [ ] **4.a** Essa habilidade funciona em conjunto com a de se auto-reiniciar — **em andamento**: quem reinicia agora é a F.Ê.N.I.X., um serviço à parte que sobe a versão nova, guarda os serviços e roda as rotinas (RF-64, ADR 0025, 08/11/2026); verificado em `npm run test:autodev:e2e`; falta validar por voz
+  - [ ] **4.b** Se algo der errado, o rollback automático entra em ação — **em andamento**: a F.Ê.N.I.X. volta à `main` numa queda, na saúde falhando ou numa atualização que não sobe (ADR 0025); falta validar por voz
 - [ ] **5. Navegador (RF-19):** detectar em qual navegador e sistema está rodando, abrir novas abas e transformar uma popup aberta em aba — **em andamento**: ferramentas `browser_*` implementadas (ADR 0012, 04/11/2026); falta validar no navegador do Mac, liberar pop-ups para o endereço da interface e decidir se vale criar aba pela extensão do Claude quando o bloqueador recusar
 - [ ] **6. Comandos por voz (RF-20):** tudo o que hoje tem atalho de teclado também pode ser acionado por voz — **em andamento**: 6.b a 6.e feitos e validados por voz (ADR 0023, 07/11/2026), com uma lista só de comandos em `bridge/comandos.mjs` e testes em `scripts/comandos.test.mjs`; falta validar o 6.a com a conversa contínua (ADR 0024)
   - [ ] **6.a** Em espera: "Apolo, em espera", ou entrar em espera sozinho ao fim de uma conversa, da forma mais natural possível e sem se intrometer quando o Ricardo falar com outra pessoa ao lado — **em andamento**: `dormir` cobre "em espera", "já volto" e "boa noite" de despedida; em espera só o nome acorda por voz, com visual próprio; fim de fala mais paciente e `ignorar_fala` (ADR 0017, 06/11/2026); o nome sozinho acorda sem esperar o Chrome fechar a frase (07/11/2026); conversa contínua por 20 s depois do nome, sem a TV segurar a conversa aberta, e o nome também acorda no celular (ADR 0024, 07/11/2026). Falta validar por voz
@@ -19,6 +19,10 @@ sobre a ordem das fases abaixo.
   - [x] **6.c** Modo mãos: ativar e desativar por voz (hoje `G`) — implementado; ligar confere na transcrição que ele pediu a câmera; validado por voz (07/11/2026)
   - [x] **6.d** Demais comandos, com ativação e desativação por voz: diagnóstico (`D`), interromper a fala e acordar (`Espaço`), cancelar tarefa (`Esc`) — implementado; cancelar sai da transcrição, porque o Gemini espera a tarefa acabar; validado por voz (07/11/2026)
   - [x] **6.e** Se o Ricardo esquecer um comando, o A.P.O.L.O. explica e lembra quais existem — implementado pela lista nas instruções da voz; validado por voz (07/11/2026)
+
+### Depois da próxima versão
+- [ ] **F.Ê.N.I.X. (RF-64):** guardiã, versões, atualizar, rotinas e scripts confirmados — **em andamento** (ADR 0025, 08/11/2026); falta validar o celular pelo H.E.R.M.E.S. no aparelho, um script por voz e a rotina `app_iphone`
+- [ ] **Avisos pelo WhatsApp (RF-65):** P.O.C. com o CallMeBot (`docs/poc/0001-callmebot-whatsapp.md`)
 
 ## Fase 0 — Fundação
 - [x] Analisar o código-base do JARVIS (`04-base-jarvis.md`)

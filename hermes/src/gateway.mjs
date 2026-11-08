@@ -1,10 +1,10 @@
 /**
- * Gateway do celular (docs/adr/0019).
+ * A porta do celular no H.E.R.M.E.S. (docs/adr/0019 e 0025).
  *
- * Uma porta separada da ponte, e não um token na 8787, porque é o desenho que
- * limita o que sai da máquina: o Tailscale publica só esta porta, e aqui só existe
- * o canal de conversa e a leitura da mídia dos popups. O resto da ponte, como
- * `/realtime/sessao`, simplesmente não existe deste lado.
+ * Uma porta só para o celular, separada da ponte, porque é o desenho que limita o
+ * que sai da máquina: o Tailscale publica só esta porta, e aqui só existe o canal
+ * de conversa e a leitura da mídia dos popups. Quem atende de verdade é o
+ * A.P.O.L.O., do outro lado do relé (src/rele.mjs).
  *
  * A WebView dos popups não põe cabeçalho em <img> nem em <iframe>, então a mídia se
  * autentica por uma chave no caminho, derivada do token: vazá-la dá acesso a esses
@@ -12,8 +12,6 @@
  *
  * O Origin não serve aqui. O app nativo não tem origem de verdade, e o iOS manda
  * uma derivada da própria URL, então quem autentica é o token e mais nada.
- *
- * Arquivo sensível (bridge/autodev/politica.mjs): só muda por revisão humana.
  */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
@@ -24,16 +22,8 @@ export const CAMINHO = '/canal'
 export const PORTA_PADRAO = 8788
 /** 32 bytes em base64url dão 43 caracteres; menos que isso foi escrito à mão. */
 export const TOKEN_MINIMO = 32
-/**
- * O celular conversa, pede a credencial da voz e manda medições, que só viram
- * linhas de log (bridge/telemetria.mjs). `extensao` só chega a uma extensão
- * registrada, e hoje não há nenhuma (bridge/extensoes.mjs). Autodev, preferências e o resto continuam
- * só no PC.
- */
-export const MENSAGENS_DO_CELULAR = new Set(['ask', 'interrupt', 'voz_sessao', 'telemetria', 'extensao'])
-
 const PULSO_MS = 25_000
-const PING = '{"type":"ping"}'
+export const PING = '{"type":"ping"}'
 const PONG = '{"type":"pong"}'
 /** O que os popups carregam. Tudo leitura, e a ponte já limita cada rota. */
 const ROTA_DE_MIDIA = /^\/m\/([\w-]+)(\/(?:img|media|file|page)\?.*)$/
@@ -104,7 +94,7 @@ export function criarGateway({
     if ((req.url ?? '').split('?')[0] !== CAMINHO) return recusar(socket, 404, 'Not Found')
     if (!tokenConfere(req.headers.authorization, token)) {
       // Nunca o valor recebido: pode ser o token certo com um erro de digitação.
-      console.warn('[apolo] celular recusado: token inválido')
+      console.warn('[hermes] celular recusado: token inválido')
       return recusar(socket, 401, 'Unauthorized')
     }
     canais.handleUpgrade(req, socket, cabeca, (ws) => {
@@ -112,9 +102,10 @@ export function criarGateway({
       ws.on('pong', () => {
         ws.vivo = true
       })
-      // É assim que o app sabe que o backend responde, e não só que o socket existe.
+      // É assim que o app sabe que o backend responde, e não só que o socket existe:
+      // quem atende diz, por `ws.pronto`, se o outro lado está mesmo de pé.
       ws.on('message', (bruto) => {
-        if (bruto.toString() === PING) ws.send(PONG)
+        if (bruto.toString() === PING && (ws.pronto?.() ?? true)) ws.send(PONG)
       })
       ws.send(JSON.stringify({ type: 'midia', chave }))
       atender(ws)

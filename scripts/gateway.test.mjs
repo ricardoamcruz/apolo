@@ -1,4 +1,4 @@
-/** Testes do gateway do celular e do canal do app (ADR 0019). */
+/** Testes do canal do app, do lado do celular na ponte e da telemetria (ADR 0019 e 0025). */
 
 import assert from 'node:assert/strict'
 import { X509Certificate } from 'node:crypto'
@@ -6,144 +6,91 @@ import { mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
+import { createServer } from 'node:http'
 import { WebSocket, WebSocketServer } from 'ws'
-import {
-  CAMINHO,
-  MENSAGENS_DO_CELULAR,
-  chaveDeMidia,
-  criarGateway,
-  tokenConfere,
-} from '../bridge/gateway.mjs'
+import { MENSAGENS_DO_CELULAR, basePublicaValida, hermesAutorizado, tokenDoHermes } from '../bridge/hermes.mjs'
 import { classificar } from '../bridge/autodev/politica.mjs'
 import { Canal, baseDeMidia, nomeDaFerramenta } from '../apps/mobile/src/canal.ts'
 import { lerCodigo } from '../apps/mobile/src/pareamento.ts'
 import { Telemetria } from '../apps/mobile/src/telemetria.ts'
-import { garantirCertificado, obterLocal } from '../bridge/tls.mjs'
+import { garantirCertificado } from '../bridge/tls.mjs'
 import { criarCentral } from '../bridge/extensoes.mjs'
 import { originAllowed } from '../bridge/gate.mjs'
 import { atividadeDaFerramenta } from '../src/lib/estados.ts'
 import { MAX_EVENTOS, criarTelemetria, lerEventos, limparEvento, resumir } from '../bridge/telemetria.mjs'
 
 const TOKEN = 'a'.repeat(43)
+const CAMINHO = '/canal'
+const CHAVE = 'chave-de-midia'
+
+/**
+ * O H.E.R.M.E.S. como o app o vê: /canal com o token, a chave da mídia ao abrir e
+ * o pong do ping. É o contrato do app; o H.E.R.M.E.S. de verdade tem os testes
+ * dele em hermes/test/.
+ */
+function criarGateway({ token, atender }) {
+  const http = createServer((_req, res) => {
+    res.writeHead(404)
+    res.end()
+  })
+  const wss = new WebSocketServer({ noServer: true })
+  http.on('upgrade', (req, socket, cabeca) => {
+    if (req.url !== CAMINHO || req.headers.authorization !== `Bearer ${token}`) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
+      return socket.destroy()
+    }
+    wss.handleUpgrade(req, socket, cabeca, (ws) => {
+      ws.on('message', (bruto) => {
+        if (bruto.toString() === '{"type":"ping"}') ws.send('{"type":"pong"}')
+      })
+      ws.send(JSON.stringify({ type: 'midia', chave: CHAVE }))
+      atender(ws)
+    })
+  })
+  return {
+    ligar: () => new Promise((r) => http.listen(0, '127.0.0.1', () => r(http.address().port))),
+    fechar: () =>
+      new Promise((r) => {
+        for (const ws of wss.clients) ws.terminate()
+        http.close(r)
+      }),
+  }
+}
+
 let gateway
 let porta
-const conexoes = []
-const midia = []
-
 before(async () => {
-  gateway = criarGateway({
-    token: TOKEN,
-    porta: 0,
-    atender: (ws) => conexoes.push(ws),
-    servirMidia: (req, res, base) => {
-      midia.push({ url: req.url, origem: req.headers.origin, base })
-      res.end('ok')
-    },
-  })
+  gateway = criarGateway({ token: TOKEN, atender() {} })
   porta = await gateway.ligar()
 })
 after(() => gateway.fechar())
-
-const abrir = (headers = {}, caminho = CAMINHO) =>
-  new Promise((resolve) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${porta}${caminho}`, { headers })
-    ws.on('open', () => {
-      ws.close()
-      resolve('aberto')
-    })
-    ws.on('unexpected-response', (_req, res) => resolve(res.statusCode))
-    ws.on('error', () => {})
-  })
-
-test('sem o token certo, o canal não abre', async () => {
-  const antes = conexoes.length
-  assert.equal(await abrir(), 401)
-  assert.equal(await abrir({ Authorization: 'Bearer errado' }), 401)
-  assert.equal(await abrir({ Authorization: `Basic ${TOKEN}` }), 401)
-  assert.equal(conexoes.length, antes)
-})
-
-test('com o token certo, o canal abre, com qualquer Origin', async () => {
-  const antes = conexoes.length
-  const headers = { Authorization: `Bearer ${TOKEN}`, Origin: 'https://mac.ts.net' }
-  assert.equal(await abrir(headers), 'aberto')
-  assert.equal(conexoes.length, antes + 1)
-})
-
-test('a mídia dos popups passa só com a chave, só por GET e só nas quatro rotas', async () => {
-  const chave = chaveDeMidia(TOKEN)
-  const obter = (caminho, opcoes) => fetch(`http://127.0.0.1:${porta}${caminho}`, opcoes)
-  midia.length = 0
-
-  const certo = await obter(`/m/${chave}/img?url=x`, {
-    headers: { Origin: 'https://mac.ts.net', 'x-forwarded-proto': 'https', 'x-forwarded-host': 'mac.ts.net' },
-  })
-  assert.equal(certo.status, 200)
-  assert.deepEqual(midia, [
-    { url: '/img?url=x', origem: undefined, base: `https://mac.ts.net/m/${chave}` },
-  ])
-
-  midia.length = 0
-  assert.equal((await obter('/m/errada/img?url=x')).status, 404)
-  assert.equal((await obter(`/m/${TOKEN}/img?url=x`)).status, 404)
-  assert.equal((await obter(`/m/${chave}/health?x=1`)).status, 404)
-  assert.equal((await obter(`/m/${chave}/realtime/sessao?x=1`)).status, 404)
-  assert.equal((await obter(`/m/${chave}/img?url=x`, { method: 'POST' })).status, 404)
-  assert.equal(midia.length, 0)
-})
-
-test('a chave de mídia não revela o token', () => {
-  assert.notEqual(chaveDeMidia(TOKEN), TOKEN)
-  assert.equal(chaveDeMidia(TOKEN).includes(TOKEN), false)
-})
-
-test('o gateway só tem o canal e a mídia: o resto da ponte não existe aqui', async () => {
-  assert.equal(await abrir({ Authorization: `Bearer ${TOKEN}` }, '/'), 404)
-  for (const rota of ['/health', '/file?path=/etc/hosts', '/media?url=x', '/realtime/sessao']) {
-    const resposta = await fetch(`http://127.0.0.1:${porta}${rota}`, {
-      headers: { Authorization: `Bearer ${TOKEN}` },
-    })
-    assert.equal(resposta.status, 404, rota)
-  }
-})
-
-test('o gateway se recusa a subir com token fraco', () => {
-  assert.throws(() => criarGateway({ token: 'curto', atender() {} }), /32 caracteres/)
-  assert.throws(() => criarGateway({ token: '', atender() {} }), /32 caracteres/)
-})
-
-test('tokenConfere exige Bearer e o valor exato', () => {
-  assert.equal(tokenConfere(`Bearer ${TOKEN}`, TOKEN), true)
-  assert.equal(tokenConfere(`Bearer ${TOKEN}x`, TOKEN), false)
-  assert.equal(tokenConfere(undefined, TOKEN), false)
-  assert.equal(tokenConfere('Bearer ', TOKEN), false)
-})
-
-test('um socket que parou de responder é derrubado pelo pulso', async () => {
-  let servidorFechou
-  const fechado = new Promise((resolve) => (servidorFechou = resolve))
-  const curto = criarGateway({
-    token: TOKEN,
-    porta: 0,
-    pulsoMs: 20,
-    atender: (ws) => ws.on('close', servidorFechou),
-  })
-  const p = await curto.ligar()
-  const ws = new WebSocket(`ws://127.0.0.1:${p}${CAMINHO}`, {
-    headers: { Authorization: `Bearer ${TOKEN}` },
-    autoPong: false,
-  })
-  ws.on('error', () => {})
-  await fechado
-  await curto.fechar()
-})
 
 test('o celular só pode conversar e mandar medições', () => {
   assert.deepEqual([...MENSAGENS_DO_CELULAR].sort(), ['ask', 'extensao', 'interrupt', 'telemetria', 'voz_sessao'])
 })
 
-test('o gateway é arquivo sensível: não entra em teste sem revisão', () => {
-  assert.deepEqual(classificar(['bridge/gateway.mjs']).sensiveis, ['bridge/gateway.mjs'])
+test('o H.E.R.M.E.S. e o lado dele na ponte são sensíveis: não entram em teste sem revisão', () => {
+  const arquivos = ['hermes/src/gateway.mjs', 'hermes/hermes.mjs', 'bridge/hermes.mjs']
+  assert.deepEqual(classificar(arquivos).sensiveis, arquivos)
+})
+
+test('o token do H.E.R.M.E.S. na ponte: o próprio, ou derivado do token do celular', () => {
+  const celular = 'c'.repeat(43)
+  const derivado = tokenDoHermes({ APOLO_GATEWAY_TOKEN: celular })
+  assert.ok(derivado && derivado !== celular && !derivado.includes(celular))
+  assert.equal(tokenDoHermes({ APOLO_HERMES_TOKEN: 'h'.repeat(40), APOLO_GATEWAY_TOKEN: celular }), 'h'.repeat(40))
+  assert.equal(tokenDoHermes({ APOLO_HERMES_TOKEN: 'curto' }), null)
+  assert.equal(tokenDoHermes({}), null)
+  assert.equal(hermesAutorizado(`Bearer ${derivado}`, derivado), true)
+  assert.equal(hermesAutorizado(`Bearer ${celular}`, derivado), false)
+  assert.equal(hermesAutorizado(`Bearer ${derivado}`, null), false)
+})
+
+test('a base pública da mídia só aceita um endereço simples', () => {
+  assert.equal(basePublicaValida('https://mac.tail1234.ts.net/m/abc_-9'), true)
+  assert.equal(basePublicaValida('https://mac.ts.net/m/x"><script>'), false)
+  assert.equal(basePublicaValida('javascript:alert(1)'), false)
+  assert.equal(basePublicaValida(undefined), false)
 })
 
 test('lerCodigo aceita o que o npm run celular copia', () => {
@@ -233,7 +180,7 @@ test('o canal entrega a resposta e ignora sobras de outro pedido', async () => {
   await ate(() => eventos.some(([n]) => n === 'fim'))
   assert.deepEqual(eventos.find(([n]) => n === 'midia'), [
     'midia',
-    `http://127.0.0.1:${p}/m/${chaveDeMidia(TOKEN)}`,
+    `http://127.0.0.1:${p}/m/${CHAVE}`,
   ])
   assert.equal(recebidas[0].type, 'ask')
   assert.equal(recebidas[0].text, 'oi')
@@ -415,20 +362,13 @@ test('a ponte só aceita páginas em HTTPS', () => {
   assert.equal(originAllowed('https://exemplo.com:5173'), false)
 })
 
-test('com certificado, o gateway só fala HTTPS, e não vira autoridade certificadora', async () => {
+test('o certificado local fica só com o usuário e não vira autoridade certificadora', () => {
   const pasta = mkdtempSync(join(tmpdir(), 'apolo-tls-'))
-  const { cert, key, caminho } = garantirCertificado(pasta)
+  const { cert, caminho } = garantirCertificado(pasta)
   assert.equal(statSync(join(pasta, 'apolo-chave.pem')).mode & 0o777, 0o600)
   assert.equal(new X509Certificate(cert).ca, false)
   assert.ok(new X509Certificate(cert).subjectAltName.includes('localhost'))
   assert.equal(garantirCertificado(pasta).caminho, caminho)
-
-  const seguro = criarGateway({ token: TOKEN, porta: 0, atender: () => {}, tls: { cert, key } })
-  const p = await seguro.ligar()
-  assert.equal((await obterLocal(`https://localhost:${p}/`, { ca: cert })).status, 404)
-  await assert.rejects(fetch(`http://localhost:${p}/`))
-  await assert.rejects(obterLocal(`https://localhost:${p}/`, { ca: undefined }))
-  await seguro.fechar()
 })
 
 test('sem extensão registrada, nada chega a lugar nenhum', () => {

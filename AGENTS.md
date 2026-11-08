@@ -52,8 +52,8 @@ detalhe está em `docs/`.
   geometria do núcleo; a decisão da paleta é do Ricardo.
 - **App mobile (ADR 0019):** `apps/mobile` (Expo SDK 58, RN 0.88, bundle
   `com.ricardocruz.apolo`, Personal Team `9F2MVYQ9SF`). Ele ouve e responde por
-  voz, como o PC, sem conversa escrita, pelo gateway com token (`bridge/gateway.mjs`,
-  porta própria só com o canal e a mídia dos popups, publicada pelo Tailscale). A
+  voz, como o PC, sem conversa escrita, pelo H.E.R.M.E.S. (`hermes/`, porta 8788 com
+  token, só com o canal e a mídia dos popups, publicada pelo Tailscale). A
   voz (`src/lib/voz/celular.ts`) e os `Panels` e `Blades` da web são compilados por
   `npm run popups` e rodam numa WebView; os shaders ficam em `src/scene/shaders.ts`.
   Mudar esse código muda o app. Popup é só para conteúdo visual, nunca para a
@@ -81,7 +81,7 @@ detalhe está em `docs/`.
 - **Nomes dos sistemas (ADR 0018):** cada sistema plugável ganha um nome próprio,
   no espírito de GAIA (*Horizon Zero Dawn*): criativo, fácil de falar, ligado ao
   tema e interessante, nesta ordem, escrito com pontos como C.O.R.E. O canal do
-  celular é H.E.R.M.E.S. (`src/lib/sistemas.ts`). Servidor MCP do Claude Code que não
+  celular é H.E.R.M.E.S. e a guardiã é F.Ê.N.I.X. (`src/lib/sistemas.ts`). Servidor MCP do Claude Code que não
   serve ao A.P.O.L.O. sai por `APOLO_MCP_IGNORAR` no `.env.local`, sem citá-lo no repositório.
 - **Aba SISTEMAS (ADR 0018, RF-56):** só aparece pela tecla `D` ou por voz
   (`diagnostico`). Tudo o que o A.P.O.L.O. usa para rodar é uma linha só, C.O.R.E.;
@@ -93,6 +93,18 @@ detalhe está em `docs/`.
   sozinha com proposta ou teste em aberto: nunca esconda o botão Confirmar.
 - **Voz própria:** pendente; o usuário quer usar o "Voice Studio" (ferramenta a
   confirmar). ADR nova quando definida.
+- **F.Ê.N.I.X., H.E.R.M.E.S. e A.P.O.L.O. independentes (ADR 0025):** `npm start`
+  é a F.Ê.N.I.X. (`fenix/`, lê `fenix.config.json`): sobe a ponte, a interface e o
+  H.E.R.M.E.S., reinicia o que cair ou travar, troca de versão com rollback
+  (`fenix/src/versoes.mjs`, o antigo supervisor), atualiza a `main` e roda rotinas
+  fixas e scripts bash, que só rodam com `--writes` e a confirmação do Ricardo, e
+  nunca com uma versão sem revisão no ar. O H.E.R.M.E.S. (`hermes/`) é a porta do
+  celular e repassa a conversa à ponte em `/hermes`; o que o celular pode pedir é
+  decidido em `bridge/hermes.mjs`. **Nenhum dos três importa código do outro**:
+  só conversam por WSS com token, para poderem ir a repositórios e máquinas
+  diferentes, e os testes cobram isso. A proteção do `fenix.config.json` tem de
+  bater com `bridge/autodev/politica.mjs` (`scripts/fenix.test.mjs`). Estado,
+  transição, token e eventos ficam em `~/.apolo/fenix/`.
 - **Autodesenvolvimento (ADR 0011 e 0015):** com `npm start -- --autodev`, o
   A.P.O.L.O. altera o próprio código por voz ou chat, com confirmação, numa
   worktree em `~/.apolo/autodev`, sempre a partir da `main`. Depois das checagens,
@@ -101,7 +113,7 @@ detalhe está em `docs/`.
   aprovação voltam à `main` e apagam a branch. `autodev/<id>` só existe durante o
   teste. O VS Code é opcional (`APOLO_AUTODEV_VSCODE=1`) e fecha sozinho. Arquivos
   sensíveis (`bridge/autodev/politica.mjs`) nunca entram em teste sem revisão.
-  Motivos de rollback ficam em `~/.apolo/autodev/eventos.log`.
+  Motivos de rollback ficam em `~/.apolo/fenix/eventos.log`.
 - Escopo atual: **apenas o core e os pontos de extensão**. Módulos de domínio
   (e-mail, agenda, finanças, automação residencial) vêm depois.
 
@@ -154,7 +166,7 @@ Ao concluir uma tarefa, atualize **no mesmo commit**:
 
 ```bash
 npm install          # dependências
-npm start            # sobe bridge (cérebro) + interface juntos
+npm start            # a F.Ê.N.I.X. sobe ponte (cérebro), interface e H.E.R.M.E.S.
 npm run bridge       # só o cérebro, modo somente leitura
 npm run dev          # só a interface (Vite, https://localhost:5173)
 npm run lint         # oxlint
@@ -166,13 +178,16 @@ npm run celular      # pareia o iPhone: token, Tailscale e código de pareamento
 npm run logs:celular # resume as medições do app (-- 7 para sete dias, --eventos para quedas)
 npm run popups       # compila os popups da web para o app do iPhone
 npm run rollback     # descarta a alteração em teste e volta à main (com tudo parado)
+npm run hermes       # só o H.E.R.M.E.S. (a F.Ê.N.I.X. já o sobe)
 npm run test:autodev # testes da política e do rollback
 npm run test:autodev:e2e # ciclo real com Chrome headless mudo (leva minutos, fora do npm test)
 npm run test:git     # testes do sub-módulo git (commit e pull request)
-npm run test:gateway # testes do gateway do celular e do canal do app
+npm run test:gateway # testes do canal do app e do H.E.R.M.E.S.
+npm run test:fenix   # testes da F.Ê.N.I.X. e do lado dela no A.P.O.L.O.
+npm run test:hermes  # testes do H.E.R.M.E.S.
 npm run test:comandos # testes dos comandos por voz (RF-20)
 npm run test:conversa # testes da janela de conversa (ADR 0024)
-npm test             # todos os testes de scripts/
+npm test             # todos os testes (scripts/, fenix/test/, hermes/test/)
 ```
 
 ## Ambiente

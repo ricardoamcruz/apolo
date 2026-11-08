@@ -1,0 +1,12 @@
+{
+  "name": "hermes",
+  "private": true,
+  "version": "0.1.0",
+  "description": "H.E.R.M.E.S. — a porta do celular: autentica o app e repassa a conversa ao assistente.",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "hermes": "hermes.mjs" },
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node --test test/" },
+  "dependencies": { "ws": "^8.21.1" }
+}

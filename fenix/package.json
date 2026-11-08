@@ -1,0 +1,12 @@
+{
+  "name": "fenix",
+  "private": true,
+  "version": "0.1.0",
+  "description": "F.Ê.N.I.X. — guardiã que sobe, vigia, troca de versão e roda as rotinas de um projeto.",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "fenix": "fenix.mjs" },
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node --test test/" },
+  "dependencies": { "ws": "^8.21.1" }
+}

@@ -161,8 +161,7 @@ async function naPagina(expressao) {
 
 async function abrirPagina() {
   await cdp('Page.navigate', { url: `https://localhost:${PAGINA}/` })
-  await ate('a página carregar', () => naPagina(`!!document.querySelector('.ignition')`))
-  await naPagina(`document.querySelector('.ignition').click()`)
+  // A página liga sozinha, sem tela de INICIAR.
   await ate('a página conectar', async () => (await saude()).interfaces > 0)
 }
 
@@ -184,6 +183,8 @@ const naFase = (fase, ms) =>
   }, ms)
 
 async function pedir(pedido) {
+  // A ponte pode estar reiniciando depois do cenário anterior, e a página, reconectando.
+  await ate('a ponte e a página estarem no ar', async () => (await saude()).interfaces > 0)
   assert.equal((await acao('propor', { pedido })).ok, true)
   assert.equal((await acao('confirmar')).ok, true)
 }

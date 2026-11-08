@@ -156,6 +156,8 @@ export async function connectGemini(
   let speaking = false
   /** Depois de uma interrupção, descarta o resto da resposta que ainda chegar. */
   let dropUntilTurnEnd = false
+  /** Em espera no celular: ouve, mas nada do que ele disser toca (docs/adr/0024). */
+  let mudo = false
 
   const stopPlayback = () => {
     for (const s of playing) {
@@ -175,7 +177,7 @@ export async function connectGemini(
   }
 
   const play = (b64: string) => {
-    if (dropUntilTurnEnd) return
+    if (dropUntilTurnEnd || mudo) return
     const pcm = fromBase64(b64)
     if (!pcm.length) return
     const buffer = outCtx.createBuffer(1, pcm.length, OUT_RATE)
@@ -336,7 +338,7 @@ export async function connectGemini(
         }
       }
     }
-    if (sc.outputTranscription?.text && !dropUntilTurnEnd) {
+    if (sc.outputTranscription?.text && !dropUntilTurnEnd && !mudo) {
       closeUserTurn()
       if (!assistantOpen) {
         assistantOpen = true
@@ -485,6 +487,10 @@ export async function connectGemini(
     interrupt() {
       if (speaking) dropUntilTurnEnd = true
       stopPlayback()
+    },
+    silenciar(on) {
+      mudo = on
+      if (on) stopPlayback()
     },
     prompt(instructions) {
       send({ realtimeInput: { text: instructions } })

@@ -59,23 +59,17 @@ function rampTo(param: AudioParam, to: number, seconds: number) {
  */
 export async function unlockAudio(): Promise<void> {
   const c = audio()
-  if (c.state === 'suspended') {
-    try {
-      await c.resume()
-    } catch {
-      /**
-       * Swallowed on purpose, now that a clap can start the assistant.
-       *
-       * resume() rejects when there has been no user gesture, and a clap is not
-       * one — the browser has no idea a microphone heard anything. Letting that
-       * reject would abort the whole power-up over a sound that may well play
-       * fine anyway (any earlier interaction with the page unlocks it). Boot
-       * either way: the worst case is a silent start, not a dead one.
-       */
-    }
-  }
+  /**
+   * Não espera o resume(). Sem um gesto na página, o Chrome não o recusa: deixa a
+   * promessa pendente até o primeiro toque, e esperar por ela travava a partida
+   * automática. Quem chamar de novo depois de um toque libera o som.
+   */
+  if (c.state === 'suspended') void c.resume().catch(() => {})
   void loadOverrides()
 }
+
+/** O Chrome deixou tocar? Sem um gesto na página, ele pode segurar o som. */
+export const somLiberado = () => audio().state === 'running'
 
 /** Pick up any real audio files the user has dropped into public/audio/. */
 async function loadOverrides() {

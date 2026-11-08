@@ -24,6 +24,8 @@
 | 0020 | Telemetria do celular e voz para usar dirigindo | proposta |
 | 0021 | Padrão de cores e HTTPS em toda conexão | proposta |
 | 0022 | Ponto de extensão entre dispositivos | proposta |
+| 0023 | Comandos por voz para todas as teclas | proposta |
+| 0024 | Conversa contínua depois do nome | proposta |
 
 ## Em aberto
 

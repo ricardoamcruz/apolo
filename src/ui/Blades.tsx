@@ -1,9 +1,11 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useStore, type Blade } from '../store'
 import { BRIDGE_HTTP_URL } from '../config'
 import { sanitisePanelHtml } from './sanitise'
+import { comandarPopup, type AcaoDePopup } from '../lib/comandosDePopup'
 import { frameSpan, peaceScroll, pinchCount } from '../lib/hands'
+import { ordenarPopups } from '../lib/ordemDosPopups'
 import * as camera from '../lib/camera'
 
 /**
@@ -587,33 +589,13 @@ export function Blades() {
   const abertos = useMemo(() => blades.filter((b) => !b.minimized), [blades])
 
   /**
-   * Newest first, then whichever the user pulled forward lifted to the front.
-   *
    * Ordered here rather than in the store because it is a view concern, and the
    * store's array order is the history — which is what makes "the one before
    * that" a meaningful thing to ask for.
    */
-  const ordered = useMemo(() => {
-    const newestFirst = [...abertos].reverse()
-    if (!focusedBlade) return newestFirst
-    const hit = newestFirst.findIndex((b) => b.id === focusedBlade)
-    if (hit <= 0) return newestFirst
-    const copy = [...newestFirst]
-    const [lifted] = copy.splice(hit, 1)
-    return [lifted, ...copy]
-  }, [abertos, focusedBlade])
+  const ordered = useMemo(() => ordenarPopups(abertos, focusedBlade), [abertos, focusedBlade])
 
   const front = ordered[0]
-
-  const cycle = useCallback(
-    (by: number) => {
-      if (ordered.length < 2) return
-      const at = ordered.findIndex((b) => b.id === front?.id)
-      const next = ordered[(at + by + ordered.length) % ordered.length]
-      if (next) focusBlade(next.id)
-    },
-    [ordered, front, focusBlade],
-  )
 
   // Bound here rather than in App, and only while something is open, so E and X
   // are free for anything else the moment the last blade closes.
@@ -627,23 +609,19 @@ export function Blades() {
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
 
-      if (e.key === 'e') {
-        e.preventDefault()
-        expandBlade(expandedBlade ? null : (front?.id ?? null))
-      } else if (e.key === 'x') {
-        e.preventDefault()
-        if (front) closeBlade(front.id)
-      } else if (e.key === ']') {
-        e.preventDefault()
-        cycle(1)
-      } else if (e.key === '[') {
-        e.preventDefault()
-        cycle(-1)
-      }
+      const acao = {
+        e: expandedBlade ? 'sair_tela_cheia' : 'tela_cheia',
+        x: 'fechar',
+        ']': 'proximo',
+        '[': 'anterior',
+      }[e.key] as AcaoDePopup | undefined
+      if (!acao) return
+      e.preventDefault()
+      comandarPopup(acao)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [front, expandedBlade, expandBlade, closeBlade, cycle])
+  }, [expandedBlade])
 
   if (!abertos.length) return null
 

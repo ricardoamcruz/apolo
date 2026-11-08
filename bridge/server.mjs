@@ -105,16 +105,28 @@ const ESFORCO_DO_CELULAR = process.env.APOLO_CELULAR_ESFORCO ?? 'low'
  * one, sent from the init message a turn later, carries live status. Expect
  * the two to differ, and treat the later one as authoritative.
  */
+/**
+ * Servidores do Claude Code que o A.P.O.L.O. não deve carregar, separados por
+ * vírgula em APOLO_MCP_IGNORAR. Ficam no Claude Code, só não chegam aqui.
+ */
+const IGNORADOS = new Set(
+  (process.env.APOLO_MCP_IGNORAR ?? '')
+    .split(',')
+    .map((nome) => nome.trim())
+    .filter(Boolean),
+)
+
 function configuredServers() {
   try {
     const cfg = JSON.parse(
       readFileSync(join(homedir(), '.claude.json'), 'utf8'),
     )
-    return {
+    const todos = {
       ...(cfg.mcpServers ?? {}),
       // Servers scoped to the home directory apply too, since that's our cwd.
       ...(cfg.projects?.[homedir()]?.mcpServers ?? {}),
     }
+    return Object.fromEntries(Object.entries(todos).filter(([nome]) => !IGNORADOS.has(nome)))
   } catch {
     return {}
   }

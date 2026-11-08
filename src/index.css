@@ -792,170 +792,6 @@ kbd {
   opacity: 0.45;
 }
 
-/* --------------------------------------------------------------- ignition */
-
-.ignition {
-  position: fixed;
-  inset: 0;
-  z-index: 7;
-  display: grid;
-  place-items: center;
-  background: radial-gradient(ellipse at center, #04121c 0%, #01060c 70%);
-  border: 0;
-  cursor: pointer;
-  font-family: inherit;
-  color: #4fd6ff;
-}
-
-.ignition-ring {
-  position: absolute;
-  width: 240px;
-  height: 240px;
-  border: 1px solid rgba(79, 214, 255, 0.28);
-  border-top-color: rgba(79, 214, 255, 0.9);
-  border-radius: 50%;
-}
-
-.ignition-label {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-.ignition-word {
-  font-size: 15px;
-  letter-spacing: 0.52em;
-  text-indent: 0.52em; /* balance the trailing letter-space */
-  text-shadow: 0 0 30px rgba(79, 214, 255, 0.7);
-}
-
-.ignition-sub {
-  font-size: 9px;
-  letter-spacing: 0.28em;
-  opacity: 0.4;
-  text-transform: uppercase;
-}
-
-.ignition:hover .ignition-word {
-  text-shadow: 0 0 44px rgba(79, 214, 255, 1);
-}
-
-/* ------------------------------------------------------------------- boot */
-
-.boot {
-  position: fixed;
-  inset: 0;
-  z-index: 6;
-  background: var(--bg);
-  color: var(--accent);
-  overflow: hidden;
-}
-
-/* -- beat 1: the status bar -------------------------------------------- */
-
-.boot-bar {
-  position: absolute;
-  top: 12%;
-  left: 0;
-  right: 0;
-  padding: 0 min(9vw, 140px);
-  transition: opacity 0.6s ease, filter 0.6s ease;
-}
-.boot-bar-dim { opacity: 0.28; filter: blur(0.6px); }
-
-.boot-bar-frame {
-  position: relative;
-  border-top: 1.5px solid var(--accent);
-  border-bottom: 1.5px solid var(--accent);
-  padding: 14px 26px 12px;
-  clip-path: polygon(3% 0, 97% 0, 100% 42%, 97% 100%, 3% 100%, 0 42%);
-  box-shadow:
-    inset 0 0 40px color-mix(in srgb, var(--accent) 12%, transparent),
-    0 0 30px color-mix(in srgb, var(--accent) 18%, transparent);
-}
-
-.boot-bar-title {
-  display: inline-flex;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-size: clamp(18px, 3.4vw, 40px);
-  font-weight: 300;
-  letter-spacing: 0.14em;
-  color: #eafcff;
-  text-shadow: 0 0 26px color-mix(in srgb, var(--accent) 60%, transparent);
-}
-.boot-dots { opacity: 0.6; margin: 0 0.2em; }
-.boot-cursor {
-  display: inline-block;
-  width: 0.6em;
-  height: 1.05em;
-  margin-left: 0.15em;
-  background: var(--accent);
-  animation: bootBlink 0.7s steps(1) infinite;
-}
-@keyframes bootBlink { 50% { opacity: 0 } }
-
-.boot-seg { display: flex; gap: 3px; margin-top: 12px; }
-.boot-seg-cell {
-  flex: 1;
-  height: 12px;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  transition: background 0.12s ease, box-shadow 0.12s ease;
-}
-.boot-seg-cell[data-on='1'] {
-  background: var(--accent);
-  box-shadow: 0 0 10px var(--accent);
-}
-
-.boot-log {
-  margin-top: 14px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 1.9;
-  letter-spacing: 0.06em;
-  opacity: 0.6;
-}
-.boot-log-line { animation: bootLogIn 0.25s ease both; }
-.boot-log-line::before { content: '\203a  '; opacity: 0.5; }
-@keyframes bootLogIn { from { opacity: 0; transform: translateX(-8px) } }
-
-/* -- beats 2-4: the centre stage --------------------------------------- */
-
-.boot-stage {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-}
-.boot-rings {
-  width: min(58vmin, 520px);
-  height: min(58vmin, 520px);
-  overflow: visible;
-}
-
-.boot-ring {
-  fill: none;
-  stroke: var(--accent);
-  opacity: 0.8;
-  transform-box: fill-box;
-  transform-origin: center;
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 50%, transparent));
-}
-.boot-name {
-  fill: #eafcff;
-  font-family: var(--font-mono);
-  font-size: 20px;
-  text-anchor: middle;
-  dominant-baseline: middle;
-}
-
-@media (max-width: 900px) {
-  .hud-top { padding: 0 46px; }
-  .rail-left { left: 30px; }
-  .log { width: 84vw; }
-}
-
 /* ---------------------------------------------------------------------------
    Instrument layer
 
@@ -1251,8 +1087,7 @@ kbd {
    One-shot frame effects
 
    Mounted only while playing (see Effects.tsx), so none of this costs anything
-   at rest. Everything is pointer-events: none — the ignition button and the
-   boot screen sit above the HUD entirely, so nothing here can trap a click.
+   at rest. Everything is pointer-events: none, so nothing here can trap a click.
    --------------------------------------------------------------------------- */
 
 .fx {
@@ -1812,22 +1647,6 @@ kbd {
 
 @media (prefers-reduced-motion: reduce) {
   .hands-live::before { animation: none }
-}
-
-/* Spun in CSS, deliberately. Under framer this was an infinitely repeating
-   animation, and AnimatePresence will not unmount a subtree whose animations
-   never end — which left the whole ignition overlay on top of the interface
-   for the entire session, swallowing every click and every pinch. */
-.ignition-ring { animation: ignitionSpin 18s linear infinite }
-
-@keyframes ignitionSpin {
-  from { transform: rotate(0deg) }
-  to   { transform: rotate(360deg) }
-}
-
-
-@media (prefers-reduced-motion: reduce) {
-  .ignition-ring { animation: none }
 }
 
 /* The live camera inside a blade. Mirrored, because a person expects their own

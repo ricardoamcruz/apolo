@@ -18,8 +18,12 @@ export type Sistema = {
   problemas: string[]
 }
 
-/** Servidores que não fazem parte do que o A.P.O.L.O. precisa para rodar. */
-const PLUGAVEIS = new Set(['rea', 'celular'])
+/**
+ * O que não faz parte do que o A.P.O.L.O. precisa para rodar, e o nome com que
+ * aparece. Cada sistema plugável ganha um nome próprio, como o C.O.R.E. (ADR 0018).
+ * H.E.R.M.E.S. é o canal do celular: o mensageiro dos deuses, irmão de Apolo.
+ */
+const PLUGAVEIS: Record<string, string> = { celular: 'H.E.R.M.E.S.' }
 
 const FALHAS: Record<string, string> = { failed: 'falhou', 'needs-auth': 'precisa de autorização' }
 
@@ -34,10 +38,10 @@ export function montarSistemas(
   const plugaveis: Sistema[] = []
   for (const { nome, estado } of servidores) {
     const falha = FALHAS[estado ?? '']
-    if (PLUGAVEIS.has(nome)) {
+    if (nome in PLUGAVEIS) {
       plugaveis.push({
         id: nome,
-        nome: nome.toUpperCase(),
+        nome: PLUGAVEIS[nome],
         tipo: 'conector',
         degradado: Boolean(falha),
         problemas: falha ? [falha] : [],

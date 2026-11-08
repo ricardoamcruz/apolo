@@ -38,6 +38,7 @@ export type MensagemDaPagina = {
   credencial?: string
   tarefa?: string
   pedido?: string
+  cancelar?: boolean
 }
 
 type Props = {

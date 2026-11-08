@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { chamouPeloNome } from '../src/lib/chamada.ts'
+import { chamouPeloNome, decidirChamada } from '../src/lib/chamada.ts'
 
 test('o nome sozinho ou abrindo a frase é um chamado', () => {
   for (const fala of ['Apolo', 'Apolo!', 'ei, Apolo', 'Oi Apollo', 'bom dia, Apolo', 'a polo']) {
@@ -33,4 +33,13 @@ test('sem o nome, nada acorda', () => {
   for (const fala of ['', 'que horas são', 'boa noite', 'polo aquático', 'apolinário']) {
     assert.equal(chamouPeloNome(fala).chamou, false, fala)
   }
+})
+
+test('o nome sozinho acorda antes de a frase fechar; com pedido, espera fechar', () => {
+  assert.equal(decidirChamada('Apolo', false), 'se_parar')
+  assert.equal(decidirChamada('Apolo', true), 'agora')
+  assert.equal(decidirChamada('Apolo, que horas são', false), 'nao')
+  assert.equal(decidirChamada('Apolo, que horas são', true), 'agora')
+  assert.equal(decidirChamada('o Apolo', false), 'nao')
+  assert.equal(decidirChamada('o Apolo travou', true), 'nao')
 })

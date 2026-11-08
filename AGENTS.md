@@ -28,6 +28,15 @@ detalhe está em `docs/`.
 - **Próxima versão:** 6 pontos do backlog têm prioridade sobre a ordem das fases
   (seção "Próxima versão" de `docs/05-roadmap.md`, RF-15 a RF-20). O primeiro,
   limpar a tela por voz (RF-16), está feito desde 03/11/2026.
+- **Conversa contínua (ADR 0024):** o nome abre uma janela de 20 s
+  (`src/lib/conversa.ts`), e só uma resposta ou tarefa a reabre. Ouvir alguém não
+  reabre: não volte a zerar o prazo em `onSpeechStart`. No celular, em espera, a
+  sessão fica muda (`silenciar`) até a frase trazer o nome.
+- **Comandos por voz (ADR 0023, RF-20):** cada tecla da interface tem uma linha em
+  `bridge/comandos.mjs`, que vira a lista que a voz explica; tecla nova entra lá, e
+  `scripts/comandos.test.mjs` cobra. Teclas e voz usam a mesma função para popups
+  (`src/lib/comandosDePopup.ts`). Cancelar sai da transcrição (`src/lib/comandos.ts`),
+  e ligar a câmera confere a fala do Ricardo: nunca dependa só do modelo para isso.
 - **Sub-módulo git (ADR 0014):** `bridge/git.mjs` dá ao A.P.O.L.O. as ferramentas
   `git_*` sobre o próprio repositório — ler o estado, commitar numa branch e
   abrir pull request para a `main`. Commitar e propor merge exigem
@@ -53,8 +62,9 @@ detalhe está em `docs/`.
   Ruby portátil do Homebrew (`scripts/setup-mobile.command`); no Homebrew,
   Intel + macOS 26 compila LLVM por horas — sempre responder `n`.
 - **Telemetria e direção (ADR 0020):** o app grava tempos no Mac por `telemetria`
-  (`bridge/telemetria.mjs`, `npm run logs:celular`), nunca a fala. A voz segue em
-  segundo plano (`UIBackgroundModes: audio`). CarPlay nativo exige conta paga e
+  (`bridge/telemetria.mjs`, `npm run logs:celular`), nunca a fala. A voz só funciona
+  com o app na tela: ao ir para segundo plano ela desliga, e não há
+  `UIBackgroundModes` (revisão da ADR 0020). CarPlay nativo exige conta paga e
   aprovação da Apple; o espelhamento não existe. No celular, as partículas usam
   `particlesOrbitVertex`, e o shader do PC fica como está.
 - **Cores e HTTPS (ADR 0021):** a cor por atividade vem de `src/lib/estados.ts`, para
@@ -68,6 +78,11 @@ detalhe está em `docs/`.
   (`dormir`: "em espera", "já volto", "boa noite" de despedida). Nela, só o nome
   ou Espaço acordam: `src/lib/chamada.ts` usa a Web Speech API, com o microfone do
   modelo fechado. `ignorar_fala` é como ele fica calado quando a fala não é para ele.
+- **Nomes dos sistemas (ADR 0018):** cada sistema plugável ganha um nome próprio,
+  no espírito de GAIA (*Horizon Zero Dawn*): criativo, fácil de falar, ligado ao
+  tema e interessante, nesta ordem, escrito com pontos como C.O.R.E. O canal do
+  celular é H.E.R.M.E.S. (`src/lib/sistemas.ts`). Servidor MCP do Claude Code que não
+  serve ao A.P.O.L.O. sai por `APOLO_MCP_IGNORAR` no `.env.local`, sem citá-lo no repositório.
 - **Aba SISTEMAS (ADR 0018, RF-56):** só aparece pela tecla `D` ou por voz
   (`diagnostico`). Tudo o que o A.P.O.L.O. usa para rodar é uma linha só, C.O.R.E.;
   skills, extensões, APIs e conectores futuros entram como outras linhas em
@@ -155,6 +170,8 @@ npm run test:autodev # testes da política e do rollback
 npm run test:autodev:e2e # ciclo real com Chrome headless mudo (leva minutos, fora do npm test)
 npm run test:git     # testes do sub-módulo git (commit e pull request)
 npm run test:gateway # testes do gateway do celular e do canal do app
+npm run test:comandos # testes dos comandos por voz (RF-20)
+npm run test:conversa # testes da janela de conversa (ADR 0024)
 npm test             # todos os testes de scripts/
 ```
 

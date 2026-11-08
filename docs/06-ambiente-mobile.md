@@ -118,7 +118,7 @@ com o iPhone no cabo, marcar **Connect via network**.
 | Círculo não aparece no simulador | Abrir a janela do Simulator e esperar: no Intel, o shader roda na CPU, a cerca de 1 quadro por segundo |
 | App mostra DESCONECTADO | Tailscale ligado no iPhone? Mac acordado? `npm start` rodando e reiniciado depois de atualizar o código? Em `tailscale serve status`, a porta 8788 aparece? |
 | App pede o código de novo: "O Mac recusou este token" | O token mudou no `.env.local`: rode `npm run celular` e pareie de novo |
-| Ele não ouve | Ajustes → A.P.O.L.O → Microfone. Em espera, toque na tela para acordar |
+| Ele não ouve | Ajustes → A.P.O.L.O → Microfone. Em espera, diga "Apolo" ou toque na tela |
 
 ## Logs e uso no carro
 
@@ -127,5 +127,10 @@ resume (`-- 7` para sete dias, `-- 1 --eventos` para ver quedas). Os arquivos fi
 `~/.apolo/logs`. Mudar `app.json` ou instalar pacote nativo exige `npx expo prebuild
 --platform ios --no-install`, `pod install` e nova compilação.
 
-No CarPlay o A.P.O.L.O. não aparece como app (ADR 0020): com o iPhone ligado ao carro,
-ele conversa em segundo plano, e a rota de áudio é escolhida pelo iOS.
+No CarPlay o A.P.O.L.O. não aparece como app (ADR 0020). Ele só ouve com o app na
+tela: ao minimizar, a voz desliga e o indicador do microfone some. Com o iPhone ligado
+ao carro, a rota de áudio é escolhida pelo iOS.
+
+Para abrir rápido: no app Atalhos, crie um atalho "Apolo" com a ação **Abrir App** →
+A.P.O.L.O.; em **Ajustes → Acessibilidade → Toque → Tocar Atrás**, escolha esse atalho.
+"E aí, Siri, Apolo" também passa a abri-lo.

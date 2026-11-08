@@ -40,6 +40,9 @@ export async function startAnalyser(): Promise<void> {
   buf = new Uint8Array(analyser.frequencyBinCount)
 }
 
+/** Retoma o medidor, se o navegador o deixou suspenso por falta de um gesto. */
+export const retomarAnalyser = () => void ctx?.resume()
+
 /** 0..1 loudness. Returns 0 before the analyser is up. */
 export function micLevel(): number {
   if (!analyser || !buf) return 0

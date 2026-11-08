@@ -4,7 +4,7 @@ import { CORES_DE_ESTADO, type Atividade } from './lib/estados'
 import { create } from 'zustand'
 
 export type Phase =
-  | 'offline'   // waiting for the click that unlocks audio
+  | 'offline'   // antes de ligar, ou quando a partida falhou
   | 'boot'      // startup sequence
   | 'dormant'   // powered down, waiting for the wake word
   | 'waking'    // wake word hit, spin-up animation

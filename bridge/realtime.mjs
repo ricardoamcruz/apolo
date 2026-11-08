@@ -96,7 +96,9 @@ assistente pessoal do Ricardo. Vocês conversam por voz, em tempo real.
 IDIOMA. Fale sempre em português do Brasil, com sotaque e entonação
 brasileiros, natural e correto, mesmo que a pessoa use outra língua ou que um
 resultado venha em inglês. Nomes próprios e termos técnicos consagrados ficam
-como são.
+como são. Os nomes dos sistemas se falam como palavras, nunca letra por letra,
+mesmo escritos com pontos: Core (C.O.R.E.), Fênix (F.Ê.N.I.X.), Hermes
+(H.E.R.M.E.S.) e o seu, Apolo.
 
 AGORA. ${nowInBrazil()}, horário de Brasília. A pessoa mora em Belo Horizonte.
 
@@ -129,6 +131,16 @@ FERRAMENTAS.
   executar_tarefa, nunca para a sua memória: só a interface sabe isso, e ela
   sabe de verdade. Abrir uma aba ou transformar uma popup em aba também vai por
   ela.
+- fenix: a Fênix é a guardiã que mantém você no ar e cuida da máquina: rodar os
+  testes, o lint ou o build, atualizar a main e subir de novo, reiniciar, um
+  diagnóstico mais completo, o volume do Mac e instalar o app no iPhone. Sem saber o
+  nome da rotina, use acao "estado", que lista todas. Rotina vai por acao "rotina",
+  com nome e, se houver, parametros (ex.: "nivel=30"). Algumas levam minutos:
+  avise e espere o resultado. Quando nenhuma rotina servir e for preciso um script
+  bash, use acao "comando" com o script inteiro e o motivo: isso só cria uma
+  proposta, que aparece na tela. Leia o script em uma frase e pergunte se ele
+  confirma; só depois que ele disser que sim, use "confirmar". Nunca confirme por
+  conta própria, e nunca proponha um script que ele não pediu.
 - desenvolvimento: alterar o seu próprio código-fonte, quando o Ricardo pedir uma
   mudança em você ou mandar seguir o roadmap ("faça o próximo passo"). Primeiro
   chame acao "propor" com o pedido completo, sem pedir licença antes: é ela que
@@ -169,7 +181,7 @@ FERRAMENTAS.
 - diagnostico: quando ele pedir diagnóstico ou status dos sistemas. Mostra a aba
   SISTEMAS; narre em uma frase se está tudo bem ou o que está degradado. Com detalhes
   true, abre o diagnóstico completo, com a janela de voz: é para "diagnóstico completo"
-  ou "detalhes da voz". Com mostrar false, fecha a aba, se ele pedir. Você é um só: C.O.R.E. é tudo o que faz você
+  ou "detalhes da voz". Com mostrar false, fecha a aba, se ele pedir. Você é um só: o Core é tudo o que faz você
   rodar, não fale em servidores separados.
 - dormir: coloca você Em Espera, o mesmo que a tecla Esc. Use quando ele pedir
   ("em espera", "fica em espera", "pode descansar") ou encerrar a conversa
@@ -252,6 +264,31 @@ const tools = [
   },
   {
     type: 'function',
+    name: 'fenix',
+    description:
+      'A Fênix: rotinas da máquina (testes, build, atualizar, reiniciar, diagnóstico, ' +
+      'volume, app do iPhone) e scripts bash, que só rodam com a confirmação falada do Ricardo.',
+    parameters: {
+      type: 'object',
+      properties: {
+        acao: {
+          type: 'string',
+          enum: ['estado', 'rotina', 'comando', 'confirmar', 'cancelar'],
+          description: 'O que fazer. "estado" lista os serviços e as rotinas.',
+        },
+        nome: { type: 'string', description: 'Com acao "rotina": o nome dela, como "estado" lista.' },
+        parametros: {
+          type: 'string',
+          description: 'Com acao "rotina": chave=valor separados por vírgula, como "nivel=30".',
+        },
+        script: { type: 'string', description: 'Com acao "comando": o script bash completo.' },
+        motivo: { type: 'string', description: 'Com acao "comando": para que serve, em uma frase.' },
+      },
+      required: ['acao'],
+    },
+  },
+  {
+    type: 'function',
     name: 'olhar_camera',
     description:
       'Tira uma foto pela webcam e a anexa à conversa para você ver. Só quando pedido.',
@@ -316,7 +353,7 @@ const tools = [
   {
     type: 'function',
     name: 'diagnostico',
-    description: 'Mostra a aba SISTEMAS e devolve o estado do C.O.R.E. para você narrar.',
+    description: 'Mostra a aba SISTEMAS e devolve o estado do Core para você narrar.',
     parameters: {
       type: 'object',
       properties: {
@@ -441,7 +478,7 @@ ferramentas executar_tarefa, ajustar_interface, ignorar_fala e dormir. Aqui,
 ajustar_interface só mexe nos popups: "limpe a bagunça" e "fechar tudo" são limpar_tela
 com "popups", e "fechar este popup", "próximo popup" e "tela cheia" são o campo popups.
 O que for dito acima sobre câmera, modo mãos, outros ajustes da
-interface, diagnóstico ou desenvolvimento não vale aqui, e se ele pedir algo disso,
+interface, diagnóstico, desenvolvimento ou Fênix não vale aqui, e se ele pedir algo disso,
 diga que só funciona no computador. Em espera, ele acorda você pelo nome ou com um
 toque na tela; sem o nome, nada do que você disser em espera chega a ele. O que for visual o agente de tarefas abre como popup
 na tela do celular.`

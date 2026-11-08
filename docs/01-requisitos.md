@@ -47,6 +47,8 @@ Fase: ver `05-roadmap.md`.
 | RF-61 | **Padrão de cores por atividade** na web e no app: ouvindo verde, processando amarelo, script lilás, código vermelho, pausa azul claro (ADR 0021) | M | 2 | feito (07/11/2026) |
 | RF-62 | **HTTPS em toda conexão** entre servidor, web e app (ADR 0021) | M | 2 | feito (07/11/2026) |
 | RF-63 | **Comandos entre dispositivos** (mobile, servidor e web): ponto de extensão pronto; a extensão vem depois (ADR 0022) | S | 3 | em andamento |
+| RF-64 | **F.Ê.N.I.X., a guardiã**: sobe e mantém no ar a ponte, a interface e o H.E.R.M.E.S. (reinicia se cair ou travar), coloca no ar a versão nova e volta à estável se quebrar, atualiza a `main`, roda rotinas (testes, build, diagnóstico, app do iPhone, volume) e scripts bash só com confirmação; A.P.O.L.O., F.Ê.N.I.X. e H.E.R.M.E.S. independentes e comunicáveis entre máquinas (ADR 0025) | S | 2 | em andamento |
+| RF-65 | **Avisos pelo WhatsApp**: testar o CallMeBot como canal gratuito de avisos curtos ao Ricardo, só para o número dele (`docs/poc/0001-callmebot-whatsapp.md`) | C | 3 | proposto |
 
 ## Requisitos não funcionais
 

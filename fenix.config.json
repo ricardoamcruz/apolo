@@ -1,0 +1,120 @@
+{
+  "nome": "A.P.O.L.O.",
+  "repositorio": ".",
+  "versaoSegura": "main",
+  "pasta": "~/.apolo/fenix",
+  "arquivosDeAmbiente": [".env.local"],
+  "escuta": { "host": "127.0.0.1", "porta": 8790 },
+  "tls": {
+    "cert": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}",
+    "key": "${APOLO_TLS_KEY:-~/.apolo/tls/apolo-chave.pem}"
+  },
+  "preparar": [["node", "scripts/preparar.mjs"]],
+  "flags": {
+    "--writes": { "ambiente": { "JARVIS_ALLOW_WRITES": "1" }, "comandosLivres": true },
+    "--autodev": { "ambiente": { "APOLO_AUTODEV": "1" } }
+  },
+  "servicos": [
+    {
+      "nome": "ponte",
+      "comando": ["node", "bridge/server.mjs"],
+      "cor": "36",
+      "versionado": true,
+      "portas": ["${JARVIS_BRIDGE_PORT:-8787}"],
+      "ambiente": {
+        "JARVIS_ALLOWED_ORIGINS": "${JARVIS_ALLOWED_ORIGINS:-https://localhost:${PORT:-5173},https://127.0.0.1:${PORT:-5173}}"
+      },
+      "saude": {
+        "urls": ["https://localhost:${JARVIS_BRIDGE_PORT:-8787}/health"],
+        "ca": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}",
+        "clientes": "interfaces"
+      }
+    },
+    {
+      "nome": "interface",
+      "comando": ["node", "node_modules/vite/bin/vite.js"],
+      "cor": "35",
+      "portas": ["${PORT:-5173}"],
+      "saude": {
+        "urls": [
+          "https://localhost:${PORT:-5173}/src/main.tsx",
+          "https://localhost:${PORT:-5173}/src/App.tsx"
+        ],
+        "ca": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}"
+      }
+    },
+    {
+      "nome": "hermes",
+      "comando": ["node", "hermes/hermes.mjs"],
+      "cor": "33",
+      "opcional": true,
+      "portas": ["${APOLO_GATEWAY_PORT:-8788}"],
+      "ambiente": {
+        "HERMES_TLS_CERT": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}",
+        "HERMES_TLS_KEY": "${APOLO_TLS_KEY:-~/.apolo/tls/apolo-chave.pem}",
+        "HERMES_APOLO_URL": "wss://localhost:${JARVIS_BRIDGE_PORT:-8787}",
+        "HERMES_APOLO_CA": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}"
+      }
+    }
+  ],
+  "protecao": {
+    "revisao": [
+      "(^|\\/)\\.env(\\.[^/]*)?$",
+      "(^|\\/)\\.git(\\/|$)",
+      { "re": "\\.(pem|key|p12|mobileprovision)$", "flags": "i" },
+      "^scripts\\/",
+      "^bridge\\/autodev\\/",
+      "^bridge\\/gate\\.mjs$",
+      "^bridge\\/hermes\\.mjs$",
+      "^bridge\\/fenix\\.mjs$",
+      "^bridge\\/tls\\.mjs$",
+      "^bridge\\/extensoes\\.mjs$",
+      "^bridge\\/env\\.mjs$",
+      "^bridge\\/git\\.mjs$",
+      "^bridge\\/net\\.mjs$",
+      "^bridge\\/page\\.mjs$",
+      "^bridge\\/chrome\\.mjs$",
+      "^src\\/ui\\/sanitise\\.ts$",
+      "^src\\/lib\\/autodev\\.ts$",
+      "^index\\.html$",
+      "^vite\\.config\\.ts$",
+      "^vite\\.popups\\.config\\.ts$",
+      "^\\.oxlintrc\\.json$",
+      "^package(-lock)?\\.json$",
+      "^\\.github\\/",
+      "^\\.claude\\/",
+      "^\\.gitignore$",
+      "^fenix\\/",
+      "^hermes\\/",
+      "^fenix\\.config\\.json$"
+    ],
+    "liberados": [".env.example"],
+    "invariantes": [
+      {
+        "arquivo": "bridge/server.mjs",
+        "contem": [
+          "from '\\.\\/gate\\.mjs'",
+          "canUseTool: podeUsarFerramenta,",
+          "permissionMode: 'default',",
+          "if \\(!originAllowed\\(origin\\)\\)"
+        ]
+      }
+    ],
+    "branch": "^fase-\\d+(\\.\\d+)*\\/[a-z0-9]+(-[a-z0-9]+)*$"
+  },
+  "instalar": {
+    "comando": ["npm", "install", "--no-audit", "--no-fund"],
+    "quando": ["^package(-lock)?\\.json$"]
+  },
+  "rotinas": [
+    { "nome": "testes", "descricao": "Roda todos os testes (npm test)", "comando": ["npm", "test"], "prazoMs": 900000 },
+    { "nome": "lint", "descricao": "Confere o código (npm run lint)", "comando": ["npm", "run", "lint"], "prazoMs": 300000 },
+    { "nome": "build", "descricao": "Checa os tipos e compila a interface (npm run build)", "comando": ["npm", "run", "build"], "prazoMs": 600000 },
+    { "nome": "conferir_ambiente", "descricao": "Confere Node, Claude Code e a chave da voz (npm run setup)", "comando": ["node", "scripts/setup.mjs"], "prazoMs": 120000 },
+    { "nome": "popups", "descricao": "Compila os popups da web para o app do iPhone", "comando": ["node", "scripts/popups.mjs"], "prazoMs": 600000 },
+    { "nome": "app_iphone", "descricao": "Compila o app em Release e instala no iPhone conectado", "comando": ["node", "scripts/iphone.mjs"], "prazoMs": 2700000 },
+    { "nome": "medicoes_celular", "descricao": "Resume as medições do app nos últimos dias", "comando": ["node", "scripts/logs-celular.mjs", "{dias}"], "parametros": { "dias": { "formato": "[1-9]|[12][0-9]|30", "descricao": "de 1 a 30 dias", "padrao": "1" } }, "prazoMs": 60000 },
+    { "nome": "volume", "descricao": "Ajusta o volume do Mac", "comando": ["osascript", "-e", "set volume output volume {nivel}"], "parametros": { "nivel": { "formato": "100|[1-9]?[0-9]", "descricao": "de 0 a 100" } }, "prazoMs": 15000 },
+    { "nome": "mudo", "descricao": "Liga ou desliga o mudo do Mac", "comando": ["osascript", "-e", "set volume output muted {ligado}"], "parametros": { "ligado": { "formato": "true|false", "descricao": "true para mudo, false para som" } }, "prazoMs": 15000 }
+  ]
+}

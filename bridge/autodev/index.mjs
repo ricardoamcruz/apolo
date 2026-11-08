@@ -5,14 +5,14 @@
  *   proposto → trabalhando → verificando → aplicando → testando → resultado
  *
  * Nada acontece na cópia em execução. O agente trabalha numa worktree separada,
- * a partir da main; a ponte confere o resultado e só então pede ao supervisor
- * (scripts/supervisor.mjs) para colocá-lo em teste. O Ricardo aprova ou descarta,
- * e se quebrar ele volta sozinho (docs/adr/0015). A ponte nunca é quem faz a
+ * a partir da main; a ponte confere o resultado e só então pede à F.Ê.N.I.X.
+ * (fenix/, docs/adr/0025) para colocá-lo em teste. O Ricardo aprova ou descarta,
+ * e se quebrar ela volta sozinha (docs/adr/0015). A ponte nunca é quem faz a
  * troca: ela é o que está sendo trocado.
  */
 
 import { execFile, spawn } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { obterLocal } from '../tls.mjs'
 import { join } from 'node:path'
@@ -28,7 +28,7 @@ const exec = promisify(execFile)
 const PROPOSTA_MS = 5 * 60_000
 const LIMITE_MS = Number(process.env.APOLO_AUTODEV_LIMITE_MIN ?? 30) * 60_000
 const CHECAGEM_MS = 5 * 60_000
-/** Mais que a subida e a observação do supervisor somadas. */
+/** Mais que a subida e a observação da F.Ê.N.I.X. somadas. */
 const TROCA_MS = 5 * 60_000
 const BUSCA_MS = 15_000
 const EM_CURSO = new Set(['trabalhando', 'verificando', 'aplicando', 'testando'])
@@ -110,7 +110,7 @@ async function verificarPadrao(pasta) {
 /**
  * @param repo         a cópia do projeto em execução
  * @param ligado       APOLO_AUTODEV=1; sem isso, tudo é recusado
- * @param supervisor   envia uma mensagem ao supervisor; null fora do `npm start`
+ * @param supervisor   envia uma mensagem à F.Ê.N.I.X.; null sem ela (`npm run bridge`)
  * @param avisar       recebe o estado a cada mudança
  * @param interfaces   quantas interfaces estão conectadas agora
  */
@@ -128,7 +128,6 @@ export function criarAutodev({
 }) {
   mkdirSync(pasta, { recursive: true })
   const arqEstado = join(pasta, 'estado.json')
-  const arqTransicao = join(pasta, 'transicao.json')
   const arqEventos = join(pasta, 'eventos.log')
 
   let estado = { ligado, fase: 'ocioso' }
@@ -144,9 +143,10 @@ export function criarAutodev({
         resultado: { id: salvo.id, tipo: 'falhou', mensagem: 'A ponte reiniciou no meio do trabalho.' },
       }
     }
-    // Sem transição em disco não há nada em teste: o rollback manual já voltou.
+    // Sem a Fênix não há troca possível. Com ela, quem diz se ainda há algo em
+    // teste é o primeiro estado que ela manda (sincronizar, abaixo).
     const emTroca = estado.fase === 'aplicando' || estado.fase === 'testando'
-    if (emTroca && (!supervisor || !existsSync(arqTransicao))) estado.fase = 'ocioso'
+    if (emTroca && !supervisor) estado.fase = 'ocioso'
     if (estado.fase === 'proposto') estado.fase = 'ocioso'
   } catch {
     /* primeira vez */
@@ -185,13 +185,13 @@ export function criarAutodev({
 
   /**
    * Uma troca cujo resultado nunca chegou não pode travar os próximos pedidos:
-   * o supervisor pode ter morrido entre aceitar e responder.
+   * a F.Ê.N.I.X. pode ter caído entre aceitar e responder.
    */
   const vigiarTroca = () => {
     clearTimeout(esperaTroca)
     esperaTroca = setTimeout(() => {
       if (estado.fase === 'aplicando') {
-        terminar(estado.id, 'falhou', 'O supervisor não informou o resultado da troca.')
+        terminar(estado.id, 'falhou', 'A Fênix não informou o resultado da troca.')
       }
     }, TROCA_MS)
     esperaTroca.unref?.()
@@ -238,7 +238,7 @@ export function criarAutodev({
     await limparCopias()
   }
 
-  /** Devolve como terminou, ou nada se seguiu para o supervisor. */
+  /** Devolve como terminou, ou nada se seguiu para a F.Ê.N.I.X. */
   async function executar(id, pedido, sinal) {
     const copia = join(pasta, 'worktrees', id)
     const branch = `autodev/${id}`
@@ -288,14 +288,14 @@ export function criarAutodev({
     const v = await verificar(copia)
     if (!v.ok) return ['falhou', `As checagens recusaram a alteração. ${v.motivo}`]
 
-    if (!supervisor) return guardar('Sem o supervisor do npm start, ela ficou na branch.')
+    if (!supervisor) return guardar('Sem a Fênix (npm start), ela ficou na branch.')
 
     await encerrarCopia()
     await git(repo, 'branch', branch, sha)
     controle = null
     mudar({ fase: 'aplicando', etapa: 'reiniciando', branch, resumo: entrega.resumo, entrega })
     vigiarTroca()
-    supervisor({ type: 'autodev:aplicar', id, sha, branch, interfaces: interfaces() })
+    supervisor({ type: 'versao:aplicar', id, sha, branch, interfaces: interfaces() })
   }
 
   async function trabalhar(id, pedido) {
@@ -400,31 +400,42 @@ export function criarAutodev({
         const branch = await nomeDaBranch(estado.entrega.branch)
         mudar({ fase: 'aplicando', etapa: `guardando em ${branch}`, resultado: undefined })
         vigiarTroca()
-        supervisor({ type: 'autodev:aprovar', id: estado.id, branch })
+        supervisor({ type: 'versao:aprovar', id: estado.id, branch })
         return { ok: true, mensagem: `Guardando na branch ${branch}.` }
       }
       if (acao === 'reverter') {
-        if (!supervisor) return { ok: false, mensagem: 'Reverter exige o supervisor do npm start.' }
+        if (!supervisor) return { ok: false, mensagem: 'Reverter exige a Fênix (npm start).' }
         if (estado.fase !== 'testando') {
           return { ok: false, mensagem: EM_CURSO.has(estado.fase) ? 'Há um trabalho em andamento.' : 'Já estou na versão segura.' }
         }
         mudar({ fase: 'aplicando', etapa: 'voltando à versão segura', resultado: undefined })
         vigiarTroca()
-        supervisor({ type: 'autodev:reverter', id: estado.id })
+        supervisor({ type: 'versao:reverter', id: estado.id })
         return { ok: true, mensagem: 'Voltando à versão segura.' }
       }
       return { ok: false, mensagem: `Ação desconhecida: ${acao}.` }
     },
 
-    /** O resultado de uma troca, vindo do supervisor. */
-    resultado({ id, tipo, mensagem, branch }) {
+    /**
+     * O primeiro estado da Fênix depois de conectar. Se ela não tem nada em troca
+     * nem em teste, o que estava aqui acabou sem aviso (um rollback manual).
+     */
+    sincronizar(versao) {
+      if (!versao || versao.troca) return
+      if (estado.fase !== 'aplicando' && estado.fase !== 'testando') return
+      clearTimeout(esperaTroca)
+      terminar(estado.id, 'revertido', 'A alteração em teste não está mais no ar; a versão segura voltou.')
+    },
+
+    /** O resultado de uma troca, vindo da F.Ê.N.I.X. */
+    resultado({ id, tipo, mensagem, branch, versao }) {
       clearTimeout(esperaTroca)
       if (tipo === 'em_teste') {
         mudar({ fase: 'testando', etapa: 'aguardando sua avaliação', testeDesde: Date.now() })
         return
       }
       // Recusou com a alteração ainda no ar: ela continua em teste.
-      if (tipo === 'recusado' && existsSync(arqTransicao)) {
+      if (tipo === 'recusado' && versao?.troca === 'testando') {
         mudar({ fase: 'testando', etapa: 'aguardando sua avaliação', resultado: { id, tipo, mensagem } })
         return
       }

@@ -22,8 +22,9 @@ export type Sistema = {
  * O que não faz parte do que o A.P.O.L.O. precisa para rodar, e o nome com que
  * aparece. Cada sistema plugável ganha um nome próprio, como o C.O.R.E. (ADR 0018).
  * H.E.R.M.E.S. é o canal do celular: o mensageiro dos deuses, irmão de Apolo.
+ * F.Ê.N.I.X. é a guardiã que o mantém no ar e o faz renascer (ADR 0025).
  */
-const PLUGAVEIS: Record<string, string> = { celular: 'H.E.R.M.E.S.' }
+const PLUGAVEIS: Record<string, string> = { fenix: 'F.Ê.N.I.X.', celular: 'H.E.R.M.E.S.' }
 
 const FALHAS: Record<string, string> = { failed: 'falhou', 'needs-auth': 'precisa de autorização' }
 
@@ -56,9 +57,16 @@ export function montarSistemas(
   ]
 }
 
+/**
+ * Como cada nome se fala. Na tela a sigla tem pontos; em voz é uma palavra só,
+ * nunca letra por letra.
+ */
+const FALADOS: Record<string, string> = { 'C.O.R.E.': 'Core', 'F.Ê.N.I.X.': 'Fênix', 'H.E.R.M.E.S.': 'Hermes' }
+export const nomeFalado = (nome: string) => FALADOS[nome] ?? nome
+
 /** O que o modelo de voz narra. */
 export function resumoSistemas(sistemas: Sistema[]) {
   const ruins = sistemas.filter((s) => s.degradado)
-  if (!ruins.length) return 'Todos os sistemas operacionais, C.O.R.E. íntegro.'
-  return ruins.map((s) => `${s.nome} degradado: ${s.problemas.join('; ')}.`).join(' ')
+  if (!ruins.length) return 'Todos os sistemas operacionais, Core íntegro.'
+  return ruins.map((s) => `${nomeFalado(s.nome)} degradado: ${s.problemas.join('; ')}.`).join(' ')
 }

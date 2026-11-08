@@ -36,14 +36,22 @@ export const PROIBIDOS = [
 /** O modelo de variáveis não tem segredo nenhum e precisa acompanhar o código. */
 const LIBERADOS = new Set(['.env.example'])
 
+/**
+ * A F.Ê.N.I.X. confere a mesma lista (fenix.config.json, "protecao"), porque é ela
+ * quem coloca a alteração no ar; scripts/fenix.test.mjs cobra que as duas batam.
+ */
 export const SENSIVEIS = [
-  // O supervisor e a inicialização.
+  // A F.Ê.N.I.X., quem a configura e o que ela roda na partida e nas rotinas.
   /^scripts\//,
   /^bridge\/autodev\//,
+  /^fenix\//,
+  /^fenix\.config\.json$/,
+  /^bridge\/fenix\.mjs$/,
   // O gate, a proteção SSRF e o saneamento do HTML.
   /^bridge\/gate\.mjs$/,
-  // Autentica o celular: quem muda isto decide quem fala com o agente de fora.
-  /^bridge\/gateway\.mjs$/,
+  // O celular: quem muda isto decide quem fala com o agente de fora.
+  /^hermes\//,
+  /^bridge\/hermes\.mjs$/,
   // A criptografia da conexão e a tomada entre dispositivos.
   /^bridge\/tls\.mjs$/,
   /^bridge\/extensoes\.mjs$/,

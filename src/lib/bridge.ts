@@ -51,6 +51,8 @@ type Frame = {
   resposta?: string
   ok?: boolean
   mensagem?: string
+  saida?: string
+  proposta?: PropostaDaFenix
   action?: string
   url?: string
   as?: string
@@ -169,6 +171,38 @@ export async function autodev(acao: string, extra?: { pedido?: string }): Promis
       resolve(r)
     })
     ws.send(JSON.stringify({ type: 'autodev', acao, id, ...extra }))
+  })
+}
+
+/** Um script bash que a F.Ê.N.I.X. só roda com a confirmação do Ricardo (ADR 0025). */
+export type PropostaDaFenix = { id: string; script: string; motivo: string }
+export type EstadoDaFenix = { conectada: boolean; propostas: PropostaDaFenix[] }
+export type FenixResposta = { ok: boolean; mensagem: string; saida?: string; proposta?: PropostaDaFenix }
+
+let onFenix: ((estado: EstadoDaFenix) => void) | null = null
+export function watchFenix(fn: (estado: EstadoDaFenix) => void) {
+  onFenix = fn
+}
+const respostasDaFenix = new Map<string, (r: FenixResposta) => void>()
+
+/** Um pedido à F.Ê.N.I.X., pela ponte: estado, rotina, comando, confirmar, cancelar. */
+export async function fenix(
+  acao: string,
+  extra: Record<string, unknown> = {},
+  prazoMs = 20_000,
+): Promise<FenixResposta> {
+  const ws = await connect()
+  const id = `f${++askSeq}`
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      respostasDaFenix.delete(id)
+      resolve({ ok: false, mensagem: 'A ponte não respondeu a tempo.' })
+    }, prazoMs)
+    respostasDaFenix.set(id, (r) => {
+      clearTimeout(timer)
+      resolve(r)
+    })
+    ws.send(JSON.stringify({ type: 'fenix', acao, id, ...extra }))
   })
 }
 
@@ -305,6 +339,17 @@ function dispatch(ws: WebSocket) {
       if (msg.resposta) {
         respostas.get(msg.resposta)?.({ ok: msg.ok === true, mensagem: msg.mensagem ?? '' })
         respostas.delete(msg.resposta)
+      }
+    } else if (msg.type === 'fenix') {
+      if (msg.estado) onFenix?.(msg.estado as unknown as EstadoDaFenix)
+      if (msg.resposta) {
+        respostasDaFenix.get(msg.resposta)?.({
+          ok: msg.ok === true,
+          mensagem: msg.mensagem ?? '',
+          saida: msg.saida,
+          proposta: msg.proposta,
+        })
+        respostasDaFenix.delete(msg.resposta)
       }
     } else if (msg.type === 'extensao' && msg.extensao) {
       ouvintesDeExtensao.get(msg.extensao)?.(msg.dados)

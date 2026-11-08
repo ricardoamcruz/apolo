@@ -1744,6 +1744,54 @@ kbd {
   opacity: 0.45;
 }
 
+/* ------------------------------------- os scripts da F.Ê.N.I.X. (ADR 0025) */
+
+.fenix-propostas {
+  position: absolute;
+  right: 92px;
+  bottom: 96px;
+  width: min(380px, calc(100vw - 184px));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  pointer-events: auto;
+  text-transform: none;
+  letter-spacing: 0.03em;
+  font-size: 12px;
+}
+
+.fenix-proposta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fenix-script {
+  margin: 0;
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.fenix-propostas button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.fenix-propostas button:hover {
+  outline: none;
+  border-color: currentColor;
+}
+
 /* ---------------------------------------------------------- a aba SISTEMAS */
 
 /* --alerta vem de contrastante(): um vermelho fixo sumiria na interface vermelha. */

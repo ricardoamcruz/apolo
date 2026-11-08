@@ -1,7 +1,7 @@
 /**
  * Teste de ponta a ponta do autodesenvolvimento: `npm run test:autodev:e2e`.
  *
- * Roda o ciclo de verdade — ponte, Vite, supervisor, git e um Chrome headless com
+ * Roda o ciclo de verdade — F.Ê.N.I.X., ponte, Vite, git e um Chrome headless com
  * a página real — num clone temporário, em portas próprias. Só o agente é falso,
  * trocado no clone: nenhum código de produção sabe deste teste. O Chrome fica mudo.
  *
@@ -49,6 +49,8 @@ async function ate(descricao, cond, ms = 90_000) {
 const raiz = realpathSync(mkdtempSync(join(tmpdir(), 'apolo-e2e-')))
 const clone = join(raiz, 'clone')
 const pasta = join(raiz, 'autodev')
+/** Onde a F.Ê.N.I.X. guarda a transição e os eventos (docs/adr/0025). */
+const pastaDaFenix = join(raiz, 'fenix')
 const projeto = process.cwd()
 
 const git = (...args) => execFileSync('git', args, { cwd: clone, encoding: 'utf8' }).trim()
@@ -78,13 +80,15 @@ const ambiente = {
   PORT: String(PAGINA),
   VITE_BRIDGE_URL: `wss://localhost:${PONTE}`,
   APOLO_AUTODEV_PASTA: pasta,
+  FENIX_PASTA: pastaDaFenix,
+  FENIX_PORTA: '18790',
   APOLO_AUTODEV_VSCODE: '0',
 }
 
 let apolo = null
 
 async function subir() {
-  apolo = spawn(process.execPath, ['scripts/start.mjs', '--autodev'], {
+  apolo = spawn(process.execPath, ['fenix/fenix.mjs', '--autodev'], {
     cwd: clone,
     env: ambiente,
     stdio: 'ignore',
@@ -199,7 +203,7 @@ async function ociosoCom(tipo, id) {
 function naVersaoSegura() {
   assert.equal(branchAtual(), 'main')
   assert.equal(autodevs(), '')
-  assert.equal(existsSync(join(pasta, 'transicao.json')), false)
+  assert.equal(existsSync(join(pastaDaFenix, 'transicao.json')), false)
   assert.equal(git('worktree', 'list').split('\n').length, 1)
 }
 
@@ -262,7 +266,7 @@ const cenarios = {
     await naFase('testando')
     await descer()
     assert.match(branchAtual(), /^autodev\//)
-    execFileSync(process.execPath, ['scripts/rollback.mjs'], { cwd: clone, env: ambiente, stdio: 'ignore' })
+    execFileSync(process.execPath, ['fenix/fenix.mjs', 'rollback'], { cwd: clone, env: ambiente, stdio: 'ignore' })
     naVersaoSegura()
     await subir()
     await abrirPagina()

@@ -46,7 +46,16 @@ import { createRealtimeSession, realtimeKey, realtimeModel, voiceProvider } from
 import { fileURLToPath } from 'node:url'
 import { criarAutodev } from './autodev/index.mjs'
 import { criarPreferencias } from './preferencias.mjs'
-import { MENSAGENS_DO_CELULAR, PORTA_PADRAO, criarGateway } from './gateway.mjs'
+import {
+  CAMINHO_DA_MIDIA,
+  CAMINHO_DO_HERMES,
+  MENSAGENS_DO_CELULAR,
+  ROTAS_DE_MIDIA,
+  basePublicaValida,
+  hermesAutorizado,
+  tokenDoHermes,
+} from './hermes.mjs'
+import { criarClienteFenix } from './fenix.mjs'
 import { criarTelemetria } from './telemetria.mjs'
 import { garantirCertificado } from './tls.mjs'
 import { criarCentral } from './extensoes.mjs'
@@ -134,12 +143,27 @@ function configuredServers() {
 
 const MCP_SERVERS = configuredServers()
 
-/** Estado do gateway para a aba SISTEMAS. null: não há celular pareado. */
-let canalCelular = null
+/**
+ * Os sistemas à parte, para a aba SISTEMAS (docs/adr/0025): a F.Ê.N.I.X. e o
+ * H.E.R.M.E.S. O estado do H.E.R.M.E.S. vem da Fênix, que é quem o sobe.
+ */
+const canais = { fenix: null, hermes: null }
+/** Quantos celulares estão conectados agora pelo H.E.R.M.E.S. */
+let celularesConectados = 0
+const STATUS_DO_SERVICO = { ligado: 'connected', subindo: 'pending', caiu: 'failed' }
 
-/** A lista de servidores que vai à interface, com o canal do celular junto. */
-const comCanais = (servers) =>
-  canalCelular ? [...servers, { name: 'celular', status: canalCelular }] : servers
+const comCanais = (servers) => {
+  const extras = []
+  if (canais.fenix) extras.push({ name: 'fenix', status: canais.fenix })
+  const hermes = canais.hermes ?? (celularesConectados ? 'connected' : null)
+  if (hermes) extras.push({ name: 'celular', status: hermes })
+  return [...servers, ...extras]
+}
+/** Cada interface reenvia a própria lista quando um canal muda. */
+const ouvintesDosCanais = new Set()
+const canaisMudaram = () => {
+  for (const ouvir of ouvintesDosCanais) ouvir()
+}
 
 const SYSTEM_PROMPT = `Você é o A.P.O.L.O., Assistente Preditivo Operacional Logístico e Otimizado,
 assistente pessoal do Ricardo — mais precisamente, o agente de tarefas dele.
@@ -531,7 +555,28 @@ function corsFor(req) {
 // One HTTP server for both the speech proxy and the WebSocket upgrade.
 const https = await import('node:https')
 
+const TOKEN_DO_HERMES = tokenDoHermes()
+
 const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
+  // A mídia dos popups do celular, repassada pelo H.E.R.M.E.S. (docs/adr/0025).
+  // O token decide; o Origin seria o do Tailscale. Só as quatro rotas de leitura.
+  if ((req.url ?? '').startsWith(`${CAMINHO_DA_MIDIA}/`)) {
+    const resto = req.url.slice(CAMINHO_DA_MIDIA.length)
+    const publica = req.headers['x-hermes-base']
+    if (
+      req.method !== 'GET' ||
+      !hermesAutorizado(req.headers.authorization, TOKEN_DO_HERMES) ||
+      !ROTAS_DE_MIDIA.test(resto) ||
+      !basePublicaValida(publica)
+    ) {
+      res.writeHead(404)
+      return res.end()
+    }
+    delete req.headers.origin
+    req.url = resto
+    return handleRequest(req, res, publica)
+  }
+
   const origin = req.headers.origin
   if (origin && !originAllowed(origin)) {
     console.warn(`[apolo] requisição recusada da origem ${origin}`)
@@ -553,8 +598,8 @@ const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
         realtime: Boolean(realtimeKey()),
         provedor: voiceProvider(),
         modelo: realtimeModel(),
-        // O supervisor usa isto para saber se a interface voltou depois de uma troca.
-        interfaces: wss.clients.size,
+        // A F.Ê.N.I.X. usa isto para saber se a interface voltou depois de uma troca.
+        interfaces: interfacesDoPc.size,
       }),
     )
   }
@@ -728,6 +773,15 @@ const wss = new WebSocketServer({
   // 403 would look like the bridge simply isn't running.
   verifyClient: ({ origin, req }, done) => {
     const path = (req.url ?? '/').split('?')[0]
+    // O relé do celular (docs/adr/0025): sem origem de navegador, quem decide é o token.
+    if (path === CAMINHO_DO_HERMES) {
+      if (!hermesAutorizado(req.headers.authorization, TOKEN_DO_HERMES)) {
+        console.warn('[apolo] H.E.R.M.E.S. recusado: token inválido')
+        return done(false, 401, 'Unauthorized')
+      }
+      req.doHermes = true
+      return done(true)
+    }
     if (path !== '/' && path !== '/ws') {
       console.warn(`[apolo] websocket recusado no caminho ${path}`)
       return done(false, 403, 'Forbidden')
@@ -762,8 +816,10 @@ server.listen(PORT)
  * trabalho é longo e sobrevive a uma interface que recarrega. `process.send` só
  * existe quando a ponte nasce do `npm start`, que é onde mora o supervisor.
  */
+/** As interfaces do PC. O celular, que chega pelo H.E.R.M.E.S., fica de fora. */
+const interfacesDoPc = new Set()
 const broadcast = (msg) => {
-  for (const client of wss.clients) {
+  for (const client of interfacesDoPc) {
     if (client.readyState === client.OPEN) client.send(JSON.stringify(msg))
   }
 }
@@ -775,16 +831,98 @@ const central = criarCentral()
 /** A cópia do projeto que está no ar. O autodev e o sub-módulo git partem dela. */
 const REPO = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '')
 
+/**
+ * A F.Ê.N.I.X. (docs/adr/0025): troca de versão, rotinas e comandos. Só existe
+ * quando foi ela quem subiu a ponte, ou quando FENIX_URL aponta para uma.
+ */
+let estadoDaFenix = null
+const fenix = criarClienteFenix({
+  url: process.env.FENIX_URL?.trim(),
+  token: process.env.FENIX_TOKEN?.trim(),
+  ca: process.env.FENIX_CA?.trim() ? readFileSync(process.env.FENIX_CA.trim()) : tls.cert,
+  aoMudar: (conectada) => {
+    canais.fenix = conectada ? 'connected' : 'failed'
+    if (!conectada) canais.hermes = null
+    canaisMudaram()
+  },
+  aoReceber: (msg) => {
+    if (msg.type === 'versao:resultado') return autodev.resultado(msg)
+    if (msg.type === 'estado') {
+      estadoDaFenix = msg
+      const hermes = msg.servicos?.find((s) => s.nome === 'hermes')
+      canais.hermes = (hermes && STATUS_DO_SERVICO[hermes.status]) ?? null
+      if (msg.inicial) autodev.sincronizar(msg.versao)
+      canaisMudaram()
+      broadcast({ type: 'fenix', estado: resumoDaFenix() })
+    }
+  },
+})
+if (fenix) canais.fenix = 'pending'
+
+/** O que a interface precisa saber da Fênix: as propostas de comando em aberto. */
+const resumoDaFenix = () => ({
+  conectada: Boolean(fenix?.conectado()),
+  propostas: estadoDaFenix?.propostas ?? [],
+})
+
 const autodev = criarAutodev({
   repo: REPO,
   ligado: process.env.APOLO_AUTODEV === '1',
-  supervisor: process.send ? (msg) => process.send(msg) : null,
+  supervisor: fenix ? (msg) => fenix.enviar(msg) : null,
   avisar: (estado) => broadcast({ type: 'autodev', estado }),
-  interfaces: () => wss.clients.size,
+  interfaces: () => interfacesDoPc.size,
 })
-process.on('message', (msg) => {
-  if (msg?.type === 'autodev:resultado') autodev.resultado(msg)
-})
+
+/** Rotinas longas (o app do iPhone) levam até 45 minutos. */
+const PRAZO_DA_ROTINA_MS = 50 * 60_000
+
+/**
+ * Um pedido da interface à Fênix. Comando livre é ação com efeito: exige
+ * --writes, como o resto do gate, e a confirmação do Ricardo, conferida na
+ * interface; a Fênix ainda recusa se houver uma versão sem revisão no ar.
+ */
+async function pedirAFenix({ acao, nome, parametros, script, motivo, proposta }) {
+  if (!fenix) return { ok: false, mensagem: 'A Fênix não está rodando: suba o Apolo com npm start.' }
+  if (!fenix.conectado()) return { ok: false, mensagem: 'A Fênix está fora do ar agora.' }
+  const atualizar = async (r) => {
+    const estado = await fenix.pedir({ type: 'estado' })
+    if (estado.ok) {
+      estadoDaFenix = estado
+      broadcast({ type: 'fenix', estado: resumoDaFenix() })
+    }
+    return r
+  }
+  switch (acao) {
+    case 'estado': {
+      const r = await fenix.pedir({ type: 'estado' })
+      if (!r.ok) return r
+      const servicos = r.servicos.map((s) => `${s.nome}: ${s.status}${s.reinicios ? `, ${s.reinicios} reinícios` : ''}`)
+      const rotinas = r.rotinas.map((x) => {
+        const p = Object.entries(x.parametros ?? {}).map(([k, d]) => `${k} (${d})`)
+        return `${x.nome}: ${x.descricao}${p.length ? `; parâmetros: ${p.join(', ')}` : ''}`
+      })
+      return {
+        ok: true,
+        mensagem:
+          `Serviços: ${servicos.join('; ')}.\nRotinas: ${rotinas.join(' | ')}.\n` +
+          `Comandos livres: ${r.comandosLivres ? 'liberados, com confirmação' : 'desligados nesta partida'}.`,
+      }
+    }
+    case 'rotina':
+      return fenix.pedir({ type: 'rotina', nome, parametros }, PRAZO_DA_ROTINA_MS)
+    case 'comando':
+      if (!ALLOW_WRITES) {
+        return { ok: false, mensagem: 'Comandos livres exigem o A.P.O.L.O. iniciado com npm start -- --writes.' }
+      }
+      return atualizar(await fenix.pedir({ type: 'comando:propor', script, motivo }))
+    case 'confirmar':
+      return atualizar(await fenix.pedir({ type: 'comando:confirmar', proposta }, 5 * 60_000))
+    case 'cancelar':
+      return atualizar(await fenix.pedir({ type: 'comando:cancelar', proposta }))
+    default:
+      return { ok: false, mensagem: `Ação desconhecida: ${acao}.` }
+  }
+}
 
 console.log(`[apolo] ponte ouvindo em wss://localhost:${PORT}`)
 console.log(
@@ -840,12 +978,18 @@ const atender = (socket, { celular = false } = {}) => {
 
   // Answer the HUD straight away rather than making it wait for the agent's
   // first turn. Refined later by the real init message.
-  socket.send(
-    JSON.stringify({ type: 'ready', servers: comCanais(Object.keys(MCP_SERVERS)) }),
-  )
-  if (!celular) {
+  let ultimosServidores = Object.keys(MCP_SERVERS)
+  socket.send(JSON.stringify({ type: 'ready', servers: comCanais(ultimosServidores) }))
+  const reenviarCanais = () => send({ type: 'ready', servers: comCanais(ultimosServidores) })
+  if (celular) {
+    celularesConectados++
+    canaisMudaram()
+  } else {
+    interfacesDoPc.add(socket)
+    ouvintesDosCanais.add(reenviarCanais)
     socket.send(JSON.stringify({ type: 'autodev', estado: autodev.estado() }))
     socket.send(JSON.stringify({ type: 'preferencias', valores: preferencias.valores() }))
+    socket.send(JSON.stringify({ type: 'fenix', estado: resumoDaFenix() }))
   }
 
   /** Resolves the pending user message into the SDK's input generator. */
@@ -1196,6 +1340,7 @@ const atender = (socket, { celular = false } = {}) => {
               // O estado vai junto: é assim que a aba SISTEMAS sabe o que falhou.
               const servers = (msg.mcp_servers ?? []).map(({ name, status }) => ({ name, status }))
               const usable = servers.filter((s) => s.status !== 'needs-auth' && s.status !== 'failed')
+              ultimosServidores = servers
               send({ type: 'ready', servers: comCanais(servers) })
               console.log(`[apolo] ${usable.length} servidores MCP disponíveis`)
             }
@@ -1267,6 +1412,13 @@ const atender = (socket, { celular = false } = {}) => {
       broadcast({ type: 'preferencias', valores: preferencias.gravar(msg.valores) })
     }
 
+    if (msg.type === 'fenix' && typeof msg.acao === 'string') {
+      void pedirAFenix(msg)
+        .catch((err) => ({ ok: false, mensagem: err.message }))
+        // O id e o tipo da interface vêm por último: os da Fênix não podem cobri-los.
+        .then((r) => send({ ...r, type: 'fenix', resposta: msg.id }))
+    }
+
     if (msg.type === 'autodev' && typeof msg.acao === 'string') {
       void autodev
         .acao(msg.acao, { pedido: msg.pedido })
@@ -1299,7 +1451,13 @@ const atender = (socket, { celular = false } = {}) => {
 
   socket.on('close', () => {
     console.log(`[apolo] ${celular ? 'celular' : 'interface'} desconectado`)
-    if (celular) telemetria.evento('canal_aberto', Date.now() - conectouEm)
+    if (celular) {
+      telemetria.evento('canal_aberto', Date.now() - conectouEm)
+      celularesConectados--
+      canaisMudaram()
+    }
+    interfacesDoPc.delete(socket)
+    ouvintesDosCanais.delete(reenviarCanais)
     dispositivo.sair()
     closed = true
     deliver?.(null)
@@ -1307,30 +1465,7 @@ const atender = (socket, { celular = false } = {}) => {
   })
 }
 
-wss.on('connection', (socket) => atender(socket))
+wss.on('connection', (socket, req) => atender(socket, { celular: req.doHermes === true }))
 
-/**
- * O gateway só existe com token: quem nunca pareou um celular não abre porta
- * nenhuma. Uma falha aqui fica na aba SISTEMAS; o PC continua funcionando.
- */
-const tokenDoCelular = process.env.APOLO_GATEWAY_TOKEN?.trim()
-if (tokenDoCelular) {
-  try {
-    const gateway = criarGateway({
-      token: tokenDoCelular,
-      host: process.env.APOLO_GATEWAY_HOST?.trim() || undefined,
-      porta: Number(process.env.APOLO_GATEWAY_PORT ?? PORTA_PADRAO),
-      atender: (socket) => atender(socket, { celular: true }),
-      tls,
-      servirMidia: responder,
-    })
-    const porta = await gateway.ligar()
-    canalCelular = 'connected'
-    console.log(`[apolo] gateway do celular ouvindo na porta ${porta}`)
-  } catch (err) {
-    canalCelular = 'failed'
-    console.error(`[apolo] gateway do celular desligado: ${err.message}`)
-  }
-} else {
-  console.log('[apolo] gateway do celular desligado — rode npm run celular para parear')
-}
+if (!TOKEN_DO_HERMES) console.log('[apolo] sem celular pareado — rode npm run celular para parear')
+if (!fenix) console.log('[apolo] sem a F.Ê.N.I.X.: troca de versão e rotinas desligadas (suba com npm start)')

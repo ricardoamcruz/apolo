@@ -40,6 +40,16 @@ test('o que é plugável aparece à parte, com nome próprio, e não degrada o C
   assert.deepEqual([celular.nome, celular.tipo, celular.degradado], ['H.E.R.M.E.S.', 'conector', true])
 })
 
+test('a F.Ê.N.I.X. aparece com o próprio nome, e fora do ar fica degradada sozinha', () => {
+  const [core, fenix, hermes] = montarSistemas(
+    [{ nome: 'fenix', estado: 'failed' }, { nome: 'celular', estado: 'connected' }],
+    ok,
+  )
+  assert.equal(core.degradado, false)
+  assert.deepEqual([fenix.nome, fenix.degradado, fenix.problemas], ['F.Ê.N.I.X.', true, ['falhou']])
+  assert.deepEqual([hermes.nome, hermes.degradado], ['H.E.R.M.E.S.', false])
+})
+
 test('um conector qualquer faz parte do C.O.R.E., e não vira linha à parte', () => {
   const lista = montarSistemas([{ nome: 'outro', estado: 'connected' }], ok)
   assert.deepEqual(lista.map((s) => s.nome), ['C.O.R.E.'])
@@ -47,7 +57,14 @@ test('um conector qualquer faz parte do C.O.R.E., e não vira linha à parte', (
 
 test('o resumo narra o que está errado, ou que está tudo bem', () => {
   assert.match(resumoSistemas(montarSistemas([], ok)), /operacionais/)
-  assert.equal(resumoSistemas(montarSistemas([], { ponte: true, voz: false })), 'C.O.R.E. degradado: voz desconectada.')
+  assert.equal(resumoSistemas(montarSistemas([], { ponte: true, voz: false })), 'Core degradado: voz desconectada.')
+})
+
+test('em voz, os nomes dos sistemas são palavras, nunca siglas soletradas', () => {
+  assert.equal(resumoSistemas(montarSistemas([], ok)), 'Todos os sistemas operacionais, Core íntegro.')
+  const fenixFora = montarSistemas([{ nome: 'fenix', estado: 'failed' }], ok)
+  assert.equal(resumoSistemas(fenixFora), 'Fênix degradado: falhou.')
+  assert.equal(/[A-Z]\.[A-Z]\./.test(resumoSistemas(fenixFora)), false)
 })
 
 test('o alerta é o oposto da cor da interface, em qualquer cor dela', () => {

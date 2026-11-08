@@ -1,4 +1,5 @@
 import type { AutodevEstado } from './lib/autodev'
+import type { EstadoDaFenix, PropostaDaFenix } from './lib/bridge'
 import type { Servidor } from './lib/sistemas'
 import { CORES_DE_ESTADO, type Atividade } from './lib/estados'
 import { create } from 'zustand'
@@ -243,6 +244,11 @@ type State = {
   looking: string | null
   /** O autodesenvolvimento, como a ponte informa. Null antes de ela responder. */
   autodev: AutodevEstado | null
+  /**
+   * A F.Ê.N.I.X. (ADR 0025): se está no ar e os comandos que esperam confirmação.
+   * `vistaEm` é quando a proposta apareceu aqui: só uma fala depois disso confirma.
+   */
+  fenix: { conectada: boolean; propostas: (PropostaDaFenix & { vistaEm: number })[] }
   /** Transient status line during boot, e.g. the voice model download. */
   bootNote: string
   /** Cards currently on the display, newest last. */
@@ -260,6 +266,7 @@ type State = {
   setGestures: (on: boolean) => void
   setLooking: (why: string | null) => void
   setAutodev: (estado: AutodevEstado) => void
+  setFenix: (estado: EstadoDaFenix) => void
   setBootNote: (n: string) => void
   pushPanel: (p: Panel) => void
   clearPanels: () => void
@@ -307,6 +314,7 @@ export const useStore = create<State>((set, get) => ({
   gestures: false,
   looking: null,
   autodev: null,
+  fenix: { conectada: false, propostas: [] },
   panels: [],
   blades: [],
   focusedBlade: null,
@@ -318,6 +326,16 @@ export const useStore = create<State>((set, get) => ({
   setGestures: (gestures) => set({ gestures }),
   setLooking: (looking) => set({ looking }),
   setAutodev: (autodev) => set({ autodev }),
+  setFenix: ({ conectada, propostas }) =>
+    set((s) => {
+      const vistas = new Map(s.fenix.propostas.map((p) => [p.id, p.vistaEm]))
+      return {
+        fenix: {
+          conectada,
+          propostas: propostas.map((p) => ({ ...p, vistaEm: vistas.get(p.id) ?? Date.now() })),
+        },
+      }
+    }),
   setBootNote: (bootNote) => set({ bootNote }),
   // Three is as many as fits around the reactor without crowding it. Sticky
   // panels are exempt from the cull — the tool description promises they stay

@@ -26,6 +26,7 @@
 | 0022 | Ponto de extensão entre dispositivos | proposta |
 | 0023 | Comandos por voz para todas as teclas | proposta |
 | 0024 | Conversa contínua depois do nome | proposta |
+| 0025 | F.Ê.N.I.X., H.E.R.M.E.S. e A.P.O.L.O. como serviços independentes | proposta |
 
 ## Em aberto
 

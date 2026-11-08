@@ -23,8 +23,11 @@ import {
   watchUi,
   watchConnection,
   watchAutodev,
+  watchFenix,
   autodev,
+  fenix,
   bridgeServers,
+  type FenixResposta,
 } from './lib/bridge'
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
 import { startAnalyser, micLevel, retomarAnalyser } from './lib/audio'
@@ -51,7 +54,6 @@ import { handleBrowser } from './lib/navegador'
  */
 
 /** O Chrome só deixa tocar som depois de um gesto na página, salvo exceções. */
-const SOM_BLOQUEADO = 'O Chrome segurou o som até você tocar na página: clique ou aperte qualquer tecla.'
 
 /** Uma fala ouvida há menos que isto conta como alguém falando agora. */
 const FALA_RECENTE_MS = 2_000
@@ -108,6 +110,35 @@ function desligarModoMaos() {
  * precisa dessa diferença: anunciar "tela limpa" diante de uma tela que já
  * estava vazia soa como uma ordem que se perdeu no caminho.
  */
+/** "nivel=30, dias=2" vira { nivel: '30', dias: '2' }. A Fênix confere cada valor. */
+function lerParametros(texto: string): Record<string, string> {
+  const valores: Record<string, string> = {}
+  for (const par of texto.split(',')) {
+    const [chave, ...resto] = par.split('=')
+    if (chave?.trim() && resto.length) valores[chave.trim()] = resto.join('=').trim()
+  }
+  return valores
+}
+
+/** O que a voz recebe de volta: a mensagem e o fim da saída, onde fica o erro. */
+function textoDaFenix(r: FenixResposta) {
+  const saida = r.saida?.trim()
+  return saida ? `${r.mensagem}\nSaída:\n${saida.slice(-1500)}` : r.mensagem
+}
+
+/** Rotina e script rodando: a cor de script (lilás) até a Fênix responder. */
+async function comFenixTrabalhando(pedir: () => Promise<FenixResposta>) {
+  const s = useStore.getState()
+  s.setActiveTool('F.Ê.N.I.X.')
+  s.setAtividade('executando')
+  try {
+    return textoDaFenix(await pedir())
+  } finally {
+    useStore.getState().setActiveTool(null)
+    useStore.getState().setAtividade(null)
+  }
+}
+
 function clearScreenAndReport(what: 'all' | 'panels' | 'transcript'): string | null {
   const s = useStore.getState()
   const popups = what === 'transcript' ? 0 : s.panels.length + s.blades.length
@@ -234,6 +265,43 @@ export default function App() {
       }
       const { mensagem } = await autodev(acao, { pedido: String(args.pedido ?? '') })
       return { output: mensagem }
+    }
+
+    if (name === 'fenix') {
+      const acao = String(args.acao ?? '')
+      armIdle()
+      // Como no desenvolvimento: quem confirma um script é a fala do Ricardo.
+      if (acao === 'confirmar' || acao === 'cancelar') {
+        const proposta = s.fenix.propostas.at(-1)
+        if (!proposta) return { output: 'Não há comando da Fênix esperando confirmação.' }
+        if (acao === 'confirmar' && !(await ouviuConfirmacao(proposta.vistaEm))) {
+          return {
+            output:
+              'A confirmação não foi ouvida do Ricardo. Peça uma vez que ele diga "confirmo" ou ' +
+              'clique em Confirmar na tela. Nada foi rodado.',
+          }
+        }
+        return { output: await comFenixTrabalhando(() => fenix(acao, { proposta: proposta.id }, 6 * 60_000)) }
+      }
+      const extra = {
+        nome: String(args.nome ?? ''),
+        parametros: lerParametros(String(args.parametros ?? '')),
+        script: String(args.script ?? ''),
+        motivo: String(args.motivo ?? ''),
+      }
+      if (acao === 'comando') {
+        const r = await fenix('comando', extra)
+        if (!r.ok || !r.proposta) return { output: r.mensagem }
+        return {
+          output:
+            `Proposta na tela, ainda sem rodar: ${r.proposta.script}\n` +
+            'Diga em uma frase o que o script faz e pergunte se ele confirma.',
+        }
+      }
+      if (acao === 'rotina') {
+        return { output: await comFenixTrabalhando(() => fenix('rotina', extra, 50 * 60_000)) }
+      }
+      return { output: textoDaFenix(await fenix(acao, extra)) }
     }
 
     if (name === 'olhar_camera') {
@@ -512,6 +580,7 @@ export default function App() {
 
     // O trabalho leva minutos, então o resultado é anunciado quando chega. Só
     // o que começou com esta página aberta: o estado salvo não é notícia.
+    watchFenix((estado) => store.getState().setFenix(estado))
     let acompanhando = false
     let testeAvisado = false
     watchAutodev((estado) => {
@@ -630,9 +699,8 @@ export default function App() {
     await bridgeUp
     store.getState().setConnected(bridgeServers())
 
-    let rt: RealtimeSession
     try {
-      rt = await voiceUp
+      await voiceUp
     } catch (err) {
       store.getState().setPhase('dormant')
       store.getState().setError(err instanceof Error ? err.message : String(err))
@@ -642,7 +710,8 @@ export default function App() {
 
     store.getState().setPhase('listening')
     armIdle()
-    rt.prompt('Cumprimente o Ricardo em uma frase curta, em português, e diga que está pronto.')
+    // Sem cumprimento a cada partida: o bip diz que ele está pronto.
+    sfx.play('listen')
   }
 
   // -- palmas -----------------------------------------------------------------
@@ -688,16 +757,13 @@ export default function App() {
     void sfx.unlockAudio()
     retomarAnalyser()
     session.current?.retomar?.()
-    const s = store.getState()
-    if (s.error === SOM_BLOQUEADO) s.setError(null)
-    if (s.phase === 'offline') void powerOn()
+    if (store.getState().phase === 'offline') void powerOn()
   }
 
   // Liga sozinho ao abrir, como o app do celular: sem tela de INICIAR nem animação.
   useEffect(() => {
-    void powerOn().then(() => {
-      if (!sfx.somLiberado() && !store.getState().error) store.getState().setError(SOM_BLOQUEADO)
-    })
+    // Se o Chrome segurar o som, o primeiro clique ou tecla o libera, em silêncio.
+    void powerOn()
     window.addEventListener('pointerdown', liberarSom)
     window.addEventListener('keydown', liberarSom)
     return () => {

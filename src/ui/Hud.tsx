@@ -8,6 +8,7 @@ import { Effects } from './Effects'
 import { Pointer } from './Pointer'
 import { GestureGuide } from './GestureGuide'
 import { Autodev } from './Autodev'
+import { Fenix } from './Fenix'
 import { Sistemas } from './Sistemas'
 import { chamadaDisponivel } from '../lib/chamada'
 
@@ -298,6 +299,7 @@ export function Hud() {
       {ui.chrome.suggestions && <Suggestions />}
 
       <Autodev />
+      <Fenix />
 
       {error && <div className="error">{error}</div>}
 

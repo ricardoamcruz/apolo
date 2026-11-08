@@ -101,7 +101,8 @@ mundo vai ao Claude pela ferramenta `executar_tarefa`.
 | OpenAI Realtime — `gpt-realtime-2.1` | WebRTC (`src/lib/voz/openai.ts`) | pago por uso |
 
 Escolha com `APOLO_VOZ_PROVEDOR`. Ferramentas da voz: `executar_tarefa`,
-`olhar_camera`, `ajustar_interface`, `dormir`.
+`desenvolvimento`, `fenix`, `olhar_camera`, `ajustar_interface`, `diagnostico`,
+`ignorar_fala`, `dormir`.
 
 | Função | Como |
 |---|---|
@@ -113,7 +114,7 @@ Escolha com `APOLO_VOZ_PROVEDOR`. Ferramentas da voz: `executar_tarefa`,
 
 ```
 voz/chat → proposta → confirmação humana → worktree + Claude Code → checagens
-         → supervisor troca a branch e reinicia a ponte → EM TESTE (sem prazo)
+         → F.Ê.N.I.X. troca a branch e reinicia a ponte → EM TESTE (sem prazo)
                               ├─ aprovado: fase-x.x/nome, volta à main
                               └─ descartado, queda ou partida sem aprovação:
                                  apaga a autodev, volta à main
@@ -127,13 +128,28 @@ voz/chat → proposta → confirmação humana → worktree + Claude Code → ch
 | VS Code opcional | `bridge/autodev/editor.mjs` |
 | Agente (único ponto que conhece o provedor) | `bridge/autodev/agente.mjs` |
 | Ciclo do trabalho e checagens | `bridge/autodev/index.mjs` |
-| Troca, teste, aprovação e rollback | `scripts/supervisor.mjs` |
-| Rollback manual | `scripts/rollback.mjs` |
+| Troca, teste, aprovação e rollback | `fenix/src/versoes.mjs` (F.Ê.N.I.X.) |
+| Rollback manual | `fenix/fenix.mjs rollback` (`npm run rollback`) |
 | Ciclo real com Chrome mudo | `scripts/e2e/autodev.mjs` |
 | Chat e acompanhamento na tela | `src/ui/Autodev.tsx`, `src/lib/autodev.ts` |
 
-A ponte e o supervisor conversam pelo canal IPC do `npm start`. Fora dele, a
-alteração fica na branch e nada reinicia.
+A ponte fala com a F.Ê.N.I.X. pelo canal dela (`/fenix`, WSS com token). Sem a
+Fênix (`npm run bridge`), a alteração fica na branch e nada reinicia.
+
+## Serviços independentes (ADR 0025)
+
+```
+ iPhone ─WSS /canal─▶ H.E.R.M.E.S. ─WSS /hermes─▶ ponte do A.P.O.L.O. ─WSS /fenix─▶ F.Ê.N.I.X.
+```
+
+| Serviço | Pasta | Faz | Fala com |
+|---|---|---|---|
+| A.P.O.L.O. | `bridge/`, `src/`, `apps/mobile/` | voz, interface, agente | a Fênix por `FENIX_URL`; recebe o H.E.R.M.E.S. em `/hermes` |
+| F.Ê.N.I.X. | `fenix/` + `fenix.config.json` | sobe e guarda os serviços, versões, rotinas, scripts confirmados | quem a chama em `/fenix` |
+| H.E.R.M.E.S. | `hermes/` | porta do celular (8788) e relé até a ponte | a ponte por `HERMES_APOLO_URL` |
+
+Nenhum importa código do outro; cada pasta tem `package.json` próprio e os testes
+cobram isso. O protocolo de cada um está no README da pasta.
 
 ## Sub-módulo git (ADR 0014)
 

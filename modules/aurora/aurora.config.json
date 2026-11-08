@@ -1,0 +1,19 @@
+{
+  "noticias": {
+    "porTema": 3,
+    "temas": [
+      { "nome": "Tecnologia e IA", "busca": "inteligência artificial OR tecnologia" },
+      { "nome": "Economia e finanças", "busca": "economia OR mercado financeiro OR dólar" },
+      { "nome": "Games e cultura pop", "busca": "games OR videogame OR cultura pop" }
+    ]
+  },
+  "musica": {
+    "playlists": [],
+    "filtroDePlaylist": "rock",
+    "trechoSegundos": 35,
+    "volume": 18
+  },
+  "tarefas": {
+    "github": "ricardoamcruz/apolo"
+  }
+}

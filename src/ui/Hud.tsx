@@ -9,6 +9,7 @@ import { Pointer } from './Pointer'
 import { GestureGuide } from './GestureGuide'
 import { Autodev } from './Autodev'
 import { Fenix } from './Fenix'
+import { Tocador } from './Tocador'
 import { Sistemas } from './Sistemas'
 import { chamadaDisponivel } from '../lib/chamada'
 
@@ -300,6 +301,7 @@ export function Hud() {
 
       <Autodev />
       <Fenix />
+      <Tocador />
 
       {error && <div className="error">{error}</div>}
 

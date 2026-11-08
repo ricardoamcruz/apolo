@@ -138,6 +138,14 @@ export function lerConfig(arquivo, envDoTerminal = process.env) {
       ? { comando: bruto.instalar.comando, quando: bruto.instalar.quando.map(padrao) }
       : null,
     rotinas,
+    notificacoes:
+      bruto.notificacoes?.url && bruto.notificacoes?.token
+        ? {
+            url: bruto.notificacoes.url,
+            token: bruto.notificacoes.token,
+            ca: bruto.notificacoes.ca ? caminho(bruto.notificacoes.ca) : null,
+          }
+        : null,
     comandos: {
       prazoMs: Number(bruto.comandos?.prazoMs ?? 120_000),
       validadeMs: Number(bruto.comandos?.validadeMs ?? 300_000),

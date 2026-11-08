@@ -1,5 +1,8 @@
 import type { AutodevEstado } from './lib/autodev'
-import type { EstadoDaFenix, PropostaDaFenix } from './lib/bridge'
+import type { EstadoDaFenix, MusicaDoBomDia, PropostaDaFenix } from './lib/bridge'
+
+/** A faixa tocando no canto. `posicao` é onde ela está, em segundos, para continuar no YouTube. */
+export type MusicaNoCanto = MusicaDoBomDia & { tocando: boolean; posicao: number }
 import type { Servidor } from './lib/sistemas'
 import { CORES_DE_ESTADO, type Atividade } from './lib/estados'
 import { create } from 'zustand'
@@ -249,6 +252,10 @@ type State = {
    * `vistaEm` é quando a proposta apareceu aqui: só uma fala depois disso confirma.
    */
   fenix: { conectada: boolean; propostas: (PropostaDaFenix & { vistaEm: number })[] }
+  /** A faixa do bom dia no tocador do canto (RF-55). Null quando nada toca. */
+  musica: MusicaNoCanto | null
+  /** Pedido de comando ao tocador: muda o `em` para valer de novo. */
+  comandoDaMusica: { acao: 'pausar' | 'tocar' | 'parar'; em: number } | null
   /** Transient status line during boot, e.g. the voice model download. */
   bootNote: string
   /** Cards currently on the display, newest last. */
@@ -267,6 +274,8 @@ type State = {
   setLooking: (why: string | null) => void
   setAutodev: (estado: AutodevEstado) => void
   setFenix: (estado: EstadoDaFenix) => void
+  setMusica: (m: MusicaNoCanto | null) => void
+  comandarMusica: (acao: 'pausar' | 'tocar' | 'parar') => void
   setBootNote: (n: string) => void
   pushPanel: (p: Panel) => void
   clearPanels: () => void
@@ -315,6 +324,8 @@ export const useStore = create<State>((set, get) => ({
   looking: null,
   autodev: null,
   fenix: { conectada: false, propostas: [] },
+  musica: null,
+  comandoDaMusica: null,
   panels: [],
   blades: [],
   focusedBlade: null,
@@ -326,6 +337,8 @@ export const useStore = create<State>((set, get) => ({
   setGestures: (gestures) => set({ gestures }),
   setLooking: (looking) => set({ looking }),
   setAutodev: (autodev) => set({ autodev }),
+  setMusica: (musica) => set({ musica }),
+  comandarMusica: (acao) => set({ comandoDaMusica: { acao, em: Date.now() } }),
   setFenix: ({ conectada, propostas }) =>
     set((s) => {
       const vistas = new Map(s.fenix.propostas.map((p) => [p.id, p.vistaEm]))

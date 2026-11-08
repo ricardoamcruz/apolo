@@ -52,6 +52,8 @@ export const SENSIVEIS = [
   // O celular: quem muda isto decide quem fala com o agente de fora.
   /^hermes\//,
   /^bridge\/hermes\.mjs$/,
+  // Módulos de domínio: leem a agenda e as contas do Ricardo (docs/03-modulos.md).
+  /^modules\//,
   // A criptografia da conexão e a tomada entre dispositivos.
   /^bridge\/tls\.mjs$/,
   /^bridge\/extensoes\.mjs$/,

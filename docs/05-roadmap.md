@@ -2,6 +2,43 @@
 
 Marque `[x]` ao concluir e atualize o status em `01-requisitos.md`.
 
+## Pendências em etapas (organizadas em 08/11/2026)
+O que ficou aberto depois da `fase-2.7/alvorada`, na ordem sugerida. Cada etapa
+vira uma branch nova a partir da `main` (ADR 0016).
+
+### Etapa 1 — Validar o que já está pronto (sem código novo, só ajustes)
+- [ ] **Bom dia por voz (RF-55):** dizer "bom dia" no PC; ajustar volume e duração do trecho em `modules/aurora/aurora.config.json`
+- [ ] **App do iPhone pelo H.E.R.M.E.S.:** conversar normalmente pelo relé (ADR 0025)
+- [ ] **Fênix por voz:** um script bash com confirmação (`--writes`) e uma rotina respondendo depois de rodar (correção do id da resposta)
+- [ ] **Notificações (RF-66):** o sentido iPhone → Mac pelo tópico `<tópico>-mac`; o botão **Descartar** numa versão em teste
+- [ ] **Autodesenvolvimento com o agente real (RF-15):** pedido por voz, conferência com `npm test`, teste ao vivo, aprovar e abrir o PR
+- [ ] **Git (RF-17):** push e `gh pr create` no Mac do Ricardo
+- [ ] **Navegador (RF-19):** abrir abas com os pop-ups liberados
+- [ ] **Espera natural (6.a):** conversa contínua com a TV ligada e alguém conversando ao lado
+- [ ] Revogar a senha de app da Microsoft, que não funciona, e apagar `APOLO_OUTLOOK_SENHA_APP` do `.env.local`
+
+### Etapa 2 — Identidade visual inspirada em Horizon (ADR 0013)
+- [ ] Página de comparação com 2 ou 3 paletas (ciano atual × âmbar sobre azul profundo) e propostas de núcleo 3D original; **a escolha é do Ricardo**
+- [ ] Implementar a paleta e o núcleo escolhidos
+- [ ] Trazer as fontes para o repositório e fechar o CSP de fontes
+
+### Etapa 3 — Contexto e comunicação
+- [ ] **Contexto compartilhado (RF-18):** decidir entre branch local e arquivo de contexto (ADR nova); é o único item do backlog que não começou
+- [ ] O A.P.O.L.O. e a A.U.R.O.R.A. pedindo notificações ao H.E.R.M.E.S. (hoje só a Fênix pede)
+- [ ] Aviso ditado por voz no app do iPhone indo para a central do Mac
+- [ ] Bom dia também no celular
+- [ ] Temas de notícia editáveis por voz ("tira games do bom dia")
+- [ ] Servidor ntfy próprio, para o texto das notificações não passar por terceiros
+
+### Etapa 4 — Bloqueada por decisão do Ricardo
+- [ ] **E-mails e Microsoft To Do no bom dia:** exigem app registrado na Microsoft, que exige diretório no Azure com cartão (ADR 0026)
+- [ ] **Push nativo no app e CarPlay:** exigem a conta paga da Apple (ADR 0020 e 0027)
+- [ ] **Avisos pelo WhatsApp (RF-65):** P.O.C. do CallMeBot; o ntfy já cobre os avisos, então só se ele ainda quiser o WhatsApp
+- [ ] **Voz própria:** ferramenta a definir
+
+### Etapa 5 — Fase 1 — Core
+- [ ] Ver a seção "Fase 1 — Core" abaixo: `core/` em TypeScript, `Provider`, host de módulos (com a fachada MCP da A.U.R.O.R.A.)
+
 ## Próxima versão — backlog (registrado em 03/11/2026)
 Os 6 pontos que o Ricardo definiu para a próxima versão. Eles têm prioridade
 sobre a ordem das fases abaixo.
@@ -9,7 +46,7 @@ sobre a ordem das fases abaixo.
 - [x] **1. Limpar a tela (RF-16):** "limpe a bagunça", "tira isso da tela" e "fecha esses popups" fecham os painéis e os artigos abertos sem apagar a conversa; "apague o histórico" e "limpe tudo" são os outros escopos, e ele informa o que saiu ou que a tela já estava limpa (03/11/2026). Falta validar por voz no navegador
 - [ ] **2. Sub-módulo git (RF-17):** o A.P.O.L.O. faz commits e gera pull requests para a própria `main` — **em andamento**: ferramentas `git_*` implementadas (ADR 0014, 05/11/2026), com commit só fora da `main`, conferência de segredos, sem merge e sem `--force`, testes offline em `npm run test:git`; falta validar na máquina do Ricardo o push no `origin` e o `gh pr create`
 - [ ] **3. Contexto compartilhado (RF-18):** avaliar salvar informações importantes em uma branch local ou em um arquivo de contexto compartilhado, para uso futuro
-- [ ] **4. Gerar código para si próprio (RF-15):** ciclo de teste com aprovação (ADR 0015, 06/11/2026), verificado de ponta a ponta com agente falso em `npm run test:autodev:e2e`; confirmar sem proposta ativa agora é recusado com a causa real, sem pedir de novo um botão que não existe (06/11/2026); falta validar por voz com o agente real
+- [ ] **4. Gerar código para si próprio (RF-15):** ciclo de teste com aprovação (ADR 0015, 06/11/2026), verificado de ponta a ponta com agente falso em `npm run test:autodev:e2e`; confirmar sem proposta ativa agora é recusado com a causa real, sem pedir de novo um botão que não existe (06/11/2026); conferência com `npm test` e PR oferecido ao aprovar (08/11/2026); falta validar por voz com o agente real
   - [ ] **4.a** Essa habilidade funciona em conjunto com a de se auto-reiniciar — **em andamento**: quem reinicia agora é a F.Ê.N.I.X., um serviço à parte que sobe a versão nova, guarda os serviços e roda as rotinas (RF-64, ADR 0025, 08/11/2026); verificado em `npm run test:autodev:e2e`; falta validar por voz
   - [ ] **4.b** Se algo der errado, o rollback automático entra em ação — **em andamento**: a F.Ê.N.I.X. volta à `main` numa queda, na saúde falhando ou numa atualização que não sobe (ADR 0025); falta validar por voz
 - [ ] **5. Navegador (RF-19):** detectar em qual navegador e sistema está rodando, abrir novas abas e transformar uma popup aberta em aba — **em andamento**: ferramentas `browser_*` implementadas (ADR 0012, 04/11/2026); falta validar no navegador do Mac, liberar pop-ups para o endereço da interface e decidir se vale criar aba pela extensão do Claude quando o bloqueador recusar
@@ -22,6 +59,8 @@ sobre a ordem das fases abaixo.
 
 ### Depois da próxima versão
 - [ ] **F.Ê.N.I.X. (RF-64):** guardiã, versões, atualizar, rotinas e scripts confirmados — **em andamento** (ADR 0025, 08/11/2026); falta validar o celular pelo H.E.R.M.E.S. no aparelho, um script por voz e a rotina `app_iphone`
+- [ ] **Bom dia com rock (RF-55):** A.U.R.O.R.A. com trecho do YouTube Music, agenda (.ics), notícias por tema e GitHub — **em andamento** (ADR 0026, 08/11/2026); falta e-mail e To Do (exigem app na Microsoft) e validar por voz
+- [ ] **Notificações push (RF-66):** central no H.E.R.M.E.S. (Mac e ntfy), botões de resposta e avisos da F.Ê.N.I.X. — **em andamento** (ADR 0027, 08/11/2026); falta validar no iPhone
 - [ ] **Avisos pelo WhatsApp (RF-65):** P.O.C. com o CallMeBot (`docs/poc/0001-callmebot-whatsapp.md`)
 
 ## Fase 0 — Fundação

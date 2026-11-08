@@ -58,6 +58,13 @@ confiável que cresce por **módulos plugáveis**. Visão e princípios em
   A.P.O.L.O. escreveu e volta à `main` se quebrar. Também roda as rotinas da
   máquina (testes, build, atualizar, app do iPhone, volume) e scripts bash que
   você confirmar.
+- **Notificações:** o H.E.R.M.E.S. entrega avisos na central do macOS e no iPhone pelo
+  app gratuito ntfy, com botões de resposta. A Fênix avisa quando uma versão vai
+  para o ar, volta à segura ou um serviço cai. Ver
+  [ADR 0027](docs/adr/0027-notificacoes-pelo-hermes.md).
+- **A A.U.R.O.R.A.** é o bom dia. A cada "bom dia", toca um trecho de rock das
+  suas playlists do YouTube, baixinho, enquanto ele resume a agenda, as notícias dos
+  seus temas e o GitHub. Ver [ADR 0026](docs/adr/0026-aurora-bom-dia.md).
 - **A.P.O.L.O., F.Ê.N.I.X. e H.E.R.M.E.S. são independentes:** pastas próprias,
   nenhum importa código do outro, e conversam só por WebSocket com TLS e token,
   então podem ir para repositórios e máquinas diferentes. Ver
@@ -93,6 +100,7 @@ apolo/
 │                       lados do A.P.O.L.O. na F.Ê.N.I.X. e no H.E.R.M.E.S.
 ├── fenix/              F.Ê.N.I.X.: guardiã, versões, rotinas (serviço à parte)
 ├── hermes/             H.E.R.M.E.S.: a porta do celular (serviço à parte)
+├── modules/aurora/     A.U.R.O.R.A.: o bom dia com rock e o resumo do dia
 ├── fenix.config.json   o que a F.Ê.N.I.X. sabe do A.P.O.L.O.
 ├── apps/mobile/        app do iPhone (Expo); ios/ é gerado
 ├── scripts/            preparar, setup, celular, https, iphone e os testes
@@ -181,8 +189,10 @@ processando, lilás executando script, vermelho codificando e azul claro em espe
 | `npm run logs:celular` | resume as medições do app (`-- 7` para sete dias) |
 | `npm run rollback` | com tudo parado, descarta a alteração em teste e volta à `main` |
 | `npm run hermes` | só o H.E.R.M.E.S. (a F.Ê.N.I.X. já o sobe) |
+| `npm run aurora:autorizar` | uma vez: autoriza a leitura das suas playlists do YouTube |
+| `npm run aurora:resumo` | mostra o texto do bom dia de hoje |
 | `npm run lint` · `npm run build` | oxlint · checagem de tipos e build |
-| `npm test` | todos os testes: `scripts/`, `fenix/test/` e `hermes/test/` |
+| `npm test` | todos os testes: `scripts/`, `fenix/test/`, `hermes/test/` e `modules/aurora/test/` |
 | `npm run test:fenix` · `npm run test:hermes` | só os da F.Ê.N.I.X. ou do H.E.R.M.E.S. |
 | `npm run test:autodev:e2e` | ciclo real do autodesenvolvimento, com Chrome headless mudo |
 
@@ -210,9 +220,9 @@ processando, lilás executando script, vermelho codificando e azul claro em espe
 | [`docs/04-base-jarvis.md`](docs/04-base-jarvis.md) | o código herdado do JARVIS |
 | [`docs/05-roadmap.md`](docs/05-roadmap.md) | fases e backlog da próxima versão |
 | [`docs/06-ambiente-mobile.md`](docs/06-ambiente-mobile.md) | Xcode, iPhone, Tailscale e o app |
-| [`docs/adr/`](docs/adr/README.md) | as 25 decisões de arquitetura (ADRs) |
+| [`docs/adr/`](docs/adr/README.md) | as 27 decisões de arquitetura (ADRs) |
 | [`docs/poc/`](docs/poc/) | provas de conceito a testar, como avisos pelo WhatsApp |
-| [`fenix/README.md`](fenix/README.md) · [`hermes/README.md`](hermes/README.md) | o protocolo e o config de cada serviço |
+| [`fenix/README.md`](fenix/README.md) · [`hermes/README.md`](hermes/README.md) · [`modules/aurora/README.md`](modules/aurora/README.md) | o protocolo e o config de cada serviço |
 | [`AGENTS.md`](AGENTS.md) | regras para agentes de IA que trabalham neste repositório |
 
 ## Histórico de versões
@@ -222,7 +232,8 @@ Cada versão é uma branch `fase-x.y/<nome>` integrada à `main` por pull reques
 
 | Versão | Data | O que entrou |
 |---|---|---|
-| `fase-2.6/das-cinzas` | em revisão | F.Ê.N.I.X., a guardiã: `npm start` passa a ser ela, que sobe e reinicia ponte, interface e H.E.R.M.E.S., troca de versão com rollback, atualiza a `main`, roda rotinas (testes, build, app do iPhone, volume) e scripts bash confirmados. O canal do celular vira o serviço H.E.R.M.E.S. Os três independentes, só pela rede (ADR 0025). Nota técnica da P.O.C. de avisos pelo WhatsApp |
+| `fase-2.7/alvorada` | em revisão | A.U.R.O.R.A., o bom dia: a cada "bom dia", um trecho de rock das playlists do YouTube toca baixinho num tocador no canto, com pausa, e "continua a playlist" abre no YouTube Music, enquanto ele resume a agenda (.ics do Outlook), as notícias dos temas escolhidos e o GitHub (ADR 0026, RF-55). O autodesenvolvimento confere com `npm test` antes de ir ao ar e oferece o pull request ao aprovar. Notificações push pelo H.E.R.M.E.S.: central do macOS e iPhone pelo ntfy, com botões de resposta, e avisos da Fênix (ADR 0027, RF-66) |
+| `fase-2.6/das-cinzas` (#10) | 08/11/2026 | F.Ê.N.I.X., a guardiã: `npm start` passa a ser ela, que sobe e reinicia ponte, interface e H.E.R.M.E.S., troca de versão com rollback, atualiza a `main`, roda rotinas (testes, build, app do iPhone, volume) e scripts bash confirmados. O canal do celular vira o serviço H.E.R.M.E.S. Os três independentes, só pela rede (ADR 0025). Nota técnica da P.O.C. de avisos pelo WhatsApp |
 | `fase-2.5/maos-livres` (#9) | 08/11/2026 | O canal do celular aparece na aba SISTEMAS como H.E.R.M.E.S., e servidores do Claude Code que não servem ao A.P.O.L.O. ficam de fora (`APOLO_MCP_IGNORAR`). Conversa contínua por 20 s depois do nome, sem a TV segurar a conversa aberta; o nome acorda também no iPhone (ADR 0024). A página do PC liga sozinha, sem a tela de INICIAR e a animação de carregamento. No iPhone, a voz desliga ao minimizar o app. Todas as teclas também por voz: popups um a um, modo mãos, diagnóstico completo, cancelar tarefa e explicar os comandos (RF-20, ADR 0023). `]` e `[` passam por todos os popups. Acordar pelo nome ficou mais rápido. README técnico |
 | `fase-2.4/apolo-no-bolso` (#8) | 07/11/2026 | App do iPhone por voz, com sinal de escuta e palavras ouvidas; telemetria no Mac; voz em segundo plano; cor por atividade na web e no app; HTTPS em toda conexão; ponto de extensão entre dispositivos (ADRs 0019 a 0022) |
 | `fase-2.3/voz-e-verniz` (#7) | 06/11/2026 | Em Espera acordando pelo nome, `ignorar_fala` para não se intrometer, aba SISTEMAS com o C.O.R.E., ponte e chat só quando pedidos (ADRs 0017 e 0018) |

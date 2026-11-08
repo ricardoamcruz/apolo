@@ -38,7 +38,7 @@ Fase: ver `05-roadmap.md`.
 | RF-52 | Briefing diário (agenda + e-mails importantes + pendências) | S | 3 |
 | RF-53 | Finanças (consulta e alertas; nunca movimentar dinheiro sem confirmação) | C | 4 |
 | RF-54 | Automação residencial (módulo construído pelo usuário) | C | 4 |
-| RF-55 | **Intro de boas-vindas personalizada**: ao ativar depois de muitas horas fora (ex.: ao acordar, ou ao voltar à noite), tocar um trecho de rock das playlists do Ricardo (Spotify, YouTube Music, Apple Music) junto com a saudação falada. Frequência ainda a definir; até lá, só a voz | C | 3–4 |
+| RF-55 | **Intro de boas-vindas personalizada**: ao ativar depois de muitas horas fora (ex.: ao acordar, ou ao voltar à noite), tocar um trecho de rock das playlists do Ricardo junto com a saudação falada. Decidido em 08/11/2026: a cada "bom dia", trecho do YouTube Music baixinho por baixo da voz e o resumo do dia (agenda, notícias por tema, GitHub; e-mail e To Do pendentes) pela A.U.R.O.R.A. (ADR 0026) | C | 2 | em andamento |
 | RF-56 | **Aba SISTEMAS**: sob demanda (tecla D ou voz), mostra o C.O.R.E. e, no futuro, cada skill, sub-sistema plugável, extensão, API e conector; o que estiver degradado usa a cor mais contrastante com a da interface no momento, e o modelo narra o estado | M | 1 em diante | em andamento |
 | RF-57 | **Exibição sob demanda**: ponte e chat ocultos por padrão, exibidos por voz (inclusive "modo detalhado"); a escolha persiste ao religar | M | 1 | em andamento |
 | RF-58 | **Sinal de escuta no celular**: círculo e partículas reagem à voz da pessoa, com rótulo de estado e as palavras ouvidas na tela por alguns segundos | M | 2 | feito (07/11/2026) |
@@ -48,6 +48,7 @@ Fase: ver `05-roadmap.md`.
 | RF-62 | **HTTPS em toda conexão** entre servidor, web e app (ADR 0021) | M | 2 | feito (07/11/2026) |
 | RF-63 | **Comandos entre dispositivos** (mobile, servidor e web): ponto de extensão pronto; a extensão vem depois (ADR 0022) | S | 3 | em andamento |
 | RF-64 | **F.Ê.N.I.X., a guardiã**: sobe e mantém no ar a ponte, a interface e o H.E.R.M.E.S. (reinicia se cair ou travar), coloca no ar a versão nova e volta à estável se quebrar, atualiza a `main`, roda rotinas (testes, build, diagnóstico, app do iPhone, volume) e scripts bash só com confirmação; A.P.O.L.O., F.Ê.N.I.X. e H.E.R.M.E.S. independentes e comunicáveis entre máquinas (ADR 0025) | S | 2 | em andamento |
+| RF-66 | **Notificações push**: o H.E.R.M.E.S. entrega avisos dos serviços na central do macOS e no iPhone (ntfy), com botões de resposta de uso único, e leva ao Mac o que o Ricardo publicar pelo celular; a F.Ê.N.I.X. avisa versões, quedas e rotinas longas (ADR 0027) | S | 2 | em andamento |
 | RF-65 | **Avisos pelo WhatsApp**: testar o CallMeBot como canal gratuito de avisos curtos ao Ricardo, só para o número dele (`docs/poc/0001-callmebot-whatsapp.md`) | C | 3 | proposto |
 
 ## Requisitos não funcionais

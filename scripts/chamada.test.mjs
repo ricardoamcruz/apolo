@@ -43,3 +43,11 @@ test('o nome sozinho acorda antes de a frase fechar; com pedido, espera fechar',
   assert.equal(decidirChamada('o Apolo', false), 'nao')
   assert.equal(decidirChamada('o Apolo travou', true), 'nao')
 })
+
+test('bom dia acorda com a rotina do bom dia, mesmo sem outro pedido', async () => {
+  const { deuBomDia, chamouPeloNome } = await import('../src/lib/chamada.ts')
+  assert.equal(deuBomDia('Bom dia, Apolo!'), true)
+  assert.equal(deuBomDia('Apolo, bom dia'), true)
+  assert.equal(deuBomDia('boa tarde Apolo'), false)
+  assert.deepEqual(chamouPeloNome('bom dia apolo'), { chamou: true, pedido: '' })
+})

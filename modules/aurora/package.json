@@ -1,0 +1,11 @@
+{
+  "name": "aurora",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A.U.R.O.R.A. — o bom dia: trecho de rock do YouTube e o resumo do dia (agenda, notícias, tarefas).",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "aurora": "aurora.mjs" },
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node --test test/" }
+}

@@ -174,6 +174,37 @@ export async function autodev(acao: string, extra?: { pedido?: string }): Promis
   })
 }
 
+/** A faixa do bom dia (RF-55): o player oficial do YouTube, em volume baixo. */
+export type MusicaDoBomDia = {
+  id: string
+  titulo: string
+  canal?: string
+  inicio: number
+  trechoSegundos: number
+  volume: number
+  /** A playlist de onde ela veio, para continuar no YouTube Music. */
+  playlist?: string
+}
+export type BomDiaResposta = { ok: boolean; texto?: string; musica?: MusicaDoBomDia | null; mensagem?: string }
+const respostasDaAurora = new Map<string, (r: BomDiaResposta) => void>()
+
+/** Pede o bom dia à A.U.R.O.R.A., pela ponte. */
+export async function bomDia(): Promise<BomDiaResposta> {
+  const ws = await connect()
+  const id = `a${++askSeq}`
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      respostasDaAurora.delete(id)
+      resolve({ ok: false, mensagem: 'A ponte não respondeu a tempo.' })
+    }, 30_000)
+    respostasDaAurora.set(id, (r) => {
+      clearTimeout(timer)
+      resolve(r)
+    })
+    ws.send(JSON.stringify({ type: 'aurora', id }))
+  })
+}
+
 /** Um script bash que a F.Ê.N.I.X. só roda com a confirmação do Ricardo (ADR 0025). */
 export type PropostaDaFenix = { id: string; script: string; motivo: string }
 export type EstadoDaFenix = { conectada: boolean; propostas: PropostaDaFenix[] }
@@ -340,6 +371,9 @@ function dispatch(ws: WebSocket) {
         respostas.get(msg.resposta)?.({ ok: msg.ok === true, mensagem: msg.mensagem ?? '' })
         respostas.delete(msg.resposta)
       }
+    } else if (msg.type === 'aurora' && msg.resposta) {
+      respostasDaAurora.get(msg.resposta)?.(msg as unknown as BomDiaResposta)
+      respostasDaAurora.delete(msg.resposta)
     } else if (msg.type === 'fenix') {
       if (msg.estado) onFenix?.(msg.estado as unknown as EstadoDaFenix)
       if (msg.resposta) {

@@ -30,6 +30,17 @@ npm test   # dentro desta pasta: node --test test/
 - Sem `HERMES_APOLO_TOKEN`, o token é `HMAC-SHA256(token do celular, "hermes.apolo")`
   em base64url, que os dois lados calculam.
 
+## Notificações (docs/adr/0027)
+
+- Serviços conectam em `wss://127.0.0.1:8792/notificacoes` com `Authorization: Bearer
+  <APOLO_NOTIFICAR_TOKEN>` e mandam `{ type: 'notificar', id, titulo, texto,
+  prioridade: 'baixa'|'normal'|'alta', botoes: [{ rotulo, acao }] }`. Recebem
+  `notificar:resposta` e, se ele tocar num botão, `{ type: 'notificacao:acao',
+  notificacao, acao }`.
+- Entrega na central do macOS e no tópico do ntfy. Cada botão é
+  `<HERMES_URL_PUBLICA>/acao/<token>`, de uso único, com prazo de 1 h.
+- O que for publicado em `<tópico>-mac` no ntfy aparece na central do macOS.
+
 ## Ambiente
 
 | Variável | Padrão | Para quê |
@@ -40,3 +51,8 @@ npm test   # dentro desta pasta: node --test test/
 | `HERMES_APOLO_URL` | `wss://localhost:8787` | o assistente |
 | `HERMES_APOLO_TOKEN` | derivado | o token que o assistente espera |
 | `HERMES_APOLO_CA` | — | a autoridade do certificado do assistente |
+| `HERMES_NOTIFICAR_TOKEN` | `APOLO_NOTIFICAR_TOKEN` | quem pode pedir notificações |
+| `HERMES_NOTIFICAR_PORTA` | 8792 | a porta local dos serviços |
+| `HERMES_NTFY_TOPICO` | `APOLO_NTFY_TOPICO` | o tópico do ntfy (segredo); entrada em `<tópico>-mac` |
+| `HERMES_NTFY_URL` | `https://ntfy.sh` | o servidor do ntfy |
+| `HERMES_URL_PUBLICA` | `APOLO_HERMES_URL_PUBLICA` | o endereço do H.E.R.M.E.S. no Tailscale, para os botões |

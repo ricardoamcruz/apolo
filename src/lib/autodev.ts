@@ -19,6 +19,10 @@ export type AutodevEstado = {
     tipo: 'aprovado' | 'revertido' | 'revisao' | 'falhou' | 'cancelado' | 'recusado'
     mensagem: string
     branch?: string
+    /** O título do commit aprovado, que vira o título do pull request. */
+    titulo?: string
+    /** O endereço do pull request, depois de aberto. */
+    pr?: string
   }
 }
 

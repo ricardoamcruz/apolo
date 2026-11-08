@@ -83,6 +83,8 @@ const ambiente = {
   FENIX_PASTA: pastaDaFenix,
   FENIX_PORTA: '18790',
   APOLO_AUTODEV_VSCODE: '0',
+  // O teste de ponta a ponta já é o ciclo inteiro: rodar npm test em cada cenário só o alongaria.
+  APOLO_AUTODEV_TESTES: '0',
 }
 
 let apolo = null

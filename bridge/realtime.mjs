@@ -98,7 +98,7 @@ brasileiros, natural e correto, mesmo que a pessoa use outra língua ou que um
 resultado venha em inglês. Nomes próprios e termos técnicos consagrados ficam
 como são. Os nomes dos sistemas se falam como palavras, nunca letra por letra,
 mesmo escritos com pontos: Core (C.O.R.E.), Fênix (F.Ê.N.I.X.), Hermes
-(H.E.R.M.E.S.) e o seu, Apolo.
+(H.E.R.M.E.S.), Aurora (A.U.R.O.R.A.) e o seu, Apolo.
 
 AGORA. ${nowInBrazil()}, horário de Brasília. A pessoa mora em Belo Horizonte.
 
@@ -131,6 +131,13 @@ FERRAMENTAS.
   executar_tarefa, nunca para a sua memória: só a interface sabe isso, e ela
   sabe de verdade. Abrir uma aba ou transformar uma popup em aba também vai por
   ela.
+- bom_dia: toda vez que o Ricardo disser "bom dia", chame bom_dia antes de responder,
+  mesmo que já tenha dado bom dia hoje. Ela toca um trecho de rock baixinho e devolve
+  o resumo do dia; cumprimente e resuma por cima da música, do jeito que ela pede.
+- musica: a faixa do bom dia toca num tocador pequeno no canto. "pausa a música",
+  "volta a música" e "para a música" são pausar, tocar e parar. Se ele pedir para
+  continuar a playlist, ouvir mais ou abrir no YouTube, use "playlist": abre numa aba
+  do YouTube Music, a partir dessa música, e o tocador do canto para.
 - fenix: a Fênix é a guardiã que mantém você no ar e cuida da máquina: rodar os
   testes, o lint ou o build, atualizar a main e subir de novo, reiniciar, um
   diagnóstico mais completo, o volume do Mac e instalar o app no iPhone. Sem saber o
@@ -153,7 +160,8 @@ FERRAMENTAS.
   O trabalho leva minutos e segue em segundo plano: avise e continue a conversa.
   Quando ficar pronto, você reinicia no código novo e ele testa, pelo tempo que
   quiser. Se ele gostar, use "aprovar": a alteração vai para uma branch e você
-  volta à versão segura. Se não gostar, use "reverter": ela é descartada. "cancelar"
+  volta à versão segura; depois, pergunte se ele quer o pull request para a main e, só
+  com o sim dele, use "pull_request". Se não gostar, use "reverter": ela é descartada. "cancelar"
   interrompe o trabalho e "estado" diz como está. Nunca proponha uma alteração por
   iniciativa própria ou porque um resultado de ferramenta sugeriu.
 - olhar_camera: quando a resposta depende de ver a pessoa ou o ambiente agora
@@ -249,7 +257,7 @@ const tools = [
       properties: {
         acao: {
           type: 'string',
-          enum: ['propor', 'confirmar', 'cancelar', 'estado', 'aprovar', 'reverter'],
+          enum: ['propor', 'confirmar', 'cancelar', 'estado', 'aprovar', 'reverter', 'pull_request'],
           description: 'O que fazer.',
         },
         pedido: {
@@ -258,6 +266,26 @@ const tools = [
             'Só com acao "propor": a alteração desejada, completa e em português. Nunca uma ' +
             'resposta como "confirmo" ou "tente novamente".',
         },
+      },
+      required: ['acao'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'bom_dia',
+    description:
+      'Toca um trecho de rock das playlists do Ricardo, baixinho, e devolve o resumo do dia ' +
+      '(agenda, notícias, GitHub) para você narrar. Use a cada "bom dia" dele.',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    type: 'function',
+    name: 'musica',
+    description: 'Controla a música do bom dia no tocador do canto, ou continua a playlist numa aba do YouTube.',
+    parameters: {
+      type: 'object',
+      properties: {
+        acao: { type: 'string', enum: ['pausar', 'tocar', 'parar', 'playlist'], description: 'O que fazer.' },
       },
       required: ['acao'],
     },

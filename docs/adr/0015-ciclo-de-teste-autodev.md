@@ -66,3 +66,13 @@ a troca de versão funcionava e que o problema estava em volta dela:
 - O push e o pull request continuam sendo pedidos à parte, pelas ferramentas da ADR
   0014.
 - Depois de um merge, é preciso atualizar a `main` e reiniciar antes do próximo pedido.
+
+## Revisão de 08/11/2026: testes na conferência e pull request ao aprovar
+
+- A conferência antes do teste ao vivo agora roda também `npm test`, depois de lint,
+  tipos e build. Uma alteração que compila mas quebra um teste para ali, sem ir ao ar.
+  `APOLO_AUTODEV_TESTES=0` pula esse passo, e só o teste de ponta a ponta usa isso.
+- Ao aprovar, a voz pergunta se ele quer o pull request para a `main`. Só com o sim
+  falado, conferido na transcrição, a ação `pull_request` envia a branch e abre o PR
+  pelo sub-módulo git (ADR 0014), com o título do commit. Exige `--writes`, abre uma
+  vez por alteração, e o merge continua sendo do Ricardo.

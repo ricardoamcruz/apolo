@@ -1792,6 +1792,75 @@ kbd {
   border-color: currentColor;
 }
 
+/* ------------------------------- o tocador do bom dia (RF-55, ADR 0026) */
+
+/* O vídeo fica no tamanho mínimo que a Google permite: 200×200. */
+.tocador {
+  position: absolute;
+  left: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  max-width: calc(100vw - 48px);
+  padding: 10px;
+  pointer-events: auto;
+  text-transform: none;
+  letter-spacing: 0.03em;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.tocador-video {
+  width: 200px;
+  height: 200px;
+  flex: none;
+  border: 0;
+}
+
+.tocador-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  width: 180px;
+}
+
+.tocador-titulo {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tocador-canal {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.tocador-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.tocador-acoes button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  padding: 5px 9px;
+  cursor: pointer;
+}
+
+.tocador-acoes button:hover {
+  border-color: currentColor;
+}
+
 /* ---------------------------------------------------------- a aba SISTEMAS */
 
 /* --alerta vem de contrastante(): um vermelho fixo sumiria na interface vermelha. */

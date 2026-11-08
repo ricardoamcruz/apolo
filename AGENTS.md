@@ -117,8 +117,9 @@ detalhe está em `docs/`.
   conteúdo pessoal: o ntfy.sh vê o texto. A Fênix avisa versões, quedas e rotinas.
 - **A.U.R.O.R.A., o bom dia (ADR 0026, RF-55):** `modules/aurora/`, serviço à parte
   (porta 8791, token `APOLO_AURORA_TOKEN`) que a Fênix sobe. A cada "bom dia", a voz
-  chama `bom_dia`: um trecho de rock das playlists do YouTube toca baixinho no player
-  oficial (popup `musica`, nunca baixar nem tocar escondido) e ela narra agenda (.ics),
+  chama `bom_dia`: um trecho de rock das playlists do YouTube toca baixinho no tocador
+  do canto (`src/ui/Tocador.tsx`, player oficial visível em 200×200, nunca baixar nem
+  esconder; `musica` pausa ou abre a playlist no YouTube Music) e ela narra agenda (.ics),
   notícias por tema e GitHub. Temas e playlists em `modules/aurora/aurora.config.json`.
   E-mail e To Do esperam um app registrado na Microsoft. Nada fora de `modules/aurora`
   importa o módulo.

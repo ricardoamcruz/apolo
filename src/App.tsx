@@ -36,6 +36,7 @@ import { foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/au
 import { pedeModoMaos, vigiarCancelamento } from './lib/comandos'
 import { criarJanela } from './lib/conversa'
 import { comandarPopup, type AcaoDePopup } from './lib/comandosDePopup'
+import { abrirNoYoutube } from './lib/musica'
 import { chamadaDisponivel, deuBomDia, ouvirNome } from './lib/chamada'
 import { sistemasAgora } from './lib/estadoDosSistemas'
 import { resumoSistemas } from './lib/sistemas'
@@ -280,17 +281,7 @@ export default function App() {
       armIdle()
       const r = await bomDia()
       if (!r.ok) return { output: `O resumo do dia não veio (${r.mensagem}). Dê bom dia normalmente, sem resumo.` }
-      if (r.musica) {
-        const m = r.musica
-        s.pushBlade({
-          id: `musica-${Date.now()}`,
-          title: `♪ ${m.titulo}`,
-          kind: 'musica',
-          musica: { id: m.id, inicio: m.inicio, trechoSegundos: m.trechoSegundos, volume: m.volume },
-          size: 'compact',
-          hold: 'sticky',
-        })
-      }
+      if (r.musica) s.setMusica({ ...r.musica, tocando: true, posicao: r.musica.inicio })
       return {
         output:
           `${r.texto}\n\nDê bom dia ao Ricardo e resuma isso em até 30 segundos, como um assistente ` +
@@ -298,6 +289,26 @@ export default function App() {
           'GitHub numa frase. A música já está tocando baixinho por baixo: não a anuncie, a não ser ' +
           'que ele pergunte.',
       }
+    }
+
+    if (name === 'musica') {
+      const acao = String(args.acao ?? '')
+      const m = s.musica
+      if (!m) return { output: 'Nenhuma música tocando agora.' }
+      if (acao === 'pausar' || acao === 'tocar' || acao === 'parar') {
+        s.comandarMusica(acao)
+        return { output: acao === 'pausar' ? 'Pausada.' : acao === 'tocar' ? 'Tocando de novo.' : 'Parei a música.' }
+      }
+      if (acao === 'playlist') {
+        const aberta = abrirNoYoutube(m)
+        s.comandarMusica('parar')
+        return {
+          output: aberta
+            ? 'Abri a playlist numa aba do YouTube Music, a partir desta música.'
+            : 'O Chrome bloqueou a aba nova. Peça que ele clique em "Abrir no YouTube" no tocador do canto, ou libere os pop-ups deste endereço.',
+        }
+      }
+      return { output: `Ação desconhecida: ${acao}.` }
     }
 
     if (name === 'fenix') {

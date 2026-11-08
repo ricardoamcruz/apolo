@@ -127,7 +127,7 @@ test('YouTube: autoriza por código, guarda só o token de renovação, e sortei
   assert.equal(statSync(join(pasta, 'youtube.json')).mode & 0o777, 0o600)
 
   const faixa = await yt.sortear({ filtro: 'rock' })
-  assert.deepEqual([faixa.id, faixa.titulo, faixa.inicio], ['v1', 'Música A', 45])
+  assert.deepEqual([faixa.id, faixa.titulo, faixa.inicio, faixa.playlist], ['v1', 'Música A', 45, 'P1'])
   assert.equal(g.pedidos.some((u) => u.includes('playlistId=P2')), false, 'a playlist sem "rock" fica de fora')
 })
 
@@ -143,7 +143,7 @@ test('YouTube: sem playlist de rock, usa as músicas curtidas', async () => {
   })
   const yt = criarYoutube({ clienteId: 'c', segredo: 's', pasta, fetcher: g.fetcher, aleatorio: () => 0 })
   await yt.autorizar(() => {})
-  assert.deepEqual((await yt.faixas({ filtro: 'rock' })).map((f) => f.id), ['m1'])
+  assert.deepEqual((await yt.faixas({ filtro: 'rock' })).map((f) => [f.id, f.playlist]), [['m1', 'LM']])
 })
 
 test('sem credenciais do Google, autorizar explica o que falta', async () => {

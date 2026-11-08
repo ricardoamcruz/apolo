@@ -182,6 +182,8 @@ export type MusicaDoBomDia = {
   inicio: number
   trechoSegundos: number
   volume: number
+  /** A playlist de onde ela veio, para continuar no YouTube Music. */
+  playlist?: string
 }
 export type BomDiaResposta = { ok: boolean; texto?: string; musica?: MusicaDoBomDia | null; mensagem?: string }
 const respostasDaAurora = new Map<string, (r: BomDiaResposta) => void>()

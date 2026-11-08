@@ -43,9 +43,16 @@ fachada MCP.
 | Tarefas | `gh pr list` e `gh issue list` do repositório | o `gh` já logado |
 | E-mails e To Do | **pendente** | exige app registrado na Microsoft |
 
-**A música toca no player oficial do YouTube**, num popup pequeno (`kind: 'musica'`),
-com `enablejsapi`: volume 18 de 100, começando entre 45 s e 75 s da faixa, por 35 s,
-com fade de 4 s e o popup se fechando sozinho. Nada é baixado.
+**A música toca no player oficial do YouTube**, num tocador no canto inferior
+esquerdo (`src/ui/Tocador.tsx`), com o nome da faixa, o artista e os botões de pausa,
+"Abrir no YouTube" e fechar. O vídeo fica visível no tamanho mínimo que a Google
+permite (200×200). Volume 18 de 100, começando entre 45 s e 75 s da faixa, por 35 s,
+com fade de 4 s; pausar segura também o relógio do trecho. Nada é baixado.
+
+**Continuar a playlist:** a ferramenta `musica` pausa, retoma ou para o tocador, e com
+"playlist" abre a faixa numa aba do YouTube Music, na playlist de onde ela veio e a
+partir de onde parou. Pedido por voz não conta como clique para o Chrome: se a aba for
+bloqueada, o botão "Abrir no YouTube" do tocador faz o mesmo.
 
 **O gatilho é a voz:** a ferramenta `bom_dia` é chamada a cada "bom dia", inclusive
 quando ele acorda o A.P.O.L.O. com "bom dia, Apolo". A voz recebe o resumo em

@@ -124,7 +124,8 @@ export function criarYoutube({ clienteId, segredo, pasta, fetcher = fetch, agora
    */
   async function faixas({ playlists = [], filtro = 'rock' } = {}) {
     const cache = lerJson(arqCache)
-    if (cache && agora() - cache.em < CACHE_MS && cache.chave === JSON.stringify([playlists, filtro])) return cache.faixas
+    const chave = JSON.stringify([2, playlists, filtro])
+    if (cache && agora() - cache.em < CACHE_MS && cache.chave === chave) return cache.faixas
     let ids = playlists
     let origem = 'playlists escolhidas'
     if (!ids.length) {
@@ -139,7 +140,12 @@ export function criarYoutube({ clienteId, segredo, pasta, fetcher = fetch, agora
         const itens = await todasAsPaginas('playlistItems', { part: 'snippet', playlistId: id })
         lista.push(
           ...itens
-            .map((i) => ({ id: i.snippet?.resourceId?.videoId, titulo: i.snippet?.title, canal: i.snippet?.videoOwnerChannelTitle }))
+            .map((i) => ({
+              id: i.snippet?.resourceId?.videoId,
+              titulo: i.snippet?.title,
+              canal: i.snippet?.videoOwnerChannelTitle,
+              playlist: id,
+            }))
             .filter((f) => f.id && f.titulo !== 'Private video' && f.titulo !== 'Deleted video'),
         )
       }
@@ -147,9 +153,10 @@ export function criarYoutube({ clienteId, segredo, pasta, fetcher = fetch, agora
       const curtidas = await todasAsPaginas('videos', { part: 'snippet', myRating: 'like' })
       lista = curtidas
         .filter((v) => v.snippet?.categoryId === '10')
-        .map((v) => ({ id: v.id, titulo: v.snippet?.title, canal: v.snippet?.channelTitle }))
+        // LM é a lista de músicas curtidas do YouTube Music.
+        .map((v) => ({ id: v.id, titulo: v.snippet?.title, canal: v.snippet?.channelTitle, playlist: 'LM' }))
     }
-    gravar(arqCache, { em: agora(), chave: JSON.stringify([playlists, filtro]), origem, faixas: lista })
+    gravar(arqCache, { em: agora(), chave, origem, faixas: lista })
     return lista
   }
 

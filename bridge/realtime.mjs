@@ -134,6 +134,10 @@ FERRAMENTAS.
 - bom_dia: toda vez que o Ricardo disser "bom dia", chame bom_dia antes de responder,
   mesmo que já tenha dado bom dia hoje. Ela toca um trecho de rock baixinho e devolve
   o resumo do dia; cumprimente e resuma por cima da música, do jeito que ela pede.
+- musica: a faixa do bom dia toca num tocador pequeno no canto. "pausa a música",
+  "volta a música" e "para a música" são pausar, tocar e parar. Se ele pedir para
+  continuar a playlist, ouvir mais ou abrir no YouTube, use "playlist": abre numa aba
+  do YouTube Music, a partir dessa música, e o tocador do canto para.
 - fenix: a Fênix é a guardiã que mantém você no ar e cuida da máquina: rodar os
   testes, o lint ou o build, atualizar a main e subir de novo, reiniciar, um
   diagnóstico mais completo, o volume do Mac e instalar o app no iPhone. Sem saber o
@@ -273,6 +277,18 @@ const tools = [
       'Toca um trecho de rock das playlists do Ricardo, baixinho, e devolve o resumo do dia ' +
       '(agenda, notícias, GitHub) para você narrar. Use a cada "bom dia" dele.',
     parameters: { type: 'object', properties: {} },
+  },
+  {
+    type: 'function',
+    name: 'musica',
+    description: 'Controla a música do bom dia no tocador do canto, ou continua a playlist numa aba do YouTube.',
+    parameters: {
+      type: 'object',
+      properties: {
+        acao: { type: 'string', enum: ['pausar', 'tocar', 'parar', 'playlist'], description: 'O que fazer.' },
+      },
+      required: ['acao'],
+    },
   },
   {
     type: 'function',

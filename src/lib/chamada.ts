@@ -53,6 +53,25 @@ export function chamouPeloNome(fala: string): { chamou: boolean; pedido: string 
   return nao
 }
 
+/**
+ * Quanto o nome sozinho precisa ficar sem continuação para valer. O Chrome só fecha a
+ * frase depois de cerca de um segundo de silêncio; isto acorda antes, mas espera o
+ * bastante para "Apolo é..." não ser tomado como chamado.
+ */
+export const NOME_ESTAVEL_MS = 400
+
+/**
+ * O que fazer com um trecho reconhecido. O nome sozinho, ainda provisório, acorda
+ * depois de `NOME_ESTAVEL_MS`. Nome com pedido espera a frase fechar, para o pedido
+ * chegar inteiro.
+ */
+export function decidirChamada(fala: string, final: boolean): 'agora' | 'se_parar' | 'nao' {
+  const { chamou, pedido } = chamouPeloNome(fala)
+  if (!chamou) return 'nao'
+  if (final) return 'agora'
+  return pedido ? 'nao' : 'se_parar'
+}
+
 const construtor = () => {
   if (typeof window === 'undefined') return undefined
   const w = window as unknown as { SpeechRecognition?: Construtor; webkitSpeechRecognition?: Construtor }
@@ -71,19 +90,29 @@ export function ouvirNome(aoChamar: (fala: string, pedido: string) => void, aoFa
   let parado = false
   let religar: ReturnType<typeof setTimeout> | undefined
   let esperaMs = 300
+  let nomeSozinho: ReturnType<typeof setTimeout> | undefined
 
   const rec = new Construtor()
   rec.lang = 'pt-BR'
   rec.continuous = true
-  rec.interimResults = false
+  rec.interimResults = true
+  const chamar = (fala: string) => {
+    clearTimeout(nomeSozinho)
+    if (parado) return
+    parado = true
+    rec.stop()
+    aoChamar(fala, chamouPeloNome(fala).pedido)
+  }
   rec.onresult = (e) => {
     esperaMs = 300
+    // Qualquer trecho novo quer dizer que a fala continuou.
+    clearTimeout(nomeSozinho)
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const resultado = e.results[i]
-      if (!resultado.isFinal) continue
       const fala = resultado[0].transcript.trim()
-      const { chamou, pedido } = chamouPeloNome(fala)
-      if (chamou && !parado) return aoChamar(fala, pedido)
+      const decisao = decidirChamada(fala, resultado.isFinal)
+      if (decisao === 'agora') return chamar(fala)
+      if (decisao === 'se_parar') nomeSozinho = setTimeout(() => chamar(fala), NOME_ESTAVEL_MS)
     }
   }
   rec.onerror = ({ error }) => {
@@ -110,6 +139,7 @@ export function ouvirNome(aoChamar: (fala: string, pedido: string) => void, aoFa
     stop() {
       parado = true
       clearTimeout(religar)
+      clearTimeout(nomeSozinho)
       rec.stop()
     },
   }

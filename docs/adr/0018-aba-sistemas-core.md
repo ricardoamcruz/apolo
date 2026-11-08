@@ -16,7 +16,8 @@ fixo desapareceria justamente quando ela estivesse vermelha.
    degradado e o motivo aparece embaixo. O `core/` da Fase 1 é outro assunto: um é
    como o sistema se apresenta, o outro é como o código se organiza.
 2. **O que for plugável tem linha própria,** com tipo (`conector`, `skill`,
-   `extensao`, `api`), em `src/lib/sistemas.ts`. Hoje só o REA está nesse grupo.
+   `extensao`, `api`), em `src/lib/sistemas.ts`. Hoje só o canal do celular está
+   nesse grupo, como H.E.R.M.E.S. (ver "Nomes dos sistemas").
 3. **A ponte envia o estado de todos os servidores,** inclusive dos que falharam.
 4. **A aba só aparece quando pedida:** tecla D, com a janela de voz, ou voz, pela
    ferramenta `diagnostico`, que devolve o estado para o modelo narrar. A verdade
@@ -39,3 +40,17 @@ Todo módulo novo precisa declarar como aparece na aba (RF-56). A janela de
 diagnóstico (D) segue com suas cores próprias de erro; só a aba usa `--alerta`.
 Um servidor externo sem autorização degrada o C.O.R.E. até ser reclassificado como
 plugável, o que é preferível a esconder uma falha.
+
+## Nomes dos sistemas (revisão de 08/11/2026)
+O A.P.O.L.O. foi pensado a partir de GAIA, de *Horizon Zero Dawn*: uma inteligência
+central com subfunções que têm nome próprio. Cada sistema plugável ganha um nome
+assim, escolhido por estes critérios, nesta ordem: criativo, fácil de falar, ligado
+ao tema do módulo e interessante. Pode vir da mitologia, da ciência ou da cultura
+pop, e aparece com pontos, como C.O.R.E.
+
+- **H.E.R.M.E.S.** é o canal do celular (gateway, ADR 0019). Hermes é o mensageiro
+  dos deuses, que leva recados entre mundos, e irmão de Apolo, a quem deu a lira.
+  Na aba, a sigla se lê Hub de Enlace Remoto Móvel, Escuta e Sincronia.
+
+Servidores do Claude Code que não servem ao A.P.O.L.O. ficam de fora por
+`APOLO_MCP_IGNORAR`, no `.env.local`, sem que o repositório precise citá-los.

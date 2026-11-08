@@ -37,6 +37,8 @@ export type RealtimeSession = {
   setMicOn: (on: boolean) => void
   /** Interrompe o que ele estiver falando agora. */
   interrupt: () => void
+  /** Ouve sem deixar nada dele tocar, até desligar. Só o Gemini tem. */
+  silenciar?: (on: boolean) => void
   /** Pede uma resposta com uma instrução pontual (ex.: cumprimentar). */
   prompt: (instructions: string) => void
   /** Nível 0..1 da voz dele, para o reator pulsar junto. */

@@ -11,8 +11,7 @@
       "bundleIdentifier": "com.ricardocruz.apolo",
       "appleTeamId": "9F2MVYQ9SF",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "O A.P.O.L.O. usa o microfone para ouvir o que você diz.",
-        "UIBackgroundModes": ["audio"]
+        "NSMicrophoneUsageDescription": "O A.P.O.L.O. usa o microfone para ouvir o que você diz."
       }
     },
     "android": {

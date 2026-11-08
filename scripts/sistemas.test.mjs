@@ -34,10 +34,15 @@ test('ponte ou voz fora do ar degradam o C.O.R.E.; voz ainda não ligada, não',
   assert.equal(montarSistemas([], { ponte: true, voz: null })[0].degradado, false)
 })
 
-test('o que é plugável aparece à parte e não degrada o C.O.R.E.', () => {
-  const [core, rea] = montarSistemas([{ nome: 'rea', estado: 'failed' }], ok)
+test('o que é plugável aparece à parte, com nome próprio, e não degrada o C.O.R.E.', () => {
+  const [core, celular] = montarSistemas([{ nome: 'celular', estado: 'failed' }], ok)
   assert.equal(core.degradado, false)
-  assert.deepEqual([rea.nome, rea.tipo, rea.degradado], ['REA', 'conector', true])
+  assert.deepEqual([celular.nome, celular.tipo, celular.degradado], ['H.E.R.M.E.S.', 'conector', true])
+})
+
+test('um conector qualquer faz parte do C.O.R.E., e não vira linha à parte', () => {
+  const lista = montarSistemas([{ nome: 'outro', estado: 'connected' }], ok)
+  assert.deepEqual(lista.map((s) => s.nome), ['C.O.R.E.'])
 })
 
 test('o resumo narra o que está errado, ou que está tudo bem', () => {

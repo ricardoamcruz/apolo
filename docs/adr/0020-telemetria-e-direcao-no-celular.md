@@ -26,7 +26,7 @@ acrescenta o tempo do agente, que separa agente de rede, e grava em
 rótulo curto validado: nunca a fala nem o que possa carregar URL ou chave.
 `npm run logs:celular` resume por medida e por rede.
 
-**Voz em segundo plano.** O modo `audio` de `UIBackgroundModes` deixa a voz seguir
+**Voz em segundo plano** (revisto em 07/11/2026, ver abaixo). O modo `audio` de `UIBackgroundModes` deixa a voz seguir
 com a tela bloqueada ou em outro app. Com isso o som pode seguir a rota do carro
 quando o iOS a escolher, sem CarPlay nativo. A sessão fecha só por ociosidade ou
 queda do backend; ao voltar ao app, religa o que tiver caído. A espera por ociosidade
@@ -54,3 +54,10 @@ usa esforço `low` (`APOLO_CELULAR_ESFORCO`). O PC não muda.
   serve ao volante. Falta decidir como acordá-lo dirigindo.
 - O indicador laranja do iOS aparece com o app fora de vista enquanto o microfone
   estiver aberto.
+
+## Revisão de 07/11/2026: voz só com o app na tela
+No aparelho, minimizar deixava o indicador do microfone aceso sem que ele respondesse.
+O Ricardo prefere usar o app só aberto. O modo `audio` saiu do `UIBackgroundModes`, e o
+app desliga a voz ao ir para segundo plano e religa ao voltar. Ele não ouve mais com
+a tela bloqueada nem em outro app, e o som do carro só vale com o app aberto. Para
+abrir rápido: Tocar Atrás ou "E aí, Siri, Apolo", com um atalho que abre o app.

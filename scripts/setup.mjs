@@ -61,7 +61,7 @@ else {
 
 console.log('');
 console.log('Para iniciar:  npm start   (abra no Chrome o endereço que aparecer)');
-console.log('Clique em INICIAR, ou bata palmas, e fale normalmente.');
+console.log('A interface liga sozinha: é só falar.');
 console.log('Para liberar ações reais (enviar, clicar, apagar):  npm start -- --writes');
 console.log('');
 process.exit(0);

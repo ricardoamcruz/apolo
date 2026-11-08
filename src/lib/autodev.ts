@@ -66,10 +66,18 @@ export function registrarFala(texto: string) {
 }
 
 /** A pessoa disse "sim" depois de a proposta aparecer? */
-export async function ouviuConfirmacao(desde: number, esperaMs = 5000): Promise<boolean> {
+export const ouviuConfirmacao = (desde: number, esperaMs = 5000) =>
+  ouviuFala(pareceConfirmacao, desde, esperaMs)
+
+/** A última fala depois de `desde` passa no teste? */
+export async function ouviuFala(
+  teste: (fala: string) => boolean,
+  desde: number,
+  esperaMs = 5000,
+): Promise<boolean> {
   const limite = Date.now() + esperaMs
   while (true) {
-    if (ouvida.em > desde && pareceConfirmacao(ouvida.texto)) return true
+    if (ouvida.em > desde && teste(ouvida.texto)) return true
     if (Date.now() > limite) return false
     await new Promise((ok) => setTimeout(ok, 150))
   }

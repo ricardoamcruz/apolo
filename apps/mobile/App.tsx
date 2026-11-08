@@ -29,7 +29,7 @@ const FASE_DA_VOZ: Record<NonNullable<MensagemDaPagina['fase']>, Fase> = {
 /** O mesmo rótulo do HUD: a palavra confirma o que o círculo está mostrando. */
 const ROTULO_DA_VOZ: Record<NonNullable<MensagemDaPagina['fase']>, string> = {
   desligada: '',
-  espera: 'EM ESPERA · TOQUE PARA ACORDAR',
+  espera: 'EM ESPERA · DIGA APOLO OU TOQUE',
   ouvindo: 'OUVINDO',
   pensando: 'PENSANDO',
   ferramenta: 'EXECUTANDO',
@@ -139,9 +139,10 @@ function Tela() {
       medidor?.registrar('app_mudou', undefined, novo)
       if (novo === 'active') {
         canal.retomar()
-        // Em segundo plano o iOS pode ter parado a voz: religa o que tiver caído.
         popups.current?.ligarVoz()
       }
+      // Só com o app na tela: fora dela, o microfone fecha e o indicador some (ADR 0020).
+      if (novo === 'background') popups.current?.desligarVoz()
     })
     return () => {
       assinatura.remove()
@@ -152,8 +153,7 @@ function Tela() {
   }, [canal])
 
   // A voz só faz sentido com o backend ao alcance: sem ele, conversaria normalmente
-  // e falharia em toda tarefa. Continua com a tela bloqueada ou em outro app, porque
-  // ele também acompanha quem está dirigindo (docs/adr/0020).
+  // e falharia em toda tarefa.
   const podeOuvir = pagina && estado === 'conectado'
   useEffect(() => {
     if (podeOuvir) popups.current?.ligarVoz()
@@ -199,6 +199,10 @@ function Tela() {
     if (mensagem.aviso) setAviso(mensagem.aviso)
     if (mensagem.credencial && !canal.pedirCredencial(mensagem.credencial)) {
       popups.current?.credencial(mensagem.credencial, null, 'O computador não está conectado.')
+    }
+    if (mensagem.cancelar) {
+      canal.interromper()
+      concluirTarefa('O Ricardo cancelou a tarefa.')
     }
     if (mensagem.tarefa) {
       tarefa.current = mensagem.tarefa

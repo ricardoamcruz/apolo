@@ -107,7 +107,7 @@ Escolha com `APOLO_VOZ_PROVEDOR`. Ferramentas da voz: `executar_tarefa`,
 |---|---|
 | Ouvir + entender + falar | sessão de voz em tempo real (`src/lib/realtime.ts`) |
 | Agir (web, e-mail, navegador, painéis) | agente de tarefas Claude, na ponte |
-| Ativação | ligado após INICIAR; espera após 90 s; Espaço ou palmas acordam |
+| Ativação | liga sozinha ao abrir a página; conversa de 20 s depois do nome (ADR 0024); em espera, o nome ou Espaço acordam |
 
 ## Autodesenvolvimento (ADR 0011 e 0015)
 

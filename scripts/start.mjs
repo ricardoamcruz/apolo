@@ -244,6 +244,6 @@ run('face', process.execPath, ['node_modules/vite/bin/vite.js'], '35', {})
 
 console.log(
   '\nQuando o servidor de desenvolvimento estiver pronto, abra no Chrome o endereço\n' +
-    'que ele mostrar, clique em INICIAR (ou bata palmas) e fale normalmente.\n' +
+    'que ele mostrar e fale normalmente: a interface liga sozinha.\n' +
     'Ctrl-C encerra tudo.\n',
 )

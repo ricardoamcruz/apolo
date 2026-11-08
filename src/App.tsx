@@ -2,8 +2,6 @@ import { atividadeDaFerramenta } from './lib/estados'
 import { useEffect, useRef } from 'react'
 import { Scene } from './scene/Scene'
 import { Hud } from './ui/Hud'
-import { Boot, BOOT_MS } from './ui/Boot'
-import { Ignition } from './ui/Ignition'
 import { Diagnostics } from './ui/Diagnostics'
 import { useStore } from './store'
 import * as sfx from './lib/sfx'
@@ -29,8 +27,11 @@ import {
   bridgeServers,
 } from './lib/bridge'
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
-import { startAnalyser, micLevel } from './lib/audio'
-import { foraDeHora, ouviuConfirmacao, registrarFala } from './lib/autodev'
+import { startAnalyser, micLevel, retomarAnalyser } from './lib/audio'
+import { foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/autodev'
+import { pedeModoMaos, vigiarCancelamento } from './lib/comandos'
+import { criarJanela } from './lib/conversa'
+import { comandarPopup, type AcaoDePopup } from './lib/comandosDePopup'
 import { chamadaDisponivel, ouvirNome } from './lib/chamada'
 import { sistemasAgora } from './lib/estadoDosSistemas'
 import { resumoSistemas } from './lib/sistemas'
@@ -49,9 +50,11 @@ import { handleBrowser } from './lib/navegador'
  * o Claude, na ponte local: a voz chama `executar_tarefa` e fala o resultado.
  */
 
-/** Sem ninguém falar por este tempo, ele entra em espera e o microfone fecha
- *  (a sessão continua aberta, então voltar é instantâneo). */
-const IDLE_MS = 90_000
+/** O Chrome só deixa tocar som depois de um gesto na página, salvo exceções. */
+const SOM_BLOQUEADO = 'O Chrome segurou o som até você tocar na página: clique ou aperte qualquer tecla.'
+
+/** Uma fala ouvida há menos que isto conta como alguém falando agora. */
+const FALA_RECENTE_MS = 2_000
 
 const newId = () =>
   globalThis.crypto?.randomUUID?.() ??
@@ -71,6 +74,33 @@ const SCREEN_SCOPE: Record<string, 'all' | 'panels' | 'transcript'> = {
   popups: 'panels',
   historico: 'transcript',
   tudo: 'all',
+}
+
+/** Até onde olhar para trás ao conferir que ele mesmo pediu a câmera. */
+const JANELA_DO_PEDIDO_MS = 20_000
+
+/** G e a voz passam por aqui. Devolve o erro, ou nada se deu certo. */
+async function ligarModoMaos(): Promise<string | null> {
+  const s = useStore.getState()
+  s.setError(null)
+  try {
+    await hands.enableHands()
+    useStore.getState().setGestures(true)
+    return null
+  } catch (err) {
+    const motivo =
+      (err as Error)?.name === 'NotAllowedError'
+        ? 'Acesso à câmera negado — controle por gestos indisponível.'
+        : `O controle por gestos não iniciou: ${(err as Error)?.message ?? err}`
+    useStore.getState().setGestures(false)
+    useStore.getState().setError(motivo)
+    return motivo
+  }
+}
+
+function desligarModoMaos() {
+  hands.disableHands()
+  useStore.getState().setGestures(false)
 }
 
 /**
@@ -95,21 +125,37 @@ export default function App() {
   const session = useRef<RealtimeSession | null>(null)
   const connecting = useRef<Promise<RealtimeSession> | null>(null)
   const booting = useRef(false)
-  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Quando a última fala foi ouvida, de quem for. */
+  const ultimaFala = useRef(0)
   /** Há uma fala dele em andamento na transcrição (para anexar os trechos). */
   const assistantOpen = useRef(false)
+  /** A tarefa em andamento foi cancelada pela fala. */
+  const cancelada = useRef(false)
+  const vigia = useRef(
+    vigiarCancelamento(() => {
+      if (store.getState().phase !== 'tooling') return
+      cancelada.current = true
+      cancelTask()
+    }),
+  )
 
   // -- espera ---------------------------------------------------------------
 
-  const clearIdle = () => {
-    if (idleTimer.current) clearTimeout(idleTimer.current)
-    idleTimer.current = null
-  }
-
-  const armIdle = () => {
-    clearIdle()
-    idleTimer.current = setTimeout(() => goDormant(), IDLE_MS)
-  }
+  // Sem nada dirigido a ele por 20 s, ele volta à espera, e a sessão continua aberta,
+  // então voltar é instantâneo (docs/adr/0024).
+  const janela = useRef(
+    criarJanela(
+      () => goDormant(),
+      () => {
+        const p = store.getState().phase
+        if (p === 'speaking' || p === 'tooling') return 'sim'
+        if (p === 'thinking' || Date.now() - ultimaFala.current < FALA_RECENTE_MS) return 'talvez'
+        return 'nao'
+      },
+    ),
+  )
+  const clearIdle = () => janela.current.pausar()
+  const armIdle = () => janela.current.abrir()
 
   const goDormant = () => {
     clearIdle()
@@ -129,7 +175,8 @@ export default function App() {
 
   const runTool = async (name: string, args: Record<string, unknown>): Promise<ToolResult> => {
     const s = store.getState()
-    clearIdle()
+    // Uma fala ignorada não foi para ele: não pode segurar a conversa aberta.
+    if (name !== 'ignorar_fala') clearIdle()
 
     if (name === 'executar_tarefa') {
       const pedido = String(args.pedido ?? '').trim()
@@ -141,6 +188,7 @@ export default function App() {
       s.setAtividade('processando')
       sfx.play('tool')
       music.working(true)
+      cancelada.current = false
       try {
         const { text } = await ask(pedido, {
           onText: () => {},
@@ -150,6 +198,7 @@ export default function App() {
             atual.setAtividade(atividadeDaFerramenta(bruto))
           },
         })
+        if (cancelada.current) return { output: 'O Ricardo cancelou a tarefa.' }
         return { output: text || 'Tarefa concluída, sem nada a relatar.' }
       } catch (err) {
         sfx.play('error')
@@ -157,6 +206,7 @@ export default function App() {
           output: `A tarefa falhou: ${err instanceof Error ? err.message : String(err)}`,
         }
       } finally {
+        vigia.current.parar()
         store.getState().setActiveTool(null)
         store.getState().setAtividade(null)
         music.working(false)
@@ -237,14 +287,22 @@ export default function App() {
         void salvarPreferencias(pedido)
         feito.push('exibição ajustada')
       }
-      if (args.popups === 'minimizar') {
-        s.minimizeBlades()
-        feito.push('popups minimizados')
+      if (typeof args.popups === 'string') {
+        const titulo = typeof args.popup === 'string' ? args.popup : undefined
+        vazio = comandarPopup(args.popups as AcaoDePopup, titulo)
       }
-      if (args.popups === 'abrir') {
-        const n = s.restoreBlades(typeof args.popup === 'string' ? args.popup : undefined)
-        if (n) feito.push(n === 1 ? 'um popup aberto' : `${n} popups abertos`)
-        else vazio = 'Não há popup minimizado com esse nome.'
+      if (args.modo_maos === false) {
+        desligarModoMaos()
+        feito.push('modo mãos desligado')
+      }
+      if (args.modo_maos === true) {
+        if (!(await ouviuFala(pedeModoMaos, Date.now() - JANELA_DO_PEDIDO_MS))) {
+          vazio = 'O pedido da câmera não foi ouvido do Ricardo. Ela continua desligada.'
+        } else {
+          const erro = await ligarModoMaos()
+          if (erro) vazio = erro
+          else feito.push('modo mãos ligado')
+        }
       }
       if (args.limpar_tela) {
         const alvo = SCREEN_SCOPE[String(args.limpar_tela)] ?? 'panels'
@@ -268,7 +326,8 @@ export default function App() {
         s.setSistemas('fechado')
         return { output: 'A aba de sistemas foi fechada.' }
       }
-      if (s.sistemas === 'fechado') s.setSistemas('aba')
+      if (args.detalhes) s.setSistemas('completo')
+      else if (s.sistemas === 'fechado') s.setSistemas('aba')
       return { output: resumoSistemas(sistemasAgora()) }
     }
 
@@ -281,10 +340,10 @@ export default function App() {
     }
 
     if (name === 'ignorar_fala') {
-      // A fala não era para ele: volta a ouvir, e a espera por ociosidade segue
-      // valendo, então uma conversa longa ao lado acaba em espera sozinha.
+      // A fala não era para ele: volta a ouvir, e o prazo da conversa segue correndo,
+      // então a TV ou uma conversa ao lado acabam em espera sozinhas.
       if (s.phase === 'thinking') s.setPhase('listening')
-      armIdle()
+      janela.current.garantir()
       return { output: 'Ignorado.', silent: true, descartar: true }
     }
 
@@ -299,7 +358,8 @@ export default function App() {
 
     connecting.current = connectRealtime({
       onSpeechStart: () => {
-        clearIdle()
+        // Não reabre a janela: ouvir alguém não quer dizer que falaram com ele.
+        ultimaFala.current = Date.now()
         const s = store.getState()
         if (s.phase === 'dormant' || s.phase === 'offline' || s.phase === 'boot') return
         s.setError(null)
@@ -313,8 +373,10 @@ export default function App() {
         if (s.phase === 'listening') s.setPhase('thinking')
       },
       onUserPartial: (text) => {
+        ultimaFala.current = Date.now()
         registrarFala(text)
         store.getState().setCaption(text)
+        if (store.getState().phase === 'tooling') vigia.current.ouvir(text)
       },
       onUserText: (text) => {
         registrarFala(text)
@@ -428,7 +490,7 @@ export default function App() {
         .setError(
           err instanceof Error
             ? `Falha ao iniciar: ${err.message}`
-            : 'Falha ao iniciar. Clique para tentar de novo.',
+            : 'Falha ao iniciar. Clique ou aperte uma tecla para tentar de novo.',
         )
     }
   }
@@ -436,8 +498,8 @@ export default function App() {
   const ignite = async () => {
     const s = store.getState()
 
-    // Precisa acontecer dentro do clique: o navegador só libera áudio depois
-    // de uma interação.
+    // Sem clique para ligar: se o Chrome segurar o som até um gesto, ele é liberado
+    // no primeiro toque (ver `liberarSom`), e o resto já sobe.
     await sfx.unlockAudio()
     sfx.play('boot')
     music.enable()
@@ -565,7 +627,6 @@ export default function App() {
     }
     const voiceUp = openSession()
 
-    await new Promise((r) => setTimeout(r, BOOT_MS))
     await bridgeUp
     store.getState().setConnected(bridgeServers())
 
@@ -620,6 +681,32 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase])
 
+  // -- partida automática ----------------------------------------------------
+
+  /** Retoma o som que o Chrome segurou, ou tenta ligar de novo se a partida falhou. */
+  const liberarSom = () => {
+    void sfx.unlockAudio()
+    retomarAnalyser()
+    session.current?.retomar?.()
+    const s = store.getState()
+    if (s.error === SOM_BLOQUEADO) s.setError(null)
+    if (s.phase === 'offline') void powerOn()
+  }
+
+  // Liga sozinho ao abrir, como o app do celular: sem tela de INICIAR nem animação.
+  useEffect(() => {
+    void powerOn().then(() => {
+      if (!sfx.somLiberado() && !store.getState().error) store.getState().setError(SOM_BLOQUEADO)
+    })
+    window.addEventListener('pointerdown', liberarSom)
+    window.addEventListener('keydown', liberarSom)
+    return () => {
+      window.removeEventListener('pointerdown', liberarSom)
+      window.removeEventListener('keydown', liberarSom)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // -- nível + teclas ---------------------------------------------------------
 
   useEffect(() => {
@@ -641,26 +728,8 @@ export default function App() {
       // G liga a câmera e o controle por gestos. Nunca implícito.
       if (e.key === 'g' && bare) {
         e.preventDefault()
-        const on = store.getState().gestures
-        if (on) {
-          hands.disableHands()
-          store.getState().setGestures(false)
-        } else {
-          store.getState().setError(null)
-          void hands
-            .enableHands()
-            .then(() => store.getState().setGestures(true))
-            .catch((err: Error) => {
-              store.getState().setGestures(false)
-              store
-                .getState()
-                .setError(
-                  err?.name === 'NotAllowedError'
-                    ? 'Acesso à câmera negado — controle por gestos indisponível.'
-                    : `O controle por gestos não iniciou: ${err?.message ?? err}`,
-                )
-            })
-        }
+        if (store.getState().gestures) desligarModoMaos()
+        else void ligarModoMaos()
         return
       }
 
@@ -696,9 +765,7 @@ export default function App() {
     <>
       <Scene />
       <Hud />
-      <Boot />
       <Diagnostics />
-      <Ignition onStart={() => void powerOn()} />
     </>
   )
 }

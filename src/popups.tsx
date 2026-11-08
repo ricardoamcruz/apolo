@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client'
 import { useStore, type Blade, type Panel } from './store'
 import { Panels } from './ui/Panels'
 import { Blades, BladeTray } from './ui/Blades'
+import { comandarPopup } from './lib/comandosDePopup'
 import { criarVozDoCelular } from './lib/voz/celular'
 import './index.css'
 import './popups.css'
@@ -42,6 +43,7 @@ window.apoloVoz = criarVozDoCelular(
     s.clearScreen('panels')
     return abertos
   },
+  comandarPopup,
 )
 
 // O toque precisa nascer aqui: só um gesto dentro da página destrava o áudio no iOS.

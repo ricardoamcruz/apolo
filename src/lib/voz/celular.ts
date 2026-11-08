@@ -1,4 +1,8 @@
 import { soltarMic } from '../audio'
+import { chamouPeloNome } from '../chamada'
+import { criarJanela } from '../conversa'
+import { vigiarCancelamento } from '../comandos'
+import type { AcaoDePopup } from '../comandosDePopup'
 import { connectGemini } from './gemini'
 import type { RealtimeSession, SessionGrant, ToolResult } from './types'
 
@@ -21,11 +25,13 @@ export type MensagemDaVoz =
   | { aviso: string }
   | { credencial: string }
   | { tarefa: string; pedido: string }
+  /** Ele mandou cancelar a tarefa em andamento. */
+  | { cancelar: true }
 
 type Grant = Extract<SessionGrant, { provider: 'gemini' }>
 
-/** O mesmo prazo do browser: sem ninguém falando, ele entra em espera. */
-const OCIOSO_MS = 90_000
+/** Uma fala ouvida há menos que isto conta como alguém falando agora. */
+const FALA_RECENTE_MS = 2_000
 const INTERVALO_DO_NIVEL_MS = 80
 const PRAZO_DA_DESPEDIDA_MS = 2_500
 /** A ponte pede a credencial ao Google, então pode demorar, mas não para sempre. */
@@ -37,13 +43,15 @@ export function criarVozDoCelular(
   enviar: (mensagem: MensagemDaVoz) => void,
   /** Fecha os popups e diz quantos saíram: a voz precisa saber se havia algum. */
   fecharPopups: () => number,
+  comandarPopup: (acao: AcaoDePopup, titulo?: string) => string,
 ) {
   let sessao: RealtimeSession | null = null
   let abrindo = false
   let saudou = false
   let emEspera = false
   let falando = false
-  let ocioso: ReturnType<typeof setTimeout> | null = null
+  /** Quando o microfone ouviu fala pela última vez, de quem for. */
+  let ultimoSom = 0
   let nivel: ReturnType<typeof setInterval> | null = null
   let pedidos = 0
   /** Momentos de fala medidos aqui, porque o Google só avisa depois de processar. */
@@ -52,6 +60,9 @@ export function criarVozDoCelular(
   let transcreveu = false
   const credenciais = new Map<string, { resolve: (g: Grant) => void; reject: (e: Error) => void }>()
   const tarefas = new Map<string, (texto: string) => void>()
+  const vigia = vigiarCancelamento(() => {
+    if (tarefas.size) enviar({ cancelar: true })
+  })
 
   const fase = (nova: FaseDaVoz) => enviar({ fase: nova })
   const medir = (nome: string, ms?: number, info?: string) => enviar({ medida: { nome, ms, info } })
@@ -60,6 +71,7 @@ export function criarVozDoCelular(
     const nivelDoMic = sessao?.nivelDoMic?.() ?? 0
     if (nivelDoMic < NIVEL_DE_FALA) return nivelDoMic
     const agora = Date.now()
+    ultimoSom = agora
     // Um silêncio de mais de 2 s separa uma fala da outra.
     if (agora - ultimaFala > 2_000) {
       inicioDaFala = agora
@@ -69,29 +81,39 @@ export function criarVozDoCelular(
     return nivelDoMic
   }
 
-  const limparOcioso = () => {
-    if (ocioso) clearTimeout(ocioso)
-    ocioso = null
-  }
-  const armarOcioso = () => {
-    limparOcioso()
-    ocioso = setTimeout(dormir, OCIOSO_MS)
-  }
+  // Sem nada dirigido a ele por 20 s, ele volta à espera (docs/adr/0024).
+  const janela = criarJanela(
+    () => dormir(),
+    () => {
+      if (falando || tarefas.size) return 'sim'
+      return Date.now() - ultimoSom < FALA_RECENTE_MS ? 'talvez' : 'nao'
+    },
+  )
+  const limparOcioso = () => janela.pausar()
+  const armarOcioso = () => janela.abrir()
 
+  /**
+   * Em espera o microfone segue aberto, mas nada dele toca até ouvir o nome: no
+   * celular não há reconhecedor do navegador para isso (docs/adr/0024).
+   */
   function dormir() {
     limparOcioso()
     emEspera = true
     sessao?.interrupt()
-    sessao?.setMicOn(false)
+    sessao?.silenciar?.(true)
     fase('espera')
   }
 
-  const acordar = () => {
+  const sairDaEspera = () => {
     emEspera = false
-    sessao?.setMicOn(true)
-    sessao?.prompt('O Ricardo tocou na tela e você saiu da espera. Diga em poucas palavras que está ouvindo.')
+    sessao?.silenciar?.(false)
     fase('ouvindo')
     armarOcioso()
+  }
+
+  const acordar = () => {
+    sairDaEspera()
+    sessao?.prompt('O Ricardo tocou na tela e você saiu da espera. Diga em poucas palavras que está ouvindo.')
   }
 
   const pedirCredencial = () =>
@@ -125,19 +147,26 @@ export function criarVozDoCelular(
     nome: string,
     args: Record<string, unknown>,
   ): Promise<ToolResult> => {
-    limparOcioso()
+    // Em espera, nada do que ele decidir vale: a fala não trouxe o nome.
+    if (emEspera) return { output: 'Ignorado.', silent: true, descartar: true }
+    if (nome !== 'ignorar_fala') limparOcioso()
     if (nome === 'executar_tarefa') {
       const pedido = String(args.pedido ?? '').trim()
       if (!pedido) return { output: 'Pedido vazio.' }
       fase('ferramenta')
       const texto = await executar(pedido)
+      vigia.parar()
       fase('pensando')
       armarOcioso()
       return { output: texto || 'Tarefa concluída, sem nada a relatar.' }
     }
     if (nome === 'ajustar_interface') {
       armarOcioso()
-      if (!args.limpar_tela) return { output: 'Aqui só dá para fechar os popups.' }
+      if (typeof args.popups === 'string') {
+        const titulo = typeof args.popup === 'string' ? args.popup : undefined
+        return { output: comandarPopup(args.popups as AcaoDePopup, titulo) }
+      }
+      if (!args.limpar_tela) return { output: 'Aqui só dá para mexer nos popups.' }
       const fechados = fecharPopups()
       if (!fechados) return { output: 'A tela já estava limpa.' }
       return { output: fechados === 1 ? 'Feito: um popup fechado.' : `Feito: ${fechados} popups fechados.` }
@@ -149,7 +178,7 @@ export function criarVozDoCelular(
     }
     if (nome === 'ignorar_fala') {
       fase('ouvindo')
-      armarOcioso()
+      janela.garantir()
       return { output: 'Ignorado.', silent: true, descartar: true }
     }
     return { output: `Isto só funciona no computador: ${nome}.` }
@@ -174,18 +203,26 @@ export function criarVozDoCelular(
       const primeira = await pedirCredencial()
       sessao = await connectGemini(primeira, pedirCredencial, {
         onSpeechStart: () => {
-          limparOcioso()
           if (!emEspera) fase('ouvindo')
         },
-        onSpeechStop: () => fase('pensando'),
+        onSpeechStop: () => {
+          if (!emEspera) fase('pensando')
+        },
         onUserPartial: (texto) => {
+          // Em espera, o que ele ouve da sala não vai para a tela.
+          if (emEspera) return
           if (!transcreveu && inicioDaFala) {
             transcreveu = true
             medir('voz_transcricao', Date.now() - inicioDaFala)
           }
           enviar({ ouviu: texto })
+          if (tarefas.size) vigia.ouvir(texto)
         },
-        onUserText: (texto) => enviar({ ouviu: texto, fim: true }),
+        onUserText: (texto) => {
+          // Chega antes do áudio da resposta: acordar aqui deixa a resposta ao chamado tocar.
+          if (emEspera && chamouPeloNome(texto).chamou) sairDaEspera()
+          if (!emEspera) enviar({ ouviu: texto, fim: true })
+        },
         onAssistantStart: () => {},
         onAssistantDelta: () => {},
         onSpeakingStart: () => {

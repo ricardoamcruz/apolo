@@ -13,12 +13,12 @@ sobre a ordem das fases abaixo.
   - [ ] **4.a** Essa habilidade funciona em conjunto com a de se auto-reiniciar
   - [ ] **4.b** Se algo der errado, o rollback automático entra em ação
 - [ ] **5. Navegador (RF-19):** detectar em qual navegador e sistema está rodando, abrir novas abas e transformar uma popup aberta em aba — **em andamento**: ferramentas `browser_*` implementadas (ADR 0012, 04/11/2026); falta validar no navegador do Mac, liberar pop-ups para o endereço da interface e decidir se vale criar aba pela extensão do Claude quando o bloqueador recusar
-- [ ] **6. Comandos por voz (RF-20):** tudo o que hoje tem atalho de teclado também pode ser acionado por voz
-  - [ ] **6.a** Em espera: "Apolo, em espera", ou entrar em espera sozinho ao fim de uma conversa, da forma mais natural possível e sem se intrometer quando o Ricardo falar com outra pessoa ao lado — **em andamento**: `dormir` cobre "em espera", "já volto" e "boa noite" de despedida; em espera só o nome acorda por voz, com visual próprio; fim de fala mais paciente e `ignorar_fala` (ADR 0017, 06/11/2026). Falta validar por voz
-  - [ ] **6.b** Popups: alternar por voz (hoje `[` e `]`), além de tela cheia (`E`) e fechar (`X`)
-  - [ ] **6.c** Modo mãos: ativar e desativar por voz (hoje `G`)
-  - [ ] **6.d** Demais comandos, com ativação e desativação por voz: diagnóstico (`D`), interromper a fala e acordar (`Espaço`), cancelar tarefa (`Esc`)
-  - [ ] **6.e** Se o Ricardo esquecer um comando, o A.P.O.L.O. explica e lembra quais existem
+- [ ] **6. Comandos por voz (RF-20):** tudo o que hoje tem atalho de teclado também pode ser acionado por voz — **em andamento**: 6.b a 6.e feitos e validados por voz (ADR 0023, 07/11/2026), com uma lista só de comandos em `bridge/comandos.mjs` e testes em `scripts/comandos.test.mjs`; falta validar o 6.a com a conversa contínua (ADR 0024)
+  - [ ] **6.a** Em espera: "Apolo, em espera", ou entrar em espera sozinho ao fim de uma conversa, da forma mais natural possível e sem se intrometer quando o Ricardo falar com outra pessoa ao lado — **em andamento**: `dormir` cobre "em espera", "já volto" e "boa noite" de despedida; em espera só o nome acorda por voz, com visual próprio; fim de fala mais paciente e `ignorar_fala` (ADR 0017, 06/11/2026); o nome sozinho acorda sem esperar o Chrome fechar a frase (07/11/2026); conversa contínua por 20 s depois do nome, sem a TV segurar a conversa aberta, e o nome também acorda no celular (ADR 0024, 07/11/2026). Falta validar por voz
+  - [x] **6.b** Popups: alternar por voz (hoje `[` e `]`), além de tela cheia (`E`) e fechar (`X`) — implementado na web e no celular, com as teclas pela mesma função; `]` e `[` passaram a percorrer todos os popups, e não só dois. validado por voz (07/11/2026)
+  - [x] **6.c** Modo mãos: ativar e desativar por voz (hoje `G`) — implementado; ligar confere na transcrição que ele pediu a câmera; validado por voz (07/11/2026)
+  - [x] **6.d** Demais comandos, com ativação e desativação por voz: diagnóstico (`D`), interromper a fala e acordar (`Espaço`), cancelar tarefa (`Esc`) — implementado; cancelar sai da transcrição, porque o Gemini espera a tarefa acabar; validado por voz (07/11/2026)
+  - [x] **6.e** Se o Ricardo esquecer um comando, o A.P.O.L.O. explica e lembra quais existem — implementado pela lista nas instruções da voz; validado por voz (07/11/2026)
 
 ## Fase 0 — Fundação
 - [x] Analisar o código-base do JARVIS (`04-base-jarvis.md`)
@@ -39,21 +39,21 @@ sobre a ordem das fases abaixo.
 - [ ] Memória em SQLite (hoje só as preferências de exibição persistem, em arquivo: RF-57; migrar para cá)
 - [ ] Agendador e barramento de eventos
 - [ ] Gateway com token de acesso — **em andamento**: `bridge/gateway.mjs`, porta própria só com o canal, publicada pelo Tailscale (ADR 0019, 06/11/2026). Falta validar fora de casa
-- [ ] Persona A.P.O.L.O em pt-BR; identidade visual básica — **em andamento**: nome, persona e textos da interface em pt-BR feitos (01/11/2026); voz em tempo real speech-to-speech em pt-BR (ADR 0009/0010, 03/11/2026); abertura reduzida à barra de status e aos anéis com o nome, sem o reator e o esquema da armadura herdados do JARVIS (03/11/2026); identidade visual começada (ADR 0013, 05/11/2026): barra lateral direita "SINAL" removida, tipografia e cor em tokens no `:root`, marca própria no favicon, `__jarvis` → `__apolo` no console. Faltam as fontes locais (sem o Google Fonts), a decisão da paleta, a geometria do núcleo 3D, o painel de status (RF-12) e as variáveis `JARVIS_*`
+- [ ] Persona A.P.O.L.O em pt-BR; identidade visual básica — **em andamento**: nome, persona e textos da interface em pt-BR feitos (01/11/2026); voz em tempo real speech-to-speech em pt-BR (ADR 0009/0010, 03/11/2026); abertura reduzida à barra de status e aos anéis com o nome, sem o reator e o esquema da armadura herdados do JARVIS (03/11/2026), e depois removida: a página liga sozinha, direto no círculo, como no app (07/11/2026); identidade visual começada (ADR 0013, 05/11/2026): barra lateral direita "SINAL" removida, tipografia e cor em tokens no `:root`, marca própria no favicon, `__jarvis` → `__apolo` no console. Faltam as fontes locais (sem o Google Fonts), a decisão da paleta, a geometria do núcleo 3D, o painel de status (RF-12) e as variáveis `JARVIS_*`
 - [ ] Painel de status (módulos, provedor, consumo) — **em andamento**: aba SISTEMAS sob demanda, com o C.O.R.E. e a cor de alerta contrastante (ADR 0018, RF-56, 06/11/2026). Falta validar o pedido por voz e somar provedor e consumo
 
 ## Fase 2 — Voz e celular
 - [ ] Autodesenvolvimento por voz e chat, com teste, aprovação e rollback para a `main` (ADR 0011, ADR 0015, RF-15) — **em andamento**: implementado e testado; o `.env.local` passou a ser lido antes de qualquer módulo que leia configuração (`bridge/env.mjs`), então `APOLO_AUTODEV_*` e `JARVIS_MODEL` valem nesse arquivo, e não só no terminal (03/11/2026); falta validar por voz no navegador
 - [x] Voz pt-BR gratuita em tempo real — speech-to-speech pelo Gemini Live, OpenAI como opção (ADR 0009 e 0010, 03/11/2026)
 - [ ] Palavra de ativação "Apolo" — **em andamento**: no PC, pela Web Speech API do navegador, só em espera (ADR 0017, 06/11/2026). Falta validar por voz e levar ao celular
-- [ ] Voz no app de celular com a mesma credencial da ponte, pelo canal autenticado — **em andamento**: sessão aberta com o Google a partir da WebView (ADR 0019, 06/11/2026). Falta validar a conversa no iPhone
+- [x] Voz no app de celular com a mesma credencial da ponte, pelo canal autenticado — sessão aberta com o Google a partir da WebView (ADR 0019, 06/11/2026); validada no iPhone pelo Ricardo (07/11/2026)
 - [ ] Protocolo de canal versionado (RNF-11)
-- [ ] App nativo React Native + Expo (MVP: texto, voz, notificações, confirmações), iPhone primeiro — ADR 0006 — **em andamento**: voz, círculo e partículas da web e os mesmos popups, sem conversa na tela, pelo gateway (ADR 0019, 06/11/2026). Faltam validar a voz no iPhone, notificações, confirmações e manter a sessão quando o iOS suspende o app
-- [ ] Sinal de escuta, palavras ouvidas e partículas compostas para a tela do celular (RF-58) — **em andamento**: falta validar no iPhone
-- [ ] Telemetria do celular em `~/.apolo/logs` (RF-59, ADR 0020) — **em andamento**: falta validar no iPhone
-- [ ] Uso dirigindo (RF-60, ADR 0020) — **em andamento**: voz em segundo plano por validar no carro; CarPlay nativo depende de conta paga e aprovação da Apple
-- [ ] Padrão de cores na web e no app, e fechar popups por voz no celular (RF-61, ADR 0021) — **em andamento**: falta validar no iPhone
-- [ ] HTTPS em toda conexão (RF-62, ADR 0021) — **em andamento**: falta confiar no certificado com `npm run https`
+- [ ] App nativo React Native + Expo (MVP: texto, voz, notificações, confirmações), iPhone primeiro — ADR 0006 — **em andamento**: voz, círculo e partículas da web e os mesmos popups, sem conversa na tela, pelo gateway (ADR 0019, 06/11/2026), validados no iPhone (07/11/2026). Faltam notificações, confirmações e manter a sessão quando o iOS suspende o app
+- [x] Sinal de escuta, palavras ouvidas e partículas compostas para a tela do celular (RF-58) — validado no iPhone (07/11/2026)
+- [x] Telemetria do celular em `~/.apolo/logs` (RF-59, ADR 0020) — validada no iPhone (07/11/2026)
+- [ ] Uso dirigindo (RF-60, ADR 0020) — **em andamento**: voz só com o app aberto (sem segundo plano desde 07/11/2026), por validar no carro; CarPlay nativo depende de conta paga e aprovação da Apple
+- [x] Padrão de cores na web e no app, e fechar popups por voz no celular (RF-61, ADR 0021) — validado no iPhone (07/11/2026)
+- [x] HTTPS em toda conexão (RF-62, ADR 0021) — validado com o app operando (07/11/2026)
 - [ ] Comandos entre dispositivos (RF-63, ADR 0022) — ponto de extensão pronto; a extensão vem depois
 
 ## Em todas as fases seguintes

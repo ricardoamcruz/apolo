@@ -10,6 +10,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { freemem, loadavg, totalmem } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { criarAvisos } from './avisos.mjs'
 import { criarCanal } from './canal.mjs'
 import { criarComandos, montar, rodar } from './rotinas.mjs'
 import { criarServicos } from './servicos.mjs'
@@ -55,13 +56,29 @@ export function criarFenix(config, { flags = [], token, log = console.log, saida
   })
 
   let avisarEstado = null
+  /** Quando cada serviço caiu e foi avisado pela última vez: um aviso a cada 10 min basta. */
+  const ultimaQuedaAvisada = new Map()
+  // Os botões das notificações (docs/adr/0027). Descartar só volta à versão segura.
+  const avisos = criarAvisos({
+    ...(config.notificacoes ?? {}),
+    ca: config.notificacoes?.ca ? readFileSync(config.notificacoes.ca) : undefined,
+    log,
+    aoTocar: (acao) => {
+      log(`[fenix] botão da notificação: ${acao}`)
+      if (acao === 'descartar_versao') void versoes.reverter({ id: versoes.estado().id })
+    },
+  })
   const servicos = criarServicos({
     repo: config.repo,
     servicos: config.servicos,
     ambiente,
     log,
     saida,
-    aoMudar: () => {
+    aoMudar: (nome, status, motivo) => {
+      if (status === 'caiu' && motivo && Date.now() - (ultimaQuedaAvisada.get(nome) ?? 0) > 10 * 60_000) {
+        ultimaQuedaAvisada.set(nome, Date.now())
+        avisos.avisar({ titulo: `${config.nome}: ${nome} caiu`, texto: `O serviço ${nome} ${motivo}. Já estou subindo de novo.`, prioridade: 'alta' })
+      }
       // Várias mudanças juntas viram um aviso só.
       clearTimeout(avisarEstado)
       avisarEstado = setTimeout(() => canal?.transmitir({ type: 'estado', ...estado() }), 200)
@@ -76,7 +93,10 @@ export function criarFenix(config, { flags = [], token, log = console.log, saida
     desligar: () => Promise.all(servicos.versionados().map((n) => servicos.desligar(n))),
     saude: () => servicos.saudeGeral(),
     // O estado vai junto: quem recebe sabe se a alteração continua no ar.
-    notificar: (r) => canal?.avisar({ type: 'versao:resultado', ...r, versao: versoes.estado() }),
+    notificar: (r) => {
+      canal?.avisar({ type: 'versao:resultado', ...r, versao: versoes.estado() })
+      avisarResultado(r)
+    },
     protecao: config.protecao,
     versaoSegura: config.versaoSegura,
     instalar: config.instalar,
@@ -104,6 +124,23 @@ export function criarFenix(config, { flags = [], token, log = console.log, saida
   })
 
   const rodando = new Set()
+
+  /** O resultado de uma troca de versão também vai para o celular e para o Mac. */
+  function avisarResultado({ tipo, mensagem, branch }) {
+    const titulos = {
+      em_teste: 'Alteração no ar para teste',
+      aprovado: 'Alteração aprovada',
+      revertido: 'Voltei à versão segura',
+      falhou: 'A troca de versão falhou',
+    }
+    if (!titulos[tipo]) return
+    avisos.avisar({
+      titulo: `${config.nome}: ${titulos[tipo]}`,
+      texto: branch ? `${mensagem} (${branch})` : mensagem,
+      prioridade: tipo === 'revertido' || tipo === 'falhou' ? 'alta' : 'normal',
+      botoes: tipo === 'em_teste' ? [{ rotulo: 'Descartar', acao: 'descartar_versao' }] : [],
+    })
+  }
 
   function estado() {
     return {
@@ -181,6 +218,14 @@ export function criarFenix(config, { flags = [], token, log = console.log, saida
       log(`[fenix] rotina ${nome}`)
       const r = await rodar(args, { cwd: config.repo, env: ambiente(), prazoMs: def.prazoMs })
       log(`[fenix] rotina ${nome}: ${r.ok ? 'ok' : `falhou (${r.estourou ? 'prazo' : r.codigo})`}`)
+      // Rotina longa termina quando ele talvez nem esteja olhando: avisa.
+      if (r.tempoMs > 60_000) {
+        avisos.avisar({
+          titulo: `${config.nome}: rotina ${nome} ${r.ok ? 'terminou' : 'falhou'}`,
+          texto: r.ok ? `Levou ${Math.round(r.tempoMs / 60_000)} min.` : (r.saida ?? '').slice(-300) || 'Sem saída.',
+          prioridade: r.ok ? 'normal' : 'alta',
+        })
+      }
       return { ...r, mensagem: r.ok ? `A rotina ${nome} terminou bem.` : `A rotina ${nome} falhou.` }
     } finally {
       rodando.delete(nome)
@@ -250,8 +295,10 @@ export function criarFenix(config, { flags = [], token, log = console.log, saida
       }
       return porta
     },
+    avisos,
     async encerrar() {
       clearTimeout(avisarEstado)
+      avisos.fechar()
       await servicos.encerrar()
       await canal.fechar()
     },

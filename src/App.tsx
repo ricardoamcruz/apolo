@@ -26,6 +26,7 @@ import {
   watchFenix,
   autodev,
   fenix,
+  bomDia,
   bridgeServers,
   type FenixResposta,
 } from './lib/bridge'
@@ -35,7 +36,7 @@ import { foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/au
 import { pedeModoMaos, vigiarCancelamento } from './lib/comandos'
 import { criarJanela } from './lib/conversa'
 import { comandarPopup, type AcaoDePopup } from './lib/comandosDePopup'
-import { chamadaDisponivel, ouvirNome } from './lib/chamada'
+import { chamadaDisponivel, deuBomDia, ouvirNome } from './lib/chamada'
 import { sistemasAgora } from './lib/estadoDosSistemas'
 import { resumoSistemas } from './lib/sistemas'
 import { handleBrowser } from './lib/navegador'
@@ -249,6 +250,14 @@ export default function App() {
     if (name === 'desenvolvimento') {
       const acao = String(args.acao ?? '')
       armIdle()
+      // Abrir o PR manda código para fora: também exige o sim falado dele.
+      if (acao === 'pull_request' && !(await ouviuConfirmacao(Date.now() - 60_000))) {
+        return {
+          output:
+            'O sim do Ricardo não foi ouvido. Pergunte uma vez se ele quer abrir o pull request; ' +
+            'se ele disser que sim, chame de novo. Nada foi enviado.',
+        }
+      }
       // Quem confirma é a pessoa, na própria fala; o modelo só repassa.
       if (acao === 'confirmar' || acao === 'aprovar') {
         const impedimento = foraDeHora(acao, s.autodev)
@@ -265,6 +274,30 @@ export default function App() {
       }
       const { mensagem } = await autodev(acao, { pedido: String(args.pedido ?? '') })
       return { output: mensagem }
+    }
+
+    if (name === 'bom_dia') {
+      armIdle()
+      const r = await bomDia()
+      if (!r.ok) return { output: `O resumo do dia não veio (${r.mensagem}). Dê bom dia normalmente, sem resumo.` }
+      if (r.musica) {
+        const m = r.musica
+        s.pushBlade({
+          id: `musica-${Date.now()}`,
+          title: `♪ ${m.titulo}`,
+          kind: 'musica',
+          musica: { id: m.id, inicio: m.inicio, trechoSegundos: m.trechoSegundos, volume: m.volume },
+          size: 'compact',
+          hold: 'sticky',
+        })
+      }
+      return {
+        output:
+          `${r.texto}\n\nDê bom dia ao Ricardo e resuma isso em até 30 segundos, como um assistente ` +
+          'que conhece a rotina dele: compromissos primeiro, um destaque por tema de notícia, o ' +
+          'GitHub numa frase. A música já está tocando baixinho por baixo: não a anuncie, a não ser ' +
+          'que ele pergunte.',
+      }
     }
 
     if (name === 'fenix') {
@@ -530,7 +563,7 @@ export default function App() {
     await wake()
     const s = store.getState()
     if (s.phase !== 'listening') return
-    if (pedido) {
+    if (pedido || deuBomDia(fala)) {
       registrarFala(fala)
       s.pushTurn({ id: newId(), role: 'user', text: fala })
       session.current?.prompt(`O Ricardo chamou você pelo nome e disse: "${fala}". Atenda.`)
@@ -596,9 +629,14 @@ export default function App() {
       if (estado.fase === 'ocioso') testeAvisado = false
       if (estado.fase === 'ocioso' && estado.resultado && acompanhando) {
         acompanhando = false
+        const aprovado = estado.resultado.tipo === 'aprovado' && estado.resultado.branch
         session.current?.prompt(
           `O autodesenvolvimento terminou. Informe o Ricardo em uma ou duas frases, sem ler ` +
-            `código nem nomes de branch: ${estado.resultado.mensagem}`,
+            `código nem nomes de branch: ${estado.resultado.mensagem}` +
+            (aprovado
+              ? ' Depois pergunte se ele quer que você abra o pull request para a main. Só se ele ' +
+                'disser que sim, use desenvolvimento com acao "pull_request".'
+              : ''),
         )
       }
     })

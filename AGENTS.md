@@ -25,6 +25,9 @@ detalhe está em `docs/`.
 
 - **Fase 0 — Fundação: concluída** (02/11/2026), exceto o Android, adiado.
   Próxima: **Fase 1 — Core**. Ver `docs/05-roadmap.md`.
+- **Pendências em etapas:** o que está aberto fica em "Pendências em etapas", no
+  topo de `docs/05-roadmap.md` (08/11/2026): validar, Horizon, contexto e
+  comunicação, o que está bloqueado e a Fase 1. Comece por lá.
 - **Próxima versão:** 6 pontos do backlog têm prioridade sobre a ordem das fases
   (seção "Próxima versão" de `docs/05-roadmap.md`, RF-15 a RF-20). O primeiro,
   limpar a tela por voz (RF-16), está feito desde 03/11/2026.
@@ -105,6 +108,20 @@ detalhe está em `docs/`.
   diferentes, e os testes cobram isso. A proteção do `fenix.config.json` tem de
   bater com `bridge/autodev/politica.mjs` (`scripts/fenix.test.mjs`). Estado,
   transição, token e eventos ficam em `~/.apolo/fenix/`.
+- **Notificações (ADR 0027, RF-66):** o H.E.R.M.E.S. é a central: serviços pedem por
+  WSS em `/notificacoes` (porta local 8792, `APOLO_NOTIFICAR_TOKEN`) e ele entrega na
+  central do macOS (`osascript`, com argumentos, nunca interpolados) e no iPhone pelo
+  ntfy (`APOLO_NTFY_TOPICO`, que é segredo). Botões são endereços de uso único na porta
+  do celular (`/acao/<token>`) e voltam só a quem pediu. O tópico `<tópico>-mac` leva
+  ao Mac o que o Ricardo publicar pelo celular. Notificação nunca leva segredo nem
+  conteúdo pessoal: o ntfy.sh vê o texto. A Fênix avisa versões, quedas e rotinas.
+- **A.U.R.O.R.A., o bom dia (ADR 0026, RF-55):** `modules/aurora/`, serviço à parte
+  (porta 8791, token `APOLO_AURORA_TOKEN`) que a Fênix sobe. A cada "bom dia", a voz
+  chama `bom_dia`: um trecho de rock das playlists do YouTube toca baixinho no player
+  oficial (popup `musica`, nunca baixar nem tocar escondido) e ela narra agenda (.ics),
+  notícias por tema e GitHub. Temas e playlists em `modules/aurora/aurora.config.json`.
+  E-mail e To Do esperam um app registrado na Microsoft. Nada fora de `modules/aurora`
+  importa o módulo.
 - **Autodesenvolvimento (ADR 0011 e 0015):** com `npm start -- --autodev`, o
   A.P.O.L.O. altera o próprio código por voz ou chat, com confirmação, numa
   worktree em `~/.apolo/autodev`, sempre a partir da `main`. Depois das checagens,
@@ -113,6 +130,8 @@ detalhe está em `docs/`.
   aprovação voltam à `main` e apagam a branch. `autodev/<id>` só existe durante o
   teste. O VS Code é opcional (`APOLO_AUTODEV_VSCODE=1`) e fecha sozinho. Arquivos
   sensíveis (`bridge/autodev/politica.mjs`) nunca entram em teste sem revisão.
+  A conferência roda lint, tipos, build e `npm test`; ao aprovar, ele oferece o PR
+  para a `main`, que só sai com o sim falado e `--writes` (revisão da ADR 0015).
   Motivos de rollback ficam em `~/.apolo/fenix/eventos.log`.
 - Escopo atual: **apenas o core e os pontos de extensão**. Módulos de domínio
   (e-mail, agenda, finanças, automação residencial) vêm depois.
@@ -179,15 +198,18 @@ npm run logs:celular # resume as medições do app (-- 7 para sete dias, --event
 npm run popups       # compila os popups da web para o app do iPhone
 npm run rollback     # descarta a alteração em teste e volta à main (com tudo parado)
 npm run hermes       # só o H.E.R.M.E.S. (a F.Ê.N.I.X. já o sobe)
+npm run aurora:autorizar # uma vez: autoriza a A.U.R.O.R.A. a ler as playlists do YouTube
+npm run aurora:resumo    # mostra o texto do bom dia de hoje
 npm run test:autodev # testes da política e do rollback
 npm run test:autodev:e2e # ciclo real com Chrome headless mudo (leva minutos, fora do npm test)
 npm run test:git     # testes do sub-módulo git (commit e pull request)
 npm run test:gateway # testes do canal do app e do H.E.R.M.E.S.
 npm run test:fenix   # testes da F.Ê.N.I.X. e do lado dela no A.P.O.L.O.
 npm run test:hermes  # testes do H.E.R.M.E.S.
+npm run test:aurora  # testes da A.U.R.O.R.A.
 npm run test:comandos # testes dos comandos por voz (RF-20)
 npm run test:conversa # testes da janela de conversa (ADR 0024)
-npm test             # todos os testes (scripts/, fenix/test/, hermes/test/)
+npm test             # todos os testes (scripts/, fenix/test/, hermes/test/, modules/aurora/test/)
 ```
 
 ## Ambiente

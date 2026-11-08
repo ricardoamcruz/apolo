@@ -36,6 +36,9 @@ const normalizar = (fala: string) =>
     .trim()
     .replace(/\bapollo\b/g, 'apolo')
 
+/** "Bom dia, Apolo": a saudação some do pedido, mas o bom dia tem rotina própria (RF-55). */
+export const deuBomDia = (fala: string) => /\bbom dia\b/.test(normalizar(fala))
+
 /** Foi um chamado? Em `pedido`, o que veio junto com o nome, se veio. */
 export function chamouPeloNome(fala: string): { chamou: boolean; pedido: string } {
   const nao = { chamou: false, pedido: '' }

@@ -43,7 +43,7 @@ export type Panel = {
 export type Blade = {
   id: string
   title: string
-  kind: 'article' | 'image' | 'gallery' | 'video' | 'embed' | 'markup' | 'camera'
+  kind: 'article' | 'image' | 'gallery' | 'video' | 'embed' | 'markup' | 'camera' | 'musica'
   /** article / image / video / embed. */
   url?: string
   /** gallery. */
@@ -54,6 +54,8 @@ export type Blade = {
   mode?: 'reader' | 'live'
   size: 'compact' | 'tall' | 'wide' | 'full'
   hold: 'turn' | 'sticky'
+  /** musica: a faixa do bom dia (RF-55). Toca o trecho baixinho e o popup se fecha. */
+  musica?: { id: string; inicio: number; trechoSegundos: number; volume: number }
   /** Na bandeja da direita: fica lá até ser aberto ou fechado de vez. */
   minimized?: boolean
 }

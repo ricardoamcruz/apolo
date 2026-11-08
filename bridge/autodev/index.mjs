@@ -91,6 +91,9 @@ async function verificarPadrao(pasta) {
     ['lint', bin('oxlint'), []],
     ['tipos', bin('tsc'), ['-b', '--force']],
     ['build', bin('vite'), ['build']],
+    // Os testes automatizados também, antes de a F.Ê.N.I.X. pôr a alteração no ar.
+    // APOLO_AUTODEV_TESTES=0 pula: o teste de ponta a ponta, que já é o ciclo inteiro.
+    ...(process.env.APOLO_AUTODEV_TESTES === '0' ? [] : [['testes', 'npm', ['test']]]),
   ]
   for (const [nome, cmd, args] of passos) {
     try {
@@ -123,6 +126,7 @@ export function criarAutodev({
   pasta = PASTA_AUTODEV,
   agente = rodarAgente,
   verificar = verificarPadrao,
+  abrirPr = null,
   abrirEditor = abrirEditorPadrao,
   fecharEditor = fecharEditorPadrao,
 }) {
@@ -395,6 +399,19 @@ export function criarAutodev({
         }
         return { ok: false, mensagem: 'Não há nada para cancelar.' }
       }
+      if (acao === 'pull_request') {
+        if (!abrirPr) {
+          return { ok: false, mensagem: 'Abrir pull request exige o Apolo iniciado com npm start -- --writes.' }
+        }
+        const r = estado.resultado
+        if (estado.fase !== 'ocioso' || r?.tipo !== 'aprovado' || !r.branch) {
+          return { ok: false, mensagem: 'Não há alteração aprovada esperando pull request.' }
+        }
+        if (r.pr) return { ok: false, mensagem: `O pull request desta alteração já foi aberto: ${r.pr}` }
+        const pr = await abrirPr({ title: r.titulo || r.branch, branch: r.branch })
+        if (pr.ok) mudar({ resultado: { ...r, pr: pr.texto.match(/https:\/\/\S+/)?.[0]?.replace(/\.$/, '') ?? 'aberto' } })
+        return { ok: pr.ok, mensagem: pr.texto }
+      }
       if (acao === 'aprovar') {
         if (estado.fase !== 'testando') return { ok: false, mensagem: 'Não há alteração em teste.' }
         const branch = await nomeDaBranch(estado.entrega.branch)
@@ -442,7 +459,8 @@ export function criarAutodev({
       const { resumo } = estado
       const texto = tipo === 'aprovado' && resumo ? `${resumo} ${mensagem}` : mensagem
       mudar({ resumo: undefined, branch: undefined })
-      terminar(id, tipo, texto, branch ? { branch } : {})
+      // O título do commit vai junto: é o título do pull request, se ele pedir.
+      terminar(id, tipo, texto, branch ? { branch, titulo: estado.entrega?.titulo } : {})
     },
   }
 }

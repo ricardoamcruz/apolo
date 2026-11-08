@@ -23,8 +23,9 @@ export type Sistema = {
  * aparece. Cada sistema plugável ganha um nome próprio, como o C.O.R.E. (ADR 0018).
  * H.E.R.M.E.S. é o canal do celular: o mensageiro dos deuses, irmão de Apolo.
  * F.Ê.N.I.X. é a guardiã que o mantém no ar e o faz renascer (ADR 0025).
+ * A.U.R.O.R.A. é o bom dia: a deusa do amanhecer (ADR 0026).
  */
-const PLUGAVEIS: Record<string, string> = { fenix: 'F.Ê.N.I.X.', celular: 'H.E.R.M.E.S.' }
+const PLUGAVEIS: Record<string, string> = { fenix: 'F.Ê.N.I.X.', celular: 'H.E.R.M.E.S.', aurora: 'A.U.R.O.R.A.' }
 
 const FALHAS: Record<string, string> = { failed: 'falhou', 'needs-auth': 'precisa de autorização' }
 
@@ -61,7 +62,12 @@ export function montarSistemas(
  * Como cada nome se fala. Na tela a sigla tem pontos; em voz é uma palavra só,
  * nunca letra por letra.
  */
-const FALADOS: Record<string, string> = { 'C.O.R.E.': 'Core', 'F.Ê.N.I.X.': 'Fênix', 'H.E.R.M.E.S.': 'Hermes' }
+const FALADOS: Record<string, string> = {
+  'C.O.R.E.': 'Core',
+  'F.Ê.N.I.X.': 'Fênix',
+  'H.E.R.M.E.S.': 'Hermes',
+  'A.U.R.O.R.A.': 'Aurora',
+}
 export const nomeFalado = (nome: string) => FALADOS[nome] ?? nome
 
 /** O que o modelo de voz narra. */

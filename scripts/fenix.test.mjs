@@ -60,9 +60,10 @@ test('cada rotina aponta para um programa que existe e tem prazo', () => {
 })
 
 test('os serviços da Fênix são a ponte, a interface e o H.E.R.M.E.S., e só a ponte troca de versão', () => {
-  assert.deepEqual(config.servicos.map((s) => s.nome), ['ponte', 'interface', 'hermes'])
+  assert.deepEqual(config.servicos.map((s) => s.nome), ['ponte', 'interface', 'hermes', 'aurora'])
   assert.deepEqual(config.servicos.filter((s) => s.versionado).map((s) => s.nome), ['ponte'])
   assert.equal(config.servicos.find((s) => s.nome === 'hermes').opcional, true)
+  assert.equal(config.servicos.find((s) => s.nome === 'aurora').opcional, true)
   assert.equal(config.flags['--writes'].comandosLivres, true, 'comando livre só com --writes')
   assert.equal(config.flags['--autodev'].comandosLivres, undefined)
 })
@@ -71,7 +72,7 @@ test('os serviços da Fênix são a ponte, a interface e o H.E.R.M.E.S., e só a
  * A.P.O.L.O., F.Ê.N.I.X. e H.E.R.M.E.S. só conversam pela rede: nenhum importa
  * código do outro. É o que deixa cada um ir para um repositório próprio.
  */
-test('nada do A.P.O.L.O. importa a Fênix ou o H.E.R.M.E.S.', () => {
+test('nada do A.P.O.L.O. importa a Fênix, o H.E.R.M.E.S. ou um módulo', () => {
   const arquivos = []
   const varrer = (pasta) => {
     for (const nome of readdirSync(pasta)) {
@@ -84,7 +85,7 @@ test('nada do A.P.O.L.O. importa a Fênix ou o H.E.R.M.E.S.', () => {
   for (const pasta of ['bridge', 'src', 'scripts', 'apps/mobile/src']) varrer(pasta)
   for (const arquivo of arquivos) {
     for (const [, alvo] of readFileSync(arquivo, 'utf8').matchAll(/(?:from|import)\s*\(?\s*'([^']+)'/g)) {
-      assert.equal(/(^|\/)(fenix|hermes)\//.test(alvo), false, `${arquivo} importa ${alvo}`)
+      assert.equal(/(^|\/)(fenix|hermes|modules)\//.test(alvo), false, `${arquivo} importa ${alvo}`)
     }
   }
 })

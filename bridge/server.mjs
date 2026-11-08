@@ -26,7 +26,7 @@ import { displayServer } from './panels.mjs'
 import { uiServer } from './ui.mjs'
 import { chromeAvailable, chromeServer } from './chrome.mjs'
 import { navegadorServer } from './navegador.mjs'
-import { gitServer } from './git.mjs'
+import { criarGit, gitServer } from './git.mjs'
 import { visionServer } from './vision.mjs'
 import { homedir, tmpdir } from 'node:os'
 import { readFileSync, realpathSync } from 'node:fs'
@@ -56,6 +56,7 @@ import {
   tokenDoHermes,
 } from './hermes.mjs'
 import { criarClienteFenix } from './fenix.mjs'
+import { criarClienteAurora } from './aurora.mjs'
 import { criarTelemetria } from './telemetria.mjs'
 import { garantirCertificado } from './tls.mjs'
 import { criarCentral } from './extensoes.mjs'
@@ -147,7 +148,7 @@ const MCP_SERVERS = configuredServers()
  * Os sistemas à parte, para a aba SISTEMAS (docs/adr/0025): a F.Ê.N.I.X. e o
  * H.E.R.M.E.S. O estado do H.E.R.M.E.S. vem da Fênix, que é quem o sobe.
  */
-const canais = { fenix: null, hermes: null }
+const canais = { fenix: null, hermes: null, aurora: null }
 /** Quantos celulares estão conectados agora pelo H.E.R.M.E.S. */
 let celularesConectados = 0
 const STATUS_DO_SERVICO = { ligado: 'connected', subindo: 'pending', caiu: 'failed' }
@@ -157,6 +158,7 @@ const comCanais = (servers) => {
   if (canais.fenix) extras.push({ name: 'fenix', status: canais.fenix })
   const hermes = canais.hermes ?? (celularesConectados ? 'connected' : null)
   if (hermes) extras.push({ name: 'celular', status: hermes })
+  if (canais.aurora) extras.push({ name: 'aurora', status: canais.aurora })
   return [...servers, ...extras]
 }
 /** Cada interface reenvia a própria lista quando um canal muda. */
@@ -842,7 +844,7 @@ const fenix = criarClienteFenix({
   ca: process.env.FENIX_CA?.trim() ? readFileSync(process.env.FENIX_CA.trim()) : tls.cert,
   aoMudar: (conectada) => {
     canais.fenix = conectada ? 'connected' : 'failed'
-    if (!conectada) canais.hermes = null
+    if (!conectada) canais.hermes = canais.aurora = null
     canaisMudaram()
   },
   aoReceber: (msg) => {
@@ -851,6 +853,8 @@ const fenix = criarClienteFenix({
       estadoDaFenix = msg
       const hermes = msg.servicos?.find((s) => s.nome === 'hermes')
       canais.hermes = (hermes && STATUS_DO_SERVICO[hermes.status]) ?? null
+      const doAurora = msg.servicos?.find((s) => s.nome === 'aurora')
+      canais.aurora = (doAurora && STATUS_DO_SERVICO[doAurora.status]) ?? null
       if (msg.inicial) autodev.sincronizar(msg.versao)
       canaisMudaram()
       broadcast({ type: 'fenix', estado: resumoDaFenix() })
@@ -871,6 +875,15 @@ const autodev = criarAutodev({
   supervisor: fenix ? (msg) => fenix.enviar(msg) : null,
   avisar: (estado) => broadcast({ type: 'autodev', estado }),
   interfaces: () => interfacesDoPc.size,
+  // Abrir o PR de uma alteração aprovada é efeito no mundo: só com --writes (ADR 0014).
+  abrirPr: ALLOW_WRITES ? (pedido) => criarGit({ repo: REPO }).pullRequest(pedido) : null,
+})
+
+/** O bom dia (RF-55, docs/adr/0026): a faixa de rock e o resumo do dia. */
+const aurora = criarClienteAurora({
+  url: process.env.APOLO_AURORA_URL?.trim() || undefined,
+  token: process.env.APOLO_AURORA_TOKEN?.trim(),
+  ca: tls.cert,
 })
 
 /** Rotinas longas (o app do iPhone) levam até 45 minutos. */
@@ -1410,6 +1423,11 @@ const atender = (socket, { celular = false } = {}) => {
 
     if (msg.type === 'preferencias') {
       broadcast({ type: 'preferencias', valores: preferencias.gravar(msg.valores) })
+    }
+
+    if (msg.type === 'aurora' && !celular) {
+      void (aurora ? aurora.bomDia() : Promise.resolve({ ok: false, mensagem: 'falta APOLO_AURORA_TOKEN no .env.local' }))
+        .then((r) => send({ ...r, type: 'aurora', resposta: msg.id }))
     }
 
     if (msg.type === 'fenix' && typeof msg.acao === 'string') {

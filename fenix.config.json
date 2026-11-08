@@ -10,6 +10,11 @@
     "key": "${APOLO_TLS_KEY:-~/.apolo/tls/apolo-chave.pem}"
   },
   "preparar": [["node", "scripts/preparar.mjs"]],
+  "notificacoes": {
+    "url": "wss://localhost:${APOLO_NOTIFICAR_PORTA:-8792}/notificacoes",
+    "token": "${APOLO_NOTIFICAR_TOKEN}",
+    "ca": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}"
+  },
   "flags": {
     "--writes": { "ambiente": { "JARVIS_ALLOW_WRITES": "1" }, "comandosLivres": true },
     "--autodev": { "ambiente": { "APOLO_AUTODEV": "1" } }
@@ -48,12 +53,29 @@
       "comando": ["node", "hermes/hermes.mjs"],
       "cor": "33",
       "opcional": true,
-      "portas": ["${APOLO_GATEWAY_PORT:-8788}"],
+      "portas": ["${APOLO_GATEWAY_PORT:-8788}", "${APOLO_NOTIFICAR_PORTA:-8792}"],
       "ambiente": {
         "HERMES_TLS_CERT": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}",
         "HERMES_TLS_KEY": "${APOLO_TLS_KEY:-~/.apolo/tls/apolo-chave.pem}",
         "HERMES_APOLO_URL": "wss://localhost:${JARVIS_BRIDGE_PORT:-8787}",
-        "HERMES_APOLO_CA": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}"
+        "HERMES_APOLO_CA": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}",
+        "HERMES_NOTIFICAR_PORTA": "${APOLO_NOTIFICAR_PORTA:-8792}"
+      }
+    },
+    {
+      "nome": "aurora",
+      "comando": ["node", "modules/aurora/aurora.mjs"],
+      "cor": "32",
+      "opcional": true,
+      "portas": ["${APOLO_AURORA_PORTA:-8791}"],
+      "ambiente": {
+        "AURORA_PORTA": "${APOLO_AURORA_PORTA:-8791}",
+        "AURORA_TLS_CERT": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}",
+        "AURORA_TLS_KEY": "${APOLO_TLS_KEY:-~/.apolo/tls/apolo-chave.pem}"
+      },
+      "saude": {
+        "urls": ["https://localhost:${APOLO_AURORA_PORTA:-8791}/saude"],
+        "ca": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}"
       }
     }
   ],
@@ -86,6 +108,7 @@
       "^\\.gitignore$",
       "^fenix\\/",
       "^hermes\\/",
+      "^modules\\/",
       "^fenix\\.config\\.json$"
     ],
     "liberados": [".env.example"],

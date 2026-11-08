@@ -260,6 +260,38 @@ test('recusar a aprovação mantém a alteração em teste', async () => {
   assert.equal(g.a.estado().resultado.mensagem, 'Há alterações.')
 })
 
+test('depois de aprovar, o pull request só sai com --writes, uma vez, com o título do commit', async () => {
+  const r = repositorio()
+  const pedidos = []
+  const agente = async ({ pasta }) => {
+    writeFileSync(join(pasta, 'novo.txt'), 'novo\n')
+    return { ok: true, texto: 'Feito.\nBRANCH: arquivo-novo\nCOMMIT: Cria o arquivo novo' }
+  }
+  const semWrites = gerente(repositorio(), { agente })
+  assert.match((await semWrites.a.acao('pull_request')).mensagem, /--writes/)
+
+  const g = gerente(r, {
+    agente,
+    abrirPr: async (p) => (pedidos.push(p), { ok: true, texto: 'Pull request aberto: https://github.com/x/y/pull/11.' }),
+  })
+  assert.equal((await g.a.acao('pull_request')).ok, false, 'sem alteração aprovada, não há PR')
+  await g.a.acao('propor', { pedido: 'criar novo' })
+  await g.a.acao('confirmar')
+  await g.fim()
+  const { id } = g.pedidos[0]
+  g.a.resultado({ id, tipo: 'em_teste', mensagem: 'No ar.' })
+  await g.a.acao('aprovar')
+  g.a.resultado({ id, tipo: 'aprovado', mensagem: 'Guardei.', branch: 'fase-2/arquivo-novo' })
+  assert.equal(g.a.estado().resultado.titulo, 'Cria o arquivo novo')
+
+  const pr = await g.a.acao('pull_request')
+  assert.equal(pr.ok, true)
+  assert.deepEqual(pedidos, [{ title: 'Cria o arquivo novo', branch: 'fase-2/arquivo-novo' }])
+  assert.equal(g.a.estado().resultado.pr, 'https://github.com/x/y/pull/11')
+  assert.match((await g.a.acao('pull_request')).mensagem, /já foi aberto/)
+  assert.equal(pedidos.length, 1)
+})
+
 test('a voz não consegue transformar "confirmo" em pedido', async () => {
   const r = repositorio()
   let rodou = false

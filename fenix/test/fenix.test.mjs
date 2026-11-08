@@ -366,3 +366,46 @@ test('a Fênix não importa nada de fora da própria pasta, a não ser o Node e 
     }
   }
 })
+
+// ── avisos ──────────────────────────────────────────────────────────────────
+
+test('a Fênix avisa a central quando um serviço cai, e o botão Descartar chega até ela', async () => {
+  const { WebSocketServer } = await import('ws')
+  const { createServer } = await import('node:http')
+  const http = createServer()
+  const hub = new WebSocketServer({ server: http, verifyClient: ({ req }, ok) => ok(req.headers.authorization === `Bearer ${TOKEN}`, 401) })
+  const recebidas = []
+  let cliente
+  hub.on('connection', (ws) => {
+    cliente = ws
+    ws.on('message', (d) => recebidas.push(JSON.parse(d.toString())))
+  })
+  await new Promise((r) => http.listen(0, '127.0.0.1', r))
+  const pasta = temp()
+  writeFileSync(join(pasta, 'cai.mjs'), 'setTimeout(() => process.exit(3), 50)')
+  writeFileSync(
+    join(pasta, 'fenix.config.json'),
+    JSON.stringify({
+      nome: 'teste',
+      pasta: join(pasta, 'dados'),
+      escuta: { porta: 0 },
+      notificacoes: { url: `ws://127.0.0.1:${http.address().port}/notificacoes`, token: TOKEN },
+      servicos: [{ nome: 'cai', comando: ['node', 'cai.mjs'] }],
+    }),
+  )
+  const fenix = criarFenix(lerConfig(join(pasta, 'fenix.config.json'), {}), { token: TOKEN, log() {}, saida: mudo })
+  await fenix.iniciar()
+  await esperar(() => recebidas.some((m) => m.type === 'notificar' && /cai caiu/.test(m.titulo)), 6000)
+  const aviso = recebidas.find((m) => /cai caiu/.test(m.titulo))
+  assert.equal(aviso.prioridade, 'alta')
+  assert.match(aviso.texto, /encerrou \(3\)/)
+  // Um segundo tombo logo depois não vira outro aviso.
+  await dormir(1500)
+  assert.equal(recebidas.filter((m) => /cai caiu/.test(m.titulo)).length, 1)
+  // O toque em Descartar chega à Fênix (sem versão em teste, ela só recusa).
+  cliente.send(JSON.stringify({ type: 'notificacao:acao', notificacao: 'x', acao: 'descartar_versao' }))
+  await dormir(100)
+  await fenix.encerrar()
+  for (const ws of hub.clients) ws.terminate()
+  await new Promise((r) => http.close(r))
+})

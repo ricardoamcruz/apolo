@@ -27,6 +27,8 @@ export const PING = '{"type":"ping"}'
 const PONG = '{"type":"pong"}'
 /** O que os popups carregam. Tudo leitura, e a ponte já limita cada rota. */
 const ROTA_DE_MIDIA = /^\/m\/([\w-]+)(\/(?:img|media|file|page)\?.*)$/
+/** O botão de uma notificação (src/notificacoes.mjs): o token de uso único decide. */
+const ROTA_DE_ACAO = /^\/acao\/([\w-]{20,100})$/
 
 export const chaveDeMidia = (token) =>
   createHmac('sha256', token).update('apolo.midia').digest('base64url')
@@ -53,6 +55,7 @@ export function tokenConfere(cabecalho, token) {
  *   recebe `base`, o endereço público da mídia, para reescrever links de páginas
  * @param {number} [opcoes.pulsoMs]
  * @param {{ cert: Buffer, key: Buffer }} [opcoes.tls] com isto, só aceita HTTPS
+ * @param {(token: string) => boolean} [opcoes.responderAcao] o toque num botão de notificação
  */
 export function criarGateway({
   token,
@@ -62,6 +65,7 @@ export function criarGateway({
   servirMidia,
   pulsoMs = PULSO_MS,
   tls,
+  responderAcao,
 }) {
   if (!token || token.length < TOKEN_MINIMO) {
     throw new Error(`o token do gateway precisa de pelo menos ${TOKEN_MINIMO} caracteres`)
@@ -70,6 +74,12 @@ export function criarGateway({
   const chave = chaveDeMidia(token)
 
   const atenderHttp = (req, res) => {
+    const acao = ROTA_DE_ACAO.exec(req.url ?? '')
+    if (acao && responderAcao && (req.method === 'POST' || req.method === 'GET')) {
+      const valeu = responderAcao(acao[1])
+      res.writeHead(valeu ? 200 : 410, { 'content-type': 'text/plain; charset=utf-8' })
+      return res.end(valeu ? 'Recebido.' : 'Este botão já foi usado ou expirou.')
+    }
     const rota = ROTA_DE_MIDIA.exec(req.url ?? '')
     if (req.method !== 'GET' || !rota || !servirMidia || !iguais(rota[1], chave)) {
       res.writeHead(404)

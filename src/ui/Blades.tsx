@@ -159,8 +159,67 @@ const CameraView = memo(function CameraView() {
   return <video ref={el} className="bl-camera" autoPlay playsInline muted />
 })
 
+/**
+ * A faixa do bom dia (RF-55, docs/adr/0026). O player oficial do YouTube, porque
+ * baixar o áudio ou tocar escondido fere os termos do Google; daí o popup pequeno.
+ * O volume fica baixo, por baixo da voz, e o trecho termina num fade de 4 s.
+ */
+function MusicaView({ blade }: { blade: Blade }) {
+  const frame = useRef<HTMLIFrameElement>(null)
+  const closeBlade = useStore((s) => s.closeBlade)
+  const m = blade.musica!
+  useEffect(() => {
+    const comando = (func: string, args: unknown[] = []) =>
+      frame.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), 'https://www.youtube-nocookie.com')
+    // O player só obedece depois de pronto: o volume é reafirmado nos primeiros segundos.
+    const ajuste = window.setInterval(() => {
+      frame.current?.contentWindow?.postMessage(JSON.stringify({ event: 'listening', id: blade.id }), 'https://www.youtube-nocookie.com')
+      comando('setVolume', [m.volume])
+      comando('playVideo')
+    }, 400)
+    const pararAjuste = window.setTimeout(() => window.clearInterval(ajuste), 4000)
+    const fadeMs = 4000
+    let fade = 0
+    const inicioDoFade = window.setTimeout(() => {
+      const passos = 10
+      let i = 0
+      fade = window.setInterval(() => {
+        i++
+        comando('setVolume', [Math.round(m.volume * (1 - i / passos))])
+        if (i >= passos) {
+          window.clearInterval(fade)
+          comando('stopVideo')
+          closeBlade(blade.id)
+        }
+      }, fadeMs / passos)
+    }, Math.max(0, m.trechoSegundos * 1000 - fadeMs))
+    return () => {
+      window.clearInterval(ajuste)
+      window.clearTimeout(pararAjuste)
+      window.clearTimeout(inicioDoFade)
+      window.clearInterval(fade)
+    }
+  }, [blade.id, m.volume, m.trechoSegundos, closeBlade])
+
+  const src =
+    `https://www.youtube-nocookie.com/embed/${encodeURIComponent(m.id)}` +
+    `?enablejsapi=1&autoplay=1&start=${m.inicio}&rel=0&playsinline=1&origin=${encodeURIComponent(window.location.origin)}`
+  return (
+    <iframe
+      ref={frame}
+      className="bl-frame"
+      src={src}
+      sandbox="allow-scripts allow-same-origin allow-presentation"
+      allow="autoplay; encrypted-media"
+      referrerPolicy="strict-origin-when-cross-origin"
+      title={blade.title}
+    />
+  )
+}
+
 const Body = memo(function Body({ blade }: { blade: Blade }) {
   if (blade.kind === 'camera') return <CameraView />
+  if (blade.kind === 'musica' && blade.musica) return <MusicaView blade={blade} />
 
   if (blade.kind === 'article' && blade.url) {
     return (

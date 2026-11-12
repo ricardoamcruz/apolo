@@ -38,8 +38,13 @@ npm test   # dentro desta pasta: node --test test/
   de novo, com as mesmas opções. O projeto pode usar isso para revivê-la se ela morrer
   (no A.P.O.L.O., `bridge/renascer.mjs`; docs/adr/0028). Renascida (`FENIX_RENASCIDA=1`),
   ela registra em `eventos.log`, avisa e escreve a saída em `fenix.log`.
-- **Prazos.** `tempos.servicos` (`esperasMs`, `estavelMs`, `intervaloMs`, `subidaMs`) e
-  `tempos.versoes` (`subidaMs`, `estabilidadeMs`, `intervaloMs`, `vigiaMs`) no config.
+- **Prazos.** `tempos.servicos` (`esperasMs`, `estavelMs`, `intervaloMs`, `subidaMs`),
+  `tempos.versoes` (`subidaMs`, `estabilidadeMs`, `intervaloMs`, `vigiaMs`) e
+  `tempos.rotinas.avisoMs` (a partir de quando uma rotina avisa ao terminar; 1 min) no config.
+- **Avisos.** Só frases para gente: nada de exceção, código ou saída de comando. A saída
+  de cada rotina fica em `<pasta>/rotinas/<nome>.log`; no aviso de falha vai a última
+  linha da saída que começa com "✖" (a explicação que a rotina deixou) ou uma frase
+  genérica, e `textoDoAviso` descarta o que parecer rastro de erro.
 - **Comandos livres.** Script bash vira proposta; só roda confirmado, no prazo, com
   o texto exato, se uma opção com `comandosLivres` estiver ligada, e nunca com
   uma versão sem revisão no ar.

@@ -357,9 +357,9 @@ test('os tempos do config valem só como números positivos e só os que existem
     }),
   )
   const c = lerConfig(join(pasta, 'fenix.config.json'), {})
-  assert.deepEqual(c.tempos, { servicos: { intervaloMs: 300, esperasMs: [200, 400] }, versoes: { subidaMs: 6000 } })
+  assert.deepEqual(c.tempos, { servicos: { intervaloMs: 300, esperasMs: [200, 400] }, versoes: { subidaMs: 6000 }, rotinas: {} })
   writeFileSync(join(pasta, 'fenix.config.json'), JSON.stringify({ servicos: [{ nome: 'app', comando: ['node', 'app.mjs'] }] }))
-  assert.deepEqual(lerConfig(join(pasta, 'fenix.config.json'), {}).tempos, { servicos: {}, versoes: {} })
+  assert.deepEqual(lerConfig(join(pasta, 'fenix.config.json'), {}).tempos, { servicos: {}, versoes: {}, rotinas: {} })
 })
 
 test('quem a Fênix sobe recebe o pid dela e a receita para revivê-la (docs/adr/0028)', async () => {
@@ -471,7 +471,7 @@ test('a Fênix avisa a central quando um serviço cai, e o botão Descartar cheg
   await esperar(() => recebidas.some((m) => m.type === 'notificar' && /cai caiu/.test(m.titulo)), 6000)
   const aviso = recebidas.find((m) => /cai caiu/.test(m.titulo))
   assert.equal(aviso.prioridade, 'alta')
-  assert.match(aviso.texto, /encerrou \(3\)/)
+  assert.equal(aviso.texto, 'O serviço cai parou com erro. Já estou subindo de novo.')
   // Um segundo tombo logo depois não vira outro aviso.
   await dormir(1500)
   assert.equal(recebidas.filter((m) => /cai caiu/.test(m.titulo)).length, 1)

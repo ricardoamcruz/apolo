@@ -141,7 +141,11 @@ detalhe está em `docs/`.
   ntfy (`APOLO_NTFY_TOPICO`, que é segredo). Botões são endereços de uso único na porta
   do celular (`/acao/<token>`) e voltam só a quem pediu. O tópico `<tópico>-mac` leva
   ao Mac o que o Ricardo publicar pelo celular. Notificação nunca leva segredo nem
-  conteúdo pessoal: o ntfy.sh vê o texto. A Fênix avisa versões, quedas e rotinas.
+  conteúdo pessoal: o ntfy.sh vê o texto. Também nunca leva exceção, rastro de erro,
+  código ou saída de comando, só frases para ele: o detalhe técnico fica no log
+  (`~/.apolo/fenix/rotinas/<rotina>.log`, `eventos.log`), e `textoDoAviso`
+  (`fenix/src/avisos.mjs`) barra o que escapar. Uma rotina explica a própria falha
+  numa última linha que começa com "✖", e é essa linha que vai no aviso. A Fênix avisa versões, quedas e rotinas.
 - **A.U.R.O.R.A., o bom dia (ADR 0026, RF-55):** `modules/aurora/`, serviço à parte
   (porta 8791, token `APOLO_AURORA_TOKEN`) que a Fênix sobe. A cada "bom dia", a voz
   chama `bom_dia`: um trecho de rock das playlists do YouTube toca baixinho no tocador

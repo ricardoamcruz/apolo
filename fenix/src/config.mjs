@@ -165,6 +165,7 @@ export function lerConfig(arquivo, envDoTerminal = process.env) {
 const TEMPOS = {
   servicos: ['estavelMs', 'intervaloMs', 'subidaMs'],
   versoes: ['subidaMs', 'estabilidadeMs', 'intervaloMs', 'vigiaMs'],
+  rotinas: ['avisoMs'],
 }
 function tempos(bruto) {
   const saida = {}

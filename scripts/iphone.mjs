@@ -5,6 +5,12 @@
  * O aparelho vem de APOLO_IPHONE_ID no .env.local ou, sem ele, é o primeiro iPhone
  * que o `devicectl` enxerga. Se mudou o app.json, rode antes o prebuild e o
  * pod install, que são raros e demoram: esta rotina não faz isso sozinha.
+ *
+ * Instalar exige o iPhone ao alcance do Xcode: pelo cabo, ou na mesma rede Wi-Fi do
+ * Mac com "Connect via network" ligado. O Tailscale não serve para isso.
+ *
+ * Toda falha termina numa linha que começa com "✖", em palavras: é ela que a Fênix
+ * manda no aviso. A saída do xcodebuild e do devicectl fica no log da rotina.
  */
 import '../bridge/env.mjs'
 import { execFileSync } from 'node:child_process'
@@ -14,7 +20,23 @@ import { join } from 'node:path'
 
 const IOS = 'apps/mobile/ios'
 const passo = (texto) => console.log(`\n» ${texto}`)
-const rodar = (comando, args, opcoes = {}) => execFileSync(comando, args, { stdio: 'inherit', ...opcoes })
+const LONGE = 'Ligue o iPhone pelo cabo ou fique na mesma rede Wi-Fi do Mac, com ele desbloqueado, e rode de novo.'
+
+/** Encerra com a explicação para gente; o detalhe técnico já saiu acima, para o log. */
+function falhar(mensagem) {
+  console.error(`\n✖ ${mensagem}`)
+  process.exit(1)
+}
+
+/** Roda um passo; se falhar, a mensagem é a de `seFalhar`, e não o rastro do Node. */
+function rodar(comando, args, { seFalhar, ...opcoes } = {}) {
+  try {
+    execFileSync(comando, args, { stdio: 'inherit', ...opcoes })
+  } catch (err) {
+    console.error(`(${comando} terminou com ${err.status ?? err.signal ?? err.code})`)
+    falhar(seFalhar)
+  }
+}
 
 function acharAparelho() {
   const fixo = process.env.APOLO_IPHONE_ID?.trim()
@@ -51,13 +73,10 @@ function acharApp() {
 }
 
 const aparelho = acharAparelho()
-if (!aparelho) {
-  console.error('Nenhum iPhone encontrado. Conecte o aparelho ou defina APOLO_IPHONE_ID no .env.local.')
-  process.exit(1)
-}
+if (!aparelho) falhar(`Nenhum iPhone encontrado. ${LONGE}`)
 
 passo('compilando os popups da web')
-rodar(process.execPath, ['scripts/popups.mjs'])
+rodar(process.execPath, ['scripts/popups.mjs'], { seFalhar: 'A compilação dos popups da web falhou. Nada foi instalado.' })
 
 passo('compilando o app em Release (leva alguns minutos)')
 rodar(
@@ -66,15 +85,14 @@ rodar(
     '-workspace', 'APOLO.xcworkspace', '-scheme', 'APOLO', '-configuration', 'Release',
     '-destination', 'generic/platform=iOS', '-allowProvisioningUpdates', '-quiet', 'build',
   ],
-  { cwd: IOS },
+  { cwd: IOS, seFalhar: 'A compilação do app falhou. Nada foi instalado.' },
 )
 
 const app = acharApp()
-if (!app) {
-  console.error('O build terminou, mas não achei o APOLO.app no DerivedData.')
-  process.exit(1)
-}
+if (!app) falhar('O app compilou, mas não achei o APOLO.app para instalar.')
 
 passo('instalando no iPhone')
-rodar('xcrun', ['devicectl', 'device', 'install', 'app', '--device', aparelho, app])
+rodar('xcrun', ['devicectl', 'device', 'install', 'app', '--device', aparelho, app], {
+  seFalhar: `O app compilou, mas o iPhone não estava ao alcance para instalar. ${LONGE}`,
+})
 console.log('\nApp instalado. Abra o A.P.O.L.O. no iPhone.')

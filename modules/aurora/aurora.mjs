@@ -10,22 +10,27 @@
  * Tudo vem do ambiente (prefixo AURORA_, ou APOLO_ como no .env.local do A.P.O.L.O.):
  *
  *   AURORA_TOKEN              quem pode pedir o bom dia (32+ caracteres); sem ele, sai com 0
- *   AURORA_PORTA, AURORA_HOST 8791, 127.0.0.1
- *   AURORA_TLS_CERT/KEY       com eles, só HTTPS
+ *   AURORA_PORTA, AURORA_HOST 8791 (ou APOLO_AURORA_PORTA), 127.0.0.1
+ *   AURORA_TLS_CERT/KEY       com eles, só HTTPS; sem eles, ~/.apolo/tls, se existir
  *   AURORA_GOOGLE_CLIENT_ID   cliente OAuth "TVs e dispositivos de entrada limitados"
  *   AURORA_GOOGLE_CLIENT_SECRET
  *   AURORA_AGENDA_ICS         link .ics da agenda
  *   AURORA_PASTA              token do YouTube e cache (padrão ~/.apolo/aurora)
  *   AURORA_CONFIG             temas, playlists e repositório (padrão aurora.config.json ao lado)
+ *
+ * Nada aqui depende de quem a subiu (docs/adr/0029): os padrões são dela, `npm run
+ * aurora` lê o .env.local sozinho, e se a F.Ê.N.I.X. cair ela continua servindo,
+ * com a saída em AURORA_PASTA/aurora.log. `GET /saude` é o contrato de quem a vigia.
  */
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { bomDia, textoParaVoz } from './src/resumo.mjs'
+import { protegerSaidas } from './src/saidas.mjs'
 import { criarYoutube } from './src/youtube.mjs'
 
 const env = process.env
@@ -34,6 +39,8 @@ const ler = (arquivo) => (arquivo ? readFileSync(arquivo) : undefined)
 
 const config = JSON.parse(readFileSync(valor('CONFIG') ?? new URL('./aurora.config.json', import.meta.url), 'utf8'))
 const pasta = valor('PASTA') ?? join(homedir(), '.apolo', 'aurora')
+/** O padrão do projeto (docs/adr/0021), só quando o arquivo existe. */
+const seExistir = (arquivo) => (existsSync(arquivo) ? arquivo : undefined)
 const youtube = criarYoutube({ clienteId: valor('GOOGLE_CLIENT_ID'), segredo: valor('GOOGLE_CLIENT_SECRET'), pasta })
 const montar = () => bomDia({ config, youtube, agendaIcs: valor('AGENDA_ICS') })
 
@@ -62,6 +69,8 @@ if (subcomando === 'resumo') {
   process.exit(0)
 }
 
+protegerSaidas({ nome: 'aurora', arquivo: join(pasta, 'aurora.log') })
+
 if (subcomando !== 'servir') {
   console.error(`[aurora] não conheço "${subcomando}". Use: servir (padrão), autorizar ou resumo.`)
   process.exit(1)
@@ -84,7 +93,7 @@ const responder = async (req, res) => {
     res.end(JSON.stringify(corpo))
   }
   if (req.method !== 'GET') return json(404, {})
-  if (req.url === '/saude') return json(200, { ok: true, youtube: youtube.autorizado() })
+  if (req.url === '/saude') return json(200, { ok: true, servico: 'aurora', youtube: youtube.autorizado() })
   if (!autorizado(req.headers.authorization)) return json(401, { ok: false })
   if (req.url !== '/bom-dia') return json(404, {})
   try {
@@ -105,9 +114,15 @@ const responder = async (req, res) => {
   }
 }
 
-const tls = valor('TLS_CERT') && valor('TLS_KEY') ? { cert: ler(valor('TLS_CERT')), key: ler(valor('TLS_KEY')) } : null
+const certificado = valor('TLS_CERT') ?? seExistir(join(homedir(), '.apolo', 'tls', 'apolo.pem'))
+const chave = valor('TLS_KEY') ?? seExistir(join(homedir(), '.apolo', 'tls', 'apolo-chave.pem'))
+const tls = certificado && chave ? { cert: ler(certificado), key: ler(chave) } : null
 const servidor = tls ? createHttpsServer(tls, responder) : createServer(responder)
-const porta = Number(valor('PORTA') ?? 8791)
+const porta = Number(valor('PORTA') ?? env.APOLO_AURORA_PORTA?.trim() ?? 8791)
+servidor.on('error', (err) => {
+  console.error(`[aurora] não consegui abrir a porta ${porta}: ${err.message}`)
+  process.exit(1)
+})
 servidor.listen(porta, valor('HOST') ?? '127.0.0.1', () => {
   console.log(`[aurora] A.U.R.O.R.A. servindo o bom dia na porta ${porta}${tls ? '' : ' (sem TLS)'}`)
   if (!youtube.autorizado()) console.log('[aurora] YouTube ainda não autorizado: rode npm run aurora:autorizar')

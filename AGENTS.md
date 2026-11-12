@@ -122,6 +122,16 @@ detalhe está em `docs/`.
   isso com a Fênix real e uma ponte mínima (`scripts/resiliencia/ponte.mjs`): mudou a
   Fênix, o cliente ou o renascimento, rode `npm run test:resiliencia`. Prazos da Fênix
   podem vir de `tempos` no `fenix.config.json`.
+- **Asas próprias (ADR 0029):** toda troca de versão e a atualização da `main`
+  passam por `conferirCopia` (`fenix/src/versoes.mjs`): motivo exato quando não dá
+  (arquivos, operação do Git pela metade, branch que não existe), Git com prazo e
+  sem pedir senha, `fetch` + `merge --ff-only` conferidos, e nenhum caminho deixa os
+  serviços desligados. Arquivo não rastreado só barra se o alvo o sobrescrever. O
+  H.E.R.M.E.S. e a A.U.R.O.R.A. sobem sozinhos (`npm run hermes`, `npm run aurora`),
+  sobrevivem à morte da Fênix (`src/saidas.mjs` de cada um) e são **adotados** quando
+  ela volta (`"independente": true` no `fenix.config.json`). O contrato entre eles é
+  `GET /saude` e os WSS com token: a ponte mede a saúde dos dois sozinha
+  (`bridge/sondas.mjs`). Não ponha estado de um deles só no relato da Fênix.
 - **Notificações (ADR 0027, RF-66):** o H.E.R.M.E.S. é a central: serviços pedem por
   WSS em `/notificacoes` (porta local 8792, `APOLO_NOTIFICAR_TOKEN`) e ele entrega na
   central do macOS (`osascript`, com argumentos, nunca interpolados) e no iPhone pelo
@@ -221,7 +231,10 @@ npm run celular      # pareia o iPhone: token, Tailscale e código de pareamento
 npm run logs:celular # resume as medições do app (-- 7 para sete dias, --eventos para quedas)
 npm run popups       # compila os popups da web para o app do iPhone
 npm run rollback     # descarta a alteração em teste e volta à main (com tudo parado)
-npm run hermes       # só o H.E.R.M.E.S. (a F.Ê.N.I.X. já o sobe)
+npm run atualizar    # pede à F.Ê.N.I.X. no ar que traga a main nova; sai com 1 e o motivo se não der
+npm run avisar -- "título" "texto"  # a F.Ê.N.I.X. no ar manda o aviso pelo H.E.R.M.E.S. (Mac e iPhone)
+npm run hermes       # só o H.E.R.M.E.S., sem a Fênix (a F.Ê.N.I.X. já o sobe)
+npm run aurora       # só a A.U.R.O.R.A., sem a Fênix (a F.Ê.N.I.X. já a sobe)
 npm run aurora:autorizar # uma vez: autoriza a A.U.R.O.R.A. a ler as playlists do YouTube
 npm run aurora:resumo    # mostra o texto do bom dia de hoje
 npm run test:autodev # testes da política e do rollback

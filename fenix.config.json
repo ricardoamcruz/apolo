@@ -53,6 +53,7 @@
       "comando": ["node", "hermes/hermes.mjs"],
       "cor": "33",
       "opcional": true,
+      "independente": true,
       "portas": ["${APOLO_GATEWAY_PORT:-8788}", "${APOLO_NOTIFICAR_PORTA:-8792}"],
       "ambiente": {
         "HERMES_TLS_CERT": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}",
@@ -60,6 +61,10 @@
         "HERMES_APOLO_URL": "wss://localhost:${JARVIS_BRIDGE_PORT:-8787}",
         "HERMES_APOLO_CA": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}",
         "HERMES_NOTIFICAR_PORTA": "${APOLO_NOTIFICAR_PORTA:-8792}"
+      },
+      "saude": {
+        "urls": ["https://localhost:${APOLO_NOTIFICAR_PORTA:-8792}/saude"],
+        "ca": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}"
       }
     },
     {
@@ -67,6 +72,7 @@
       "comando": ["node", "modules/aurora/aurora.mjs"],
       "cor": "32",
       "opcional": true,
+      "independente": true,
       "portas": ["${APOLO_AURORA_PORTA:-8791}"],
       "ambiente": {
         "AURORA_PORTA": "${APOLO_AURORA_PORTA:-8791}",

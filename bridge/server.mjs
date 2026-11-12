@@ -58,6 +58,7 @@ import {
 import { criarClienteFenix } from './fenix.mjs'
 import { criarRenascimento, lerReceita } from './renascer.mjs'
 import { criarClienteAurora } from './aurora.mjs'
+import { criarSondas } from './sondas.mjs'
 import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog } from './desenvolvimento.mjs'
 import { criarTelemetria } from './telemetria.mjs'
 import { garantirCertificado } from './tls.mjs'
@@ -147,10 +148,16 @@ function configuredServers() {
 const MCP_SERVERS = configuredServers()
 
 /**
- * Os sistemas à parte, para a aba SISTEMAS (docs/adr/0025): a F.Ê.N.I.X. e o
- * H.E.R.M.E.S. O estado do H.E.R.M.E.S. vem da Fênix, que é quem o sobe.
+ * Os sistemas à parte, para a aba SISTEMAS (docs/adr/0025): a F.Ê.N.I.X., o
+ * H.E.R.M.E.S. e a A.U.R.O.R.A. A saúde dos dois últimos a ponte mede sozinha
+ * (`sondas`, docs/adr/0029); o que a Fênix conta deles (subindo, caiu) só vale
+ * enquanto ela está conectada, e some com ela sem levar os dois junto.
  */
 const canais = { fenix: null, hermes: null, aurora: null }
+/** A saúde medida pela própria ponte. Criada mais abaixo, depois do certificado. */
+let sondas = null
+/** De pé pela sonda vale mais que qualquer relato; sem relato da Fênix, vale a sonda. */
+const doServico = (nome) => (sondas?.estado(nome) === 'connected' ? 'connected' : (canais[nome] ?? sondas?.estado(nome) ?? null))
 /** Quantos celulares estão conectados agora pelo H.E.R.M.E.S. */
 let celularesConectados = 0
 const STATUS_DO_SERVICO = { ligado: 'connected', subindo: 'pending', caiu: 'failed' }
@@ -158,9 +165,10 @@ const STATUS_DO_SERVICO = { ligado: 'connected', subindo: 'pending', caiu: 'fail
 const comCanais = (servers) => {
   const extras = []
   if (canais.fenix) extras.push({ name: 'fenix', status: canais.fenix })
-  const hermes = canais.hermes ?? (celularesConectados ? 'connected' : null)
+  const hermes = doServico('hermes') ?? (celularesConectados ? 'connected' : null)
   if (hermes) extras.push({ name: 'celular', status: hermes })
-  if (canais.aurora) extras.push({ name: 'aurora', status: canais.aurora })
+  const doAurora = doServico('aurora')
+  if (doAurora) extras.push({ name: 'aurora', status: doAurora })
   return [...servers, ...extras]
 }
 /** Cada interface reenvia a própria lista quando um canal muda. */
@@ -846,7 +854,9 @@ const fenix = criarClienteFenix({
   ca: process.env.FENIX_CA?.trim() ? readFileSync(process.env.FENIX_CA.trim()) : tls.cert,
   aoMudar: (conectada) => {
     canais.fenix = conectada ? 'connected' : 'failed'
+    // O relato da Fênix sai com ela; a saúde medida pela ponte continua valendo.
     if (!conectada) canais.hermes = canais.aurora = null
+    if (!conectada) void sondas?.checar()
     // Caiu a conexão: se foi ela que morreu, a ponte a revive (docs/adr/0028).
     if (!conectada) renascimento?.vigiar()
     canaisMudaram()
@@ -907,6 +917,26 @@ async function acaoDoAutodev({ acao, pedido, tarefa }) {
   }
   return autodev.acao(acao, { pedido })
 }
+
+/**
+ * A saúde do H.E.R.M.E.S. e da A.U.R.O.R.A., medida daqui (docs/adr/0029). Só os
+ * que este .env.local configura: sem token, o serviço sai sozinho e não é queda.
+ */
+const portaDoHermes = process.env.APOLO_NOTIFICAR_PORTA?.trim() || '8792'
+sondas = criarSondas({
+  alvos: [
+    (process.env.APOLO_GATEWAY_TOKEN?.trim() || process.env.APOLO_NOTIFICAR_TOKEN?.trim()) && {
+      nome: 'hermes',
+      url: `https://localhost:${portaDoHermes}/saude`,
+    },
+    process.env.APOLO_AURORA_TOKEN?.trim() && {
+      nome: 'aurora',
+      url: new URL('/saude', process.env.APOLO_AURORA_URL?.trim() || 'https://localhost:8791').href,
+    },
+  ],
+  ca: tls.cert,
+  aoMudar: canaisMudaram,
+})
 
 /** O bom dia (RF-55, docs/adr/0026): a faixa de rock e o resumo do dia. */
 const aurora = criarClienteAurora({

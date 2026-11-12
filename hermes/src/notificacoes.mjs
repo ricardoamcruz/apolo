@@ -173,10 +173,19 @@ export function criarCentral({ entregar, urlPublica, agora = Date.now, log = con
  * `{ type: 'notificar', id, titulo, texto, prioridade?, botoes? }` recebe
  * `{ type: 'notificar:resposta', resposta: id, ok }`; um botão tocado chega como
  * `{ type: 'notificacao:acao', notificacao, acao }`, só para quem pediu.
+ *
+ * `GET /saude` responde sem token, com o que `saude()` devolver (docs/adr/0029):
+ * é o contrato pelo qual quem vigia o H.E.R.M.E.S. (a Fênix, a ponte) sabe se ele
+ * está de pé, sem depender de quem o subiu. Sem token das notificações, a porta
+ * abre só para a saúde e recusa o WebSocket.
  */
-export function criarPortaDosServicos({ token, central, host = '127.0.0.1', porta = 8792, tls, log = console.log }) {
-  if (!token || token.length < 32) throw new Error('o token das notificações precisa de pelo menos 32 caracteres')
-  const http = (_q, res) => {
+export function criarPortaDosServicos({ token, central, host = '127.0.0.1', porta = 8792, tls, saude = () => ({ ok: true }), log = console.log }) {
+  if (token && token.length < 32) throw new Error('o token das notificações precisa de pelo menos 32 caracteres')
+  const http = (req, res) => {
+    if (req.method === 'GET' && (req.url ?? '').split('?')[0] === '/saude') {
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+      return res.end(JSON.stringify({ servico: 'hermes', ...saude() }))
+    }
     res.writeHead(404)
     res.end()
   }
@@ -188,6 +197,7 @@ export function criarPortaDosServicos({ token, central, host = '127.0.0.1', port
       socket.destroy()
     }
     if ((req.url ?? '').split('?')[0] !== CAMINHO_DAS_NOTIFICACOES) return recusar('404 Not Found')
+    if (!token) return recusar('503 Service Unavailable')
     if (!tokenConfere(req.headers.authorization, token)) {
       log('[hermes] serviço recusado nas notificações: token inválido')
       return recusar('401 Unauthorized')

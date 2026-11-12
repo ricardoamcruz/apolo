@@ -11,6 +11,11 @@
  *
  * Durante uma troca de versão, quem decide sobre os serviços versionados é
  * src/versoes.mjs: `aoCair` e `pausado` são as duas perguntas que a guardiã faz.
+ *
+ * Um serviço `independente` (o H.E.R.M.E.S. e a A.U.R.O.R.A., docs/adr/0029) não
+ * cai junto com a Fênix. Se ela morre e volta, ele continua de pé, e ela o
+ * adota: confere que é a mesma cópia (o mesmo programa, nesta pasta) e que
+ * responde à saúde, e passa a vigiá-lo pelo processo e pela saúde, sem derrubá-lo.
  */
 import { spawn, spawnSync } from 'node:child_process'
 import { readFileSync, realpathSync } from 'node:fs'
@@ -71,7 +76,7 @@ export function criarServicos({
   const estados = new Map(
     servicos.map((def) => [
       def.nome,
-      { def, filho: null, status: 'desligado', reinicios: 0, quedas: 0, ligadoEm: 0, falhas: 0, timer: null, motivo: null },
+      { def, filho: null, adotado: null, status: 'desligado', reinicios: 0, quedas: 0, ligadoEm: 0, falhas: 0, timer: null, motivo: null },
     ]),
   )
   let encerrando = false
@@ -107,7 +112,7 @@ export function criarServicos({
 
   function ligar(nome) {
     const e = pegar(nome)
-    if (e.filho || encerrando) return
+    if (e.filho || e.adotado || encerrando) return
     clearTimeout(e.timer)
     e.timer = null
     const [comando, ...args] = e.def.comando
@@ -168,6 +173,7 @@ export function criarServicos({
     const e = pegar(nome)
     clearTimeout(e.timer)
     e.timer = null
+    if (e.adotado) return soltarAdotado(e, prazoMs).then(() => mudar(e, 'desligado'))
     const filho = e.filho
     if (!filho) {
       if (e.status === 'caiu') mudar(e, 'desligado')
@@ -187,7 +193,7 @@ export function criarServicos({
   /** Pergunta a cada endereço de saúde. O JSON do primeiro vem em `dados`. */
   async function saude(nome) {
     const e = pegar(nome)
-    if (!e.filho) return { ok: false, motivo: 'não está rodando' }
+    if (!e.filho && !e.adotado) return { ok: false, motivo: 'não está rodando' }
     const s = e.def.saude
     if (!s) return { ok: true }
     let dados
@@ -222,6 +228,10 @@ export function criarServicos({
     while (!encerrando) {
       await dormir(intervaloMs)
       for (const e of estados.values()) {
+        if (e.adotado) {
+          await vigiarAdotado(e)
+          continue
+        }
         if (!e.filho || !e.def.saude || pausado(e.def.nome)) continue
         const r = await saude(e.def.nome)
         if (!e.filho || pausado(e.def.nome)) continue
@@ -240,14 +250,71 @@ export function criarServicos({
     }
   }
 
+  /** Termina um serviço adotado: não é filho, então é pelo número do processo. */
+  async function soltarAdotado(e, prazoMs = 5000) {
+    const pid = e.adotado
+    e.adotado = null
+    if (!processoVivo(pid)) return
+    try {
+      process.kill(pid, 'SIGTERM')
+    } catch {
+      return
+    }
+    const limite = Date.now() + prazoMs
+    while (processoVivo(pid) && Date.now() < limite) await dormir(100)
+    if (processoVivo(pid)) {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        /* já saiu */
+      }
+    }
+  }
+
+  /** Um adotado que sumiu ou travou volta a ser um serviço comum: sobe como filho. */
+  async function vigiarAdotado(e) {
+    const vivo = processoVivo(e.adotado)
+    const r = vivo && e.def.saude ? await saude(e.def.nome) : { ok: vivo, motivo: 'o processo sumiu' }
+    if (!e.adotado) return
+    if (r.ok) {
+      e.falhas = 0
+      if (e.status !== 'ligado') mudar(e, 'ligado')
+      return
+    }
+    if (vivo && ++e.falhas < FALHAS_SEGUIDAS) return
+    const motivo = vivo ? 'parou de responder' : 'saiu'
+    log(`[fenix] ${e.def.nome} (adotado, processo ${e.adotado}) ${motivo}; subindo um novo`)
+    await soltarAdotado(e)
+    e.ligadoEm = Date.now()
+    reiniciarDepois(e, motivo)
+  }
+
   /**
    * Encerra um processo antigo deste mesmo serviço que tenha ficado com a porta.
-   * Só mata o que é nosso: o mesmo comando, rodando nesta pasta.
+   * Só mata o que é nosso: o mesmo comando, rodando nesta pasta. Um independente
+   * que responde à saúde não é antigo: continuou de pé enquanto a Fênix não
+   * estava, e é adotado.
    */
-  function liberarPortas() {
+  async function liberarPortas() {
     let mortos = 0
-    for (const { def } of estados.values()) {
+    for (const e of estados.values()) {
+      const { def } = e
       const assinatura = def.comando.slice(1).find((a) => /[/.]/.test(a)) ?? def.comando[0]
+      if (def.independente && def.portas.length && !e.filho) {
+        const donos = new Set(def.portas.flatMap((porta) => donosDaPorta(porta, assinatura, repo)))
+        if (donos.size === 1) {
+          const [pid] = donos
+          e.adotado = pid
+          const r = def.saude ? await saude(def.nome) : { ok: true }
+          if (r.ok) {
+            e.ligadoEm = Date.now()
+            log(`[fenix] ${def.nome} continuou de pé sem mim (processo ${pid}); adotado, sem reiniciar.`)
+            mudar(e, 'ligado')
+            continue
+          }
+          e.adotado = null
+        }
+      }
       for (const porta of def.portas) mortos += encerrarNaPorta(porta, assinatura, repo, log)
     }
     if (mortos) spawnSync('sleep', ['1'])
@@ -280,9 +347,10 @@ export function criarServicos({
         status: e.status,
         motivo: e.motivo,
         reinicios: e.reinicios,
-        pid: e.filho?.pid ?? null,
-        desde: e.filho ? e.ligadoEm : null,
+        pid: e.filho?.pid ?? e.adotado ?? null,
+        desde: e.filho || e.adotado ? e.ligadoEm : null,
         opcional: e.def.opcional,
+        ...(e.adotado ? { adotado: true } : {}),
       })),
     async encerrar() {
       encerrando = true
@@ -299,16 +367,35 @@ const real = (caminho) => {
   }
 }
 
-/** Mata quem escuta na porta, se for o mesmo programa e na mesma pasta. */
-export function encerrarNaPorta(porta, assinatura, pasta, log = console.log) {
+/** O processo existe? `kill(pid, 0)` não mata: só pergunta ao sistema. */
+export function processoVivo(pid) {
+  if (!pid) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    return err.code === 'EPERM'
+  }
+}
+
+/** Quem escuta na porta e é o mesmo programa, na mesma pasta. */
+export function donosDaPorta(porta, assinatura, pasta) {
   const achados = spawnSync('lsof', ['-ti', `tcp:${porta}`, '-sTCP:LISTEN'], { encoding: 'utf8' })
-  let mortos = 0
+  const donos = []
   for (const pid of (achados.stdout ?? '').split(/\s+/).filter(Boolean)) {
     if (Number(pid) === process.pid) continue
     const comando = spawnSync('ps', ['-o', 'command=', '-p', pid], { encoding: 'utf8' }).stdout ?? ''
     const cwd = spawnSync('lsof', ['-a', '-p', pid, '-d', 'cwd', '-Fn'], { encoding: 'utf8' }).stdout ?? ''
     const cwdReal = cwd.split('\n').find((l) => l.startsWith('n'))?.slice(1)
-    if (!comando.includes(assinatura) || cwdReal !== real(pasta)) continue
+    if (comando.includes(assinatura) && cwdReal === real(pasta)) donos.push(Number(pid))
+  }
+  return donos
+}
+
+/** Mata quem escuta na porta, se for o mesmo programa e na mesma pasta. */
+export function encerrarNaPorta(porta, assinatura, pasta, log = console.log) {
+  let mortos = 0
+  for (const pid of donosDaPorta(porta, assinatura, pasta)) {
     try {
       process.kill(Number(pid), 'SIGTERM')
       mortos++

@@ -16,7 +16,8 @@ npm run test:aurora
 
 ## API
 
-- `GET /saude` → `{ ok, youtube }`, sem token.
+- `GET /saude` → `{ ok, servico: 'aurora', youtube }`, sem token. É o contrato de quem a
+  vigia: a Fênix e a ponte, cada uma por conta própria (docs/adr/0029).
 - `GET /bom-dia` com `Authorization: Bearer <token>` →
   `{ ok, texto, musica: { id, titulo, canal, inicio, trechoSegundos, volume } | null, avisoDaMusica, pendencias }`.
 
@@ -35,4 +36,8 @@ npm run test:aurora
 
 `AURORA_*` ou `APOLO_*`: `TOKEN` (`APOLO_AURORA_TOKEN`), `PORTA` (8791), `HOST`,
 `TLS_CERT`, `TLS_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AGENDA_ICS`,
-`PASTA` (`~/.apolo/aurora`) e `CONFIG`.
+`PASTA` (`~/.apolo/aurora`) e `CONFIG`. Sem `TLS_*`, usa `~/.apolo/tls` se existir;
+a porta também aceita `APOLO_AURORA_PORTA`.
+
+`npm run aurora` sobe sem a F.Ê.N.I.X. e lê o `.env.local`. Se quem a subiu morre, ela
+continua servindo e escreve a saída em `PASTA/aurora.log`; a Fênix, ao voltar, a adota.

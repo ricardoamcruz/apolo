@@ -263,8 +263,29 @@ export function criarFenix(
     }
   }
 
+  /**
+   * Um aviso pedido por quem fala com a Fênix (a linha de comando, `fenix avisar`).
+   * Vai para a central de notificações (o H.E.R.M.E.S.) com o nome do projeto no
+   * título, sem botões: um botão volta a quem o criou, e aqui não há quem.
+   */
+  async function avisar(msg) {
+    const titulo = typeof msg.titulo === 'string' ? msg.titulo.trim().slice(0, 120) : ''
+    const texto = typeof msg.texto === 'string' ? msg.texto.trim().slice(0, 1000) : ''
+    if (!titulo || !texto) return { ok: false, mensagem: 'O aviso precisa de título e texto.' }
+    const prioridade = msg.prioridade === 'alta' ? 'alta' : 'normal'
+    log(`[fenix] aviso pedido: ${titulo}`)
+    const r = await avisos.avisar({ titulo: `${config.nome}: ${titulo}`, texto, prioridade })
+    if (r.ok) {
+      const onde = [r.mac && 'no Mac', r.ntfy && 'no iPhone'].filter(Boolean).join(' e ')
+      return { ok: true, mensagem: `A central de notificações entregou o aviso${onde ? ` ${onde}` : ''}.`, entrega: r }
+    }
+    return { ok: false, mensagem: `O aviso não foi entregue: ${r.mensagem ?? 'a central não conseguiu entregar'}.`, entrega: r }
+  }
+
   async function atender(msg) {
     switch (msg.type) {
+      case 'avisar':
+        return avisar(msg)
       case 'estado':
         return { ok: true, ...estado() }
       case 'versao:aplicar':
@@ -326,7 +347,7 @@ export function criarFenix(
       }
       const interrompida = await versoes.recuperar()
       porta = await canal.ligar()
-      servicos.liberarPortas()
+      await servicos.liberarPortas()
       servicos.ligarTodos()
       if (interrompida) {
         canal.avisar({

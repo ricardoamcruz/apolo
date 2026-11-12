@@ -5,19 +5,24 @@
  *
  *   node fenix/fenix.mjs [--config arquivo] [opções do projeto]
  *   node fenix/fenix.mjs rollback [--config arquivo]
+ *   node fenix/fenix.mjs rotina <nome> [parametro=valor...] [--config arquivo]
+ *   node fenix/fenix.mjs avisar <título> <texto> [--alta] [--config arquivo]
  *
  * Sem `--config`, lê fenix.config.json da pasta atual. As opções (no A.P.O.L.O.,
  * --writes e --autodev) são as que o arquivo declara em "flags".
  *
  * A primeira forma sobe e guarda os serviços do projeto até Ctrl-C. A segunda é o
  * rollback manual, com tudo parado: volta à versão segura e descarta a alteração
- * em teste.
+ * em teste. `rotina` e `avisar` falam com a Fênix que já está no ar, pelo canal:
+ * rodam uma rotina (`rotina atualizar`) ou mandam um aviso à central de
+ * notificações. Todas saem com 0 quando deu certo e com 1, e o motivo, quando não.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { pedirAFenix } from './src/cliente.mjs'
 import { lerConfig } from './src/config.mjs'
 import { criarFenix, garantirToken } from './src/fenix.mjs'
 import { encerrarNaPorta } from './src/servicos.mjs'
@@ -33,31 +38,109 @@ if (!existsSync(arquivo)) {
 }
 const config = lerConfig(arquivo)
 
+/** O Git do rollback: com a pasta, sem perguntar nada, e com o motivo em uma linha. */
+function gitManual(...a) {
+  try {
+    return execFileSync('git', a, {
+      cwd: config.repo,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 30_000,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    }).trim()
+  } catch (err) {
+    const motivo = String(err.stderr ?? '').split('\n').map((l) => l.replace(/^(fatal|error):\s*/i, '').trim()).find(Boolean)
+    throw new Error(`git ${a[0]} falhou: ${motivo ?? err.message}`)
+  }
+}
+
 if (subcomando === 'rollback') {
   const arqTransicao = join(config.pasta, 'transicao.json')
-  const git = (...a) => execFileSync('git', a, { cwd: config.repo, encoding: 'utf8' }).trim()
   if (!existsSync(arqTransicao)) {
     console.log('Não há alteração em teste: já estou na versão segura.')
     process.exit(0)
   }
-  if (git('status', '--porcelain')) {
-    console.error('Há alterações não commitadas; guarde-as antes do rollback. Nada foi trocado.')
+  try {
+    if (gitManual('rev-parse', '--is-inside-work-tree') !== 'true') throw new Error(`${config.repo} não é um repositório Git`)
+    const sujos = gitManual('status', '--porcelain', '--untracked-files=no')
+    if (sujos) {
+      console.error(`Há alterações não commitadas (${sujos.split('\n').map((l) => l.trim().replace(/^\S{1,2}\s+/, '')).slice(0, 5).join(', ')}); guarde-as antes do rollback. Nada foi trocado.`)
+      process.exit(1)
+    }
+    const { de, para, aprovada } = JSON.parse(readFileSync(arqTransicao, 'utf8'))
+    if (de.ref === de.sha) gitManual('switch', '--quiet', '--detach', de.sha)
+    else {
+      let existe = true
+      try {
+        gitManual('show-ref', '--verify', '--quiet', `refs/heads/${de.ref}`)
+      } catch {
+        existe = false
+      }
+      if (!existe) throw new Error(`a branch ${de.ref} não existe mais nesta cópia; volte à mão com git switch --detach ${de.sha}`)
+      gitManual('switch', '--quiet', de.ref)
+    }
+    const agora = gitManual('rev-parse', '--abbrev-ref', 'HEAD')
+    if (de.ref !== de.sha && agora !== de.ref) throw new Error(`pedi ${de.ref}, mas a cópia ficou em ${agora}`)
+    if (!aprovada) {
+      try {
+        gitManual('branch', '-D', para.ref)
+        console.log(`Descartei ${para.ref}. Para recuperar: git branch recuperada ${para.sha}`)
+      } catch {
+        console.log(`${para.ref} já não existia. Para recuperar a alteração: git branch recuperada ${para.sha}`)
+      }
+    }
+    rmSync(arqTransicao)
+    console.log(`Voltou para ${de.ref} (${gitManual('rev-parse', '--short', 'HEAD')}). Inicie de novo com npm start.`)
+    process.exit(0)
+  } catch (err) {
+    console.error(`[fenix] o rollback não terminou: ${err.message}. O registro da troca continua em ${arqTransicao}.`)
     process.exit(1)
   }
-  const { de, para, aprovada } = JSON.parse(readFileSync(arqTransicao, 'utf8'))
-  if (de.ref === de.sha) git('switch', '--detach', de.sha)
-  else git('switch', de.ref)
-  if (!aprovada) {
-    git('branch', '-D', para.ref)
-    console.log(`Descartei ${para.ref}. Para recuperar: git branch recuperada ${para.sha}`)
+}
+
+if (subcomando === 'rotina' || subcomando === 'avisar') {
+  const alta = args.includes('--alta')
+  const posicionais = args.filter((a) => !a.startsWith('--'))
+  const token = process.env.FENIX_TOKEN?.trim() || (() => {
+    try {
+      return readFileSync(join(config.pasta, 'token'), 'utf8').trim()
+    } catch {
+      return ''
+    }
+  })()
+  if (!token) {
+    console.error(`[fenix] não achei o token do canal (${join(config.pasta, 'token')} ou FENIX_TOKEN): a Fênix já subiu nesta máquina?`)
+    process.exit(1)
   }
-  rmSync(arqTransicao)
-  console.log(`Voltou para ${de.ref} (${de.sha.slice(0, 7)}). Inicie de novo com npm start.`)
-  process.exit(0)
+  let msg
+  if (subcomando === 'rotina') {
+    const [nome, ...pares] = posicionais
+    if (!nome) {
+      console.error('[fenix] diga qual rotina: node fenix/fenix.mjs rotina atualizar')
+      process.exit(1)
+    }
+    msg = { type: 'rotina', nome, parametros: Object.fromEntries(pares.map((p) => p.split(/=(.*)/s).slice(0, 2))) }
+  } else {
+    const [titulo, ...resto] = posicionais
+    if (!titulo || !resto.length) {
+      console.error('[fenix] uso: node fenix/fenix.mjs avisar "título" "texto" [--alta]')
+      process.exit(1)
+    }
+    msg = { type: 'avisar', titulo, texto: resto.join(' '), prioridade: alta ? 'alta' : 'normal' }
+  }
+  const host = ['0.0.0.0', '::', '127.0.0.1'].includes(config.escuta.host) ? 'localhost' : config.escuta.host
+  const url = `${config.tls ? 'wss' : 'ws'}://${host}:${config.escuta.porta}/fenix`
+  const ca = config.tls ? readFileSync(config.tls.cert) : undefined
+  // Rotinas longas (o app do iPhone) levam até 45 minutos.
+  const prazoMs = subcomando === 'rotina' ? (config.rotinas.find((r) => r.nome === msg.nome)?.prazoMs ?? 15 * 60_000) + 60_000 : 20_000
+  const r = await pedirAFenix({ url, token, ca, msg, prazoMs })
+  ;(r.ok ? console.log : console.error)(`[fenix] ${r.mensagem ?? (r.ok ? 'feito.' : 'falhou, sem detalhe.')}`)
+  if (r.saida) console.log(r.saida)
+  process.exit(r.ok ? 0 : 1)
 }
 
 if (subcomando !== 'iniciar') {
-  console.error(`[fenix] não conheço "${subcomando}". Use: iniciar (padrão) ou rollback.`)
+  console.error(`[fenix] não conheço "${subcomando}". Use: iniciar (padrão), rollback, rotina ou avisar.`)
   process.exit(1)
 }
 

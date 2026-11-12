@@ -13,6 +13,7 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [ ] **Notificações (RF-66):** o sentido iPhone → Mac pelo tópico `<tópico>-mac`; o botão **Descartar** numa versão em teste
 - [ ] **Autodesenvolvimento com o agente real (RF-15):** pedido por voz, conferência com `npm test`, teste ao vivo, aprovar e abrir o PR. Desde 12/11/2026 também pelo número do backlog ("Apolo, faz o item 1.3"; ADR 0028)
 - [ ] **Pacto com a Fênix (RF-67, ADR 0028):** no Mac, `kill -9` na Fênix com tudo no ar e ver o A.P.O.L.O. revivê-la (a interface reconecta e chega o aviso "a Fênix renasceu"); e um pedido de autodev que quebre a ponte, voltando à `main` sozinho. Os dois já passam em `npm run test:resiliencia`
+- [ ] **Asas próprias (ADR 0029):** no Mac, `kill -9` na Fênix com tudo no ar e ver o celular, as notificações e o bom dia seguirem (SISTEMAS mostra a Fênix caída e os outros de pé); quando ela voltar, o H.E.R.M.E.S. e a Aurora são adotados, sem reiniciar. Na `main`, `npm run atualizar` com um commit novo no GitHub
 - [ ] **Git (RF-17):** push e `gh pr create` no Mac do Ricardo
 - [ ] **Navegador (RF-19):** abrir abas com os pop-ups liberados
 - [ ] **Espera natural (6.a):** conversa contínua com a TV ligada e alguém conversando ao lado

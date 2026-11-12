@@ -41,18 +41,28 @@ npm test   # dentro desta pasta: node --test test/
   `<HERMES_URL_PUBLICA>/acao/<token>`, de uso único, com prazo de 1 h.
 - O que for publicado em `<tópico>-mac` no ntfy aparece na central do macOS.
 
+## Sozinho (docs/adr/0029)
+
+- `npm run hermes` sobe sem a F.Ê.N.I.X. e lê o `.env.local`; os padrões abaixo são
+  dele. `GET /saude` na porta local dos serviços (8792) responde sem token, mesmo sem
+  notificações configuradas: é por ali que a Fênix e a ponte sabem se ele está de pé.
+- Se quem o subiu morre, ele continua atendendo e passa a escrever a saída em
+  `HERMES_PASTA/hermes.log`, com uma linha dizendo o que houve. Quando a Fênix volta,
+  ela o adota em vez de reiniciá-lo.
+
 ## Ambiente
 
 | Variável | Padrão | Para quê |
 |---|---|---|
 | `HERMES_TOKEN` | `APOLO_GATEWAY_TOKEN` | token do celular; sem ele, sai com código 0 |
 | `HERMES_PORTA`, `HERMES_HOST` | 8788, 127.0.0.1 | onde ouvir (o Tailscale entrega aqui) |
-| `HERMES_TLS_CERT`, `HERMES_TLS_KEY` | — | com eles, só HTTPS |
-| `HERMES_APOLO_URL` | `wss://localhost:8787` | o assistente |
+| `HERMES_TLS_CERT`, `HERMES_TLS_KEY` | `APOLO_TLS_*`, ou `~/.apolo/tls` se existir | com eles, só HTTPS |
+| `HERMES_APOLO_URL` | `wss://localhost:<JARVIS_BRIDGE_PORT ou 8787>` | o assistente |
 | `HERMES_APOLO_TOKEN` | derivado | o token que o assistente espera |
-| `HERMES_APOLO_CA` | — | a autoridade do certificado do assistente |
+| `HERMES_APOLO_CA` | o próprio certificado | a autoridade do certificado do assistente |
 | `HERMES_NOTIFICAR_TOKEN` | `APOLO_NOTIFICAR_TOKEN` | quem pode pedir notificações |
-| `HERMES_NOTIFICAR_PORTA` | 8792 | a porta local dos serviços |
+| `HERMES_NOTIFICAR_PORTA` | `APOLO_NOTIFICAR_PORTA`, 8792 | a porta local dos serviços e da saúde |
+| `HERMES_PASTA` | `~/.apolo/hermes` | o registro quando ninguém lê a saída |
 | `HERMES_NTFY_TOPICO` | `APOLO_NTFY_TOPICO` | o tópico do ntfy (segredo); entrada em `<tópico>-mac` |
 | `HERMES_NTFY_URL` | `https://ntfy.sh` | o servidor do ntfy |
 | `HERMES_URL_PUBLICA` | `APOLO_HERMES_URL_PUBLICA` | o endereço do H.E.R.M.E.S. no Tailscale, para os botões |

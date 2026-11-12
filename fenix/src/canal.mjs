@@ -55,6 +55,7 @@ export function criarCanal({ token, host = '127.0.0.1', porta = 8790, tls, atend
     }
     clientes.handleUpgrade(req, socket, cabeca, (ws) => {
       ws.vivo = true
+      ws.avulso = req.headers['x-fenix-cliente'] === 'avulso'
       ws.on('pong', () => (ws.vivo = true))
       const enviar = (msg) => ws.readyState === ws.OPEN && ws.send(JSON.stringify(msg))
       ws.on('message', async (bruto) => {
@@ -73,6 +74,9 @@ export function criarCanal({ token, host = '127.0.0.1', porta = 8790, tls, atend
         }
         if (r !== undefined && msg.id !== undefined) enviar({ type: `${msg.type}:resposta`, resposta: msg.id, ...r })
       })
+      // Um cliente avulso (a linha de comando) só faz o próprio pedido: a fila e o
+      // retrato inicial são de quem é o projeto.
+      if (ws.avulso) return
       for (const aviso of fila.splice(0)) enviar(aviso)
       aoConectar(enviar)
     })
@@ -90,7 +94,8 @@ export function criarCanal({ token, host = '127.0.0.1', porta = 8790, tls, atend
   }, PULSO_MS)
   pulso.unref()
 
-  const abertos = () => [...clientes.clients].filter((ws) => ws.readyState === ws.OPEN)
+  /** Os avisos e o estado são do projeto: o cliente avulso não conta. */
+  const abertos = () => [...clientes.clients].filter((ws) => ws.readyState === ws.OPEN && !ws.avulso)
 
   return {
     conectados: () => abertos().length,

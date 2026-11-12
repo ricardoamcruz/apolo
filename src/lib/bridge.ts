@@ -1,6 +1,7 @@
 import type { Blade, Exibicao, Panel } from '../store'
 import { BRIDGE_WS_URL } from '../config'
 import type { AutodevEstado } from './autodev'
+import type { DadosDoBomDia } from './bomDia'
 import type { Servidor } from './sistemas'
 import type { BrowserReply, BrowserRequest } from './navegador'
 
@@ -185,7 +186,7 @@ export type MusicaDoBomDia = {
   /** A playlist de onde ela veio, para continuar no YouTube Music. */
   playlist?: string
 }
-export type BomDiaResposta = { ok: boolean; texto?: string; musica?: MusicaDoBomDia | null; mensagem?: string }
+export type BomDiaResposta = DadosDoBomDia & { ok: boolean; texto?: string; musica?: MusicaDoBomDia | null; mensagem?: string }
 const respostasDaAurora = new Map<string, (r: BomDiaResposta) => void>()
 
 /** Pede o bom dia à A.U.R.O.R.A., pela ponte. */

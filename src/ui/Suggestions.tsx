@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useStore } from '../store'
+import { useStore, faseNaTela } from '../store'
 
 /**
  * Rotating example commands, shown only while idle.
@@ -24,7 +24,7 @@ const EXAMPLES = [
 const ROTATE_MS = 4200
 
 export function Suggestions() {
-  const phase = useStore((s) => s.phase)
+  const phase = useStore(faseNaTela)
   const turns = useStore((s) => s.turns)
   const [i, setI] = useState(0)
 

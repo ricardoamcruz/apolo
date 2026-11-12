@@ -7,7 +7,7 @@ O que ficou aberto depois da `fase-2.7/alvorada`, na ordem sugerida. Cada etapa
 vira uma branch nova a partir da `main` (ADR 0016).
 
 ### Etapa 1 — Validar o que já está pronto (sem código novo, só ajustes)
-- [ ] **Bom dia por voz (RF-55):** dizer "bom dia" no PC; ajustar volume e duração do trecho em `modules/aurora/aurora.config.json`
+- [ ] **Bom dia por voz (RF-55):** dizer "bom dia" no PC; ajustar volume e duração do trecho em `modules/aurora/aurora.config.json`. Em 09/11/2026: popups de notícias, compromissos e desenvolvimento em diagonal, "obrigado" fecha tudo e põe em espera, outro assunto minimiza; o tocador agora percebe quando o Chrome segura o autoplay e pede um clique; a confirmação do autodev recusada (fora da `main`) não trava mais o botão; com os popups na tela a conversa fica aberta até 3 min; o visual de espera só aparece quando ela é pedida (voz ou Esc), e a espera automática deixa a tela igual
 - [ ] **App do iPhone pelo H.E.R.M.E.S.:** conversar normalmente pelo relé (ADR 0025)
 - [ ] **Fênix por voz:** um script bash com confirmação (`--writes`) e uma rotina respondendo depois de rodar (correção do id da resposta)
 - [ ] **Notificações (RF-66):** o sentido iPhone → Mac pelo tópico `<tópico>-mac`; o botão **Descartar** numa versão em teste

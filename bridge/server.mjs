@@ -57,6 +57,7 @@ import {
 } from './hermes.mjs'
 import { criarClienteFenix } from './fenix.mjs'
 import { criarClienteAurora } from './aurora.mjs'
+import { estadoDoDesenvolvimento } from './desenvolvimento.mjs'
 import { criarTelemetria } from './telemetria.mjs'
 import { garantirCertificado } from './tls.mjs'
 import { criarCentral } from './extensoes.mjs'
@@ -1426,8 +1427,10 @@ const atender = (socket, { celular = false } = {}) => {
     }
 
     if (msg.type === 'aurora' && !celular) {
-      void (aurora ? aurora.bomDia() : Promise.resolve({ ok: false, mensagem: 'falta APOLO_AURORA_TOKEN no .env.local' }))
-        .then((r) => send({ ...r, type: 'aurora', resposta: msg.id }))
+      void Promise.all([
+        aurora ? aurora.bomDia() : Promise.resolve({ ok: false, mensagem: 'falta APOLO_AURORA_TOKEN no .env.local' }),
+        estadoDoDesenvolvimento({ repo: REPO, autodev: autodev.estado() }),
+      ]).then(([r, desenvolvimento]) => send({ ...r, desenvolvimento, type: 'aurora', resposta: msg.id }))
     }
 
     if (msg.type === 'fenix' && typeof msg.acao === 'string') {

@@ -56,6 +56,11 @@ test('o dia de hoje é contado no fuso do Ricardo', () => {
   assert.equal(diaNoFuso(new Date('2026-11-09T01:30:00Z')), '20261108')
 })
 
+test('evento sem título, como na agenda publicada só com a disponibilidade, ganha um nome', () => {
+  const ics = 'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:\nDTSTART:20261109T133000\nEND:VEVENT\nEND:VCALENDAR\n'
+  assert.deepEqual(eventosDoDia(ics, '20261109'), [{ titulo: 'compromisso sem título', hora: '13:30', local: null }])
+})
+
 test('sem o link, a agenda diz por quê; com erro HTTP, também', async () => {
   assert.equal((await agendaDeHoje('')).disponivel, false)
   const r = await agendaDeHoje('https://x/cal.ics', { fetcher: async () => ({ ok: false, status: 404 }) })
@@ -64,12 +69,12 @@ test('sem o link, a agenda diz por quê; com erro HTTP, também', async () => {
 
 test('o feed vira título e fonte, sem a fonte repetida no título', () => {
   const xml = `<rss><channel>
-    <item><title>Dólar cai &amp; bolsa sobe - Folha</title><source url="x">Folha</source></item>
-    <item><title><![CDATA[IA nova chega]]></title></item>
+    <item><title>Dólar cai &amp; bolsa sobe - Folha</title><link>https://news.google.com/a</link><source url="x">Folha</source></item>
+    <item><title><![CDATA[IA nova chega]]></title><link>javascript:alert(1)</link></item>
     <item><title>Terceira</title></item></channel></rss>`
   assert.deepEqual(lerFeed(xml, 2), [
-    { titulo: 'Dólar cai & bolsa sobe', fonte: 'Folha' },
-    { titulo: 'IA nova chega', fonte: null },
+    { titulo: 'Dólar cai & bolsa sobe', fonte: 'Folha', link: 'https://news.google.com/a' },
+    { titulo: 'IA nova chega', fonte: null, link: null },
   ])
 })
 

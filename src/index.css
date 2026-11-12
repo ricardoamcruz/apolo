@@ -1841,6 +1841,22 @@ kbd {
   opacity: 0.6;
 }
 
+/* O Chrome segurou o autoplay: o botão chama o clique que libera o som. */
+.tocador-aviso {
+  font-size: 10px;
+  opacity: 0.8;
+  color: color-mix(in srgb, var(--accent) 80%, white);
+}
+
+.tocador-liberar {
+  border-color: var(--accent) !important;
+  animation: tocador-pulsa 1.4s ease-in-out infinite;
+}
+
+@keyframes tocador-pulsa {
+  50% { box-shadow: 0 0 12px -2px var(--accent) }
+}
+
 .tocador-acoes {
   display: flex;
   flex-wrap: wrap;

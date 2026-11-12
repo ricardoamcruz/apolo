@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { COMANDOS, textoDosComandos } from '../bridge/comandos.mjs'
 import { geminiSetup } from '../bridge/realtime.mjs'
-import { pedeCancelamento, pedeModoMaos, vigiarCancelamento } from '../src/lib/comandos.ts'
+import { agradece, pedeCancelamento, pedeModoMaos, vigiarCancelamento } from '../src/lib/comandos.ts'
 import { ordenarPopups, vizinhoDoPopup } from '../src/lib/ordemDosPopups.ts'
 
 const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms))
@@ -89,4 +89,11 @@ test('alternar passa por todos os popups, nos dois sentidos', () => {
   assert.deepEqual(percorrer(1), ['b', 'a', 'c'])
   assert.deepEqual(percorrer(-1), ['a', 'b', 'c'])
   assert.equal(vizinhoDoPopup([{ id: 'a' }], 'a', 1), null)
+})
+
+test('"obrigado" sozinho encerra; agradecer e continuar o assunto, não', () => {
+  for (const f of ['Obrigado.', 'obrigada, Apolo', 'valeu!', 'Ok, muito obrigado', 'Apolo, obrigado pelo resumo', 'brigado viu'])
+    assert.equal(agradece(f), true, f)
+  for (const f of ['obrigado, e a agenda de amanhã?', 'abre a segunda notícia', 'não precisa agradecer', 'obrigado por nada'])
+    assert.equal(agradece(f), false, f)
 })

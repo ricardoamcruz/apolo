@@ -33,7 +33,8 @@ import {
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
 import { startAnalyser, micLevel, retomarAnalyser } from './lib/audio'
 import { foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/autodev'
-import { pedeModoMaos, vigiarCancelamento } from './lib/comandos'
+import { agradece, pedeModoMaos, vigiarCancelamento } from './lib/comandos'
+import { INTERVALO_DOS_POPUPS_MS, PREFIXO_DO_BOM_DIA, descreverPopups, popupsDoBomDia } from './lib/bomDia'
 import { criarJanela } from './lib/conversa'
 import { comandarPopup, type AcaoDePopup } from './lib/comandosDePopup'
 import { abrirNoYoutube } from './lib/musica'
@@ -152,6 +153,9 @@ function clearScreenAndReport(what: 'all' | 'panels' | 'transcript'): string | n
   return saiu.length ? saiu.join(' e ') : null
 }
 
+/** Quanto tempo a conversa fica aberta, em silêncio, com os popups do bom dia na tela. */
+const LEITURA_DO_BOM_DIA_MS = 3 * 60_000
+
 export default function App() {
   const store = useStore
   const phase = useStore((s) => s.phase)
@@ -164,6 +168,12 @@ export default function App() {
   const assistantOpen = useRef(false)
   /** A tarefa em andamento foi cancelada pela fala. */
   const cancelada = useRef(false)
+  /** Os popups do bom dia estão na tela, esperando um "obrigado" ou outro assunto. */
+  const bomDiaNaTela = useRef(false)
+  /** Quando os popups do bom dia abriram: enquanto ele os lê, a conversa não fecha. */
+  const bomDiaDesde = useRef(0)
+  /** Ele agradeceu: a despedida termina e ele entra em espera. */
+  const dormirAoCalar = useRef<ReturnType<typeof setTimeout> | null>(null)
   const vigia = useRef(
     vigiarCancelamento(() => {
       if (store.getState().phase !== 'tooling') return
@@ -182,6 +192,9 @@ export default function App() {
       () => {
         const p = store.getState().phase
         if (p === 'speaking' || p === 'tooling') return 'sim'
+        // Lendo os popups do bom dia, o silêncio dele não é fim de conversa. Fecha com
+        // um "obrigado", com outro assunto ou, esquecido ali, depois de uns minutos.
+        if (bomDiaNaTela.current && Date.now() - bomDiaDesde.current < LEITURA_DO_BOM_DIA_MS) return 'sim'
         if (p === 'thinking' || Date.now() - ultimaFala.current < FALA_RECENTE_MS) return 'talvez'
         return 'nao'
       },
@@ -190,18 +203,46 @@ export default function App() {
   const clearIdle = () => janela.current.pausar()
   const armIdle = () => janela.current.abrir()
 
-  const goDormant = () => {
+  /**
+   * Em espera. `pedida`: ele mandou (voz ou Esc), e só então a tela muda para o
+   * visual de espera e os popups vão para a bandeja. Por silêncio, só o microfone
+   * fecha: a tela fica como estava.
+   */
+  const goDormant = (pedida = false) => {
     clearIdle()
     session.current?.interrupt()
     session.current?.setMicOn(false)
     const s = store.getState()
     s.setCaption('')
     s.setActiveTool(null)
-    s.minimizeBlades()
+    s.setEsperaPedida(pedida)
+    if (pedida) s.minimizeBlades()
     music.working(false)
     music.duck(false)
     sfx.duck(false)
     s.setPhase('dormant')
+  }
+
+  /** Outro assunto: os popups do bom dia vão para a bandeja, sem fechar. */
+  const minimizarBomDia = () => {
+    if (!bomDiaNaTela.current) return
+    bomDiaNaTela.current = false
+    const s = store.getState()
+    if (s.blades.some((b) => b.id.startsWith(PREFIXO_DO_BOM_DIA) && !b.minimized)) s.minimizeBlades()
+  }
+
+  /** "Obrigado" com o bom dia na tela: fecha tudo e, depois da despedida, espera. */
+  const encerrarBomDia = () => {
+    bomDiaNaTela.current = false
+    const s = store.getState()
+    s.clearScreen('panels')
+    if (s.musica) s.comandarMusica('parar')
+    if (dormirAoCalar.current) clearTimeout(dormirAoCalar.current)
+    // Se ele não chegar a responder, dorme assim mesmo.
+    dormirAoCalar.current = setTimeout(() => {
+      dormirAoCalar.current = null
+      goDormant()
+    }, 6000)
   }
 
   // -- ferramentas ------------------------------------------------------------
@@ -216,6 +257,7 @@ export default function App() {
       if (!pedido) return { output: 'Pedido vazio.' }
       s.clearPanels()
       s.clearBlades()
+      minimizarBomDia()
       s.setPhase('tooling')
       s.setActiveTool('agente de tarefas')
       s.setAtividade('processando')
@@ -282,12 +324,24 @@ export default function App() {
       const r = await bomDia()
       if (!r.ok) return { output: `O resumo do dia não veio (${r.mensagem}). Dê bom dia normalmente, sem resumo.` }
       if (r.musica) s.setMusica({ ...r.musica, tocando: true, posicao: r.musica.inicio })
+      // Notícias, compromissos e desenvolvimento, em diagonal, um de cada vez.
+      const popups = popupsDoBomDia(r)
+      for (const b of s.blades) if (b.id.startsWith(PREFIXO_DO_BOM_DIA)) s.closeBlade(b.id)
+      popups.forEach((b, i) => setTimeout(() => store.getState().pushBlade(b), i * INTERVALO_DOS_POPUPS_MS))
+      bomDiaNaTela.current = popups.length > 0
+      bomDiaDesde.current = Date.now()
       return {
         output:
-          `${r.texto}\n\nDê bom dia ao Ricardo e resuma isso em até 30 segundos, como um assistente ` +
-          'que conhece a rotina dele: compromissos primeiro, um destaque por tema de notícia, o ' +
-          'GitHub numa frase. A música já está tocando baixinho por baixo: não a anuncie, a não ser ' +
-          'que ele pergunte.',
+          `${r.texto}\n${descreverPopups(popups)}\n\nDê bom dia ao Ricardo e resuma isso em até 30 segundos, ` +
+          'como um assistente que conhece a rotina dele: compromissos primeiro, um destaque por tema ' +
+          'de notícia, o GitHub numa frase. Os detalhes já estão nos popups: não leia listas. A ' +
+          'música já está tocando baixinho por baixo: não a anuncie, a não ser que ele pergunte. ' +
+          'Se ele agradecer, despeça-se em poucas palavras: a tela fecha os popups e entra em espera ' +
+          'sozinha. Se ele mudar de assunto, chame ajustar_interface com popups "minimizar" antes ' +
+          'de responder; se ele perguntar de uma notícia ou de um compromisso, os popups ficam. ' +
+          'Termine o resumo com uma pergunta curta, como se quer detalhar alguma notícia, e ' +
+          'espere: a conversa continua. A voz dele por cima da música é para você: não use ' +
+          'ignorar_fala por causa da música.',
       }
     }
 
@@ -447,7 +501,7 @@ export default function App() {
       // O mesmo que o Esc: também cancela a tarefa em andamento.
       if (s.phase === 'tooling') cancelTask()
       // Deixa a despedida terminar de tocar antes de fechar o microfone.
-      setTimeout(goDormant, 2500)
+      setTimeout(() => goDormant(true), 2500)
       return { output: 'Em espera.', silent: true }
     }
 
@@ -495,6 +549,8 @@ export default function App() {
         const s = store.getState()
         s.setCaption('')
         s.pushTurn({ id: newId(), role: 'user', text })
+        // Pela transcrição, como o cancelar: não depende de o modelo lembrar.
+        if (bomDiaNaTela.current && agradece(text)) encerrarBomDia()
       },
       onAssistantStart: () => {
         assistantOpen.current = true
@@ -518,6 +574,12 @@ export default function App() {
         assistantOpen.current = false
         sfx.duck(false)
         music.duck(false)
+        if (dormirAoCalar.current) {
+          clearTimeout(dormirAoCalar.current)
+          dormirAoCalar.current = null
+          goDormant()
+          return
+        }
         const s = store.getState()
         if (s.phase === 'speaking' || s.phase === 'thinking') {
           s.setPhase('listening')
@@ -853,7 +915,7 @@ export default function App() {
         e.preventDefault()
         const p = store.getState().phase
         if (p === 'tooling') cancelTask()
-        if (p !== 'offline' && p !== 'boot') goDormant()
+        if (p !== 'offline' && p !== 'boot') goDormant(true)
         return
       }
 

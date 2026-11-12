@@ -9,8 +9,9 @@ const exec = promisify(execFile)
 export async function tarefasDoGithub(repo, { rodar = (args) => exec('gh', args, { timeout: 15_000 }) } = {}) {
   if (!repo) return { disponivel: false, motivo: 'nenhum repositório configurado' }
   try {
+    const campos = { pr: 'number,title,url,headRefName,isDraft', issue: 'number,title,url' }
     const listar = async (tipo) =>
-      JSON.parse((await rodar([tipo, 'list', '--repo', repo, '--state', 'open', '--limit', '10', '--json', 'number,title'])).stdout)
+      JSON.parse((await rodar([tipo, 'list', '--repo', repo, '--state', 'open', '--limit', '10', '--json', campos[tipo]])).stdout)
     // Repositório com issues desligadas não é falha: só não há issues.
     const [prs, issues] = await Promise.all([
       listar('pr'),

@@ -91,7 +91,7 @@ export function eventosDoDia(ics, dia, fuso = FUSO) {
       if (atual?.inicio && atual.status !== 'CANCELLED') {
         const hoje = atual.inicio.dia === dia || (atual.regra && repeteEm(atual.regra, atual.inicio.dia, dia))
         if (hoje && !atual.excecoes.includes(dia)) {
-          eventos.push({ titulo: atual.titulo ?? '(sem título)', hora: atual.inicio.hora, local: atual.local || null })
+          eventos.push({ titulo: atual.titulo?.trim() || 'compromisso sem título', hora: atual.inicio.hora, local: atual.local || null })
         }
       }
       atual = null

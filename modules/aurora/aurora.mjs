@@ -89,7 +89,17 @@ const responder = async (req, res) => {
   if (req.url !== '/bom-dia') return json(404, {})
   try {
     const r = await montar()
-    return json(200, { ok: true, musica: r.musica, texto: textoParaVoz(r), avisoDaMusica: r.avisoDaMusica, pendencias: r.pendencias })
+    // Os dados vão junto do texto: a interface monta com eles os popups do bom dia.
+    return json(200, {
+      ok: true,
+      musica: r.musica,
+      texto: textoParaVoz(r),
+      avisoDaMusica: r.avisoDaMusica,
+      pendencias: r.pendencias,
+      agenda: r.agenda,
+      noticias: r.noticias,
+      tarefas: r.tarefas,
+    })
   } catch (err) {
     return json(500, { ok: false, mensagem: err.message })
   }

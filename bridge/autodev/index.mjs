@@ -329,27 +329,31 @@ export function criarAutodev({
     }
   }
 
+  /** O que impede o trabalho de partir da main limpa; vazio se nada impede. */
+  async function impedimento() {
+    const atual = await git(repo, 'symbolic-ref', '--short', '-q', 'HEAD').catch(() => '')
+    if (atual !== BASE) {
+      return `Estou rodando em ${atual || 'um commit solto'}. Volte à ${BASE} e reinicie: todo trabalho parte dela.`
+    }
+    if (await git(repo, 'status', '--porcelain')) {
+      return 'A cópia em execução tem alterações não commitadas. Faça o commit antes.'
+    }
+    return ''
+  }
+
   async function confirmar() {
     if (estado.fase !== 'proposto') return { ok: false, mensagem: 'Não há proposta para confirmar.' }
     if (Date.now() - estado.criadoEm > PROPOSTA_MS) {
       mudar({ fase: 'ocioso', id: undefined, pedido: undefined, criadoEm: undefined })
       return { ok: false, mensagem: 'A proposta expirou.' }
     }
-    const atual = await git(repo, 'symbolic-ref', '--short', '-q', 'HEAD').catch(() => '')
-    if (atual !== BASE) {
-      return {
-        ok: false,
-        mensagem: `Estou rodando em ${atual || 'um commit solto'}. Volte à ${BASE} e reinicie: todo trabalho parte dela.`,
-      }
-    }
-    if (await git(repo, 'status', '--porcelain')) {
-      return {
-        ok: false,
-        mensagem: 'A cópia em execução tem alterações não commitadas. Faça o commit antes.',
-      }
-    }
-    if (await mainAtrasada()) {
-      return { ok: false, mensagem: `A ${BASE} local está atrás do GitHub. Atualize e reinicie antes.` }
+    // Recusada aqui, a proposta acaba: ficar em 'proposto' deixava o botão
+    // Confirmar na tela sem nada que ele pudesse fazer.
+    const motivo = (await impedimento()) ||
+      ((await mainAtrasada()) ? `A ${BASE} local está atrás do GitHub. Atualize e reinicie antes.` : '')
+    if (motivo) {
+      terminar(estado.id, 'falhou', motivo)
+      return { ok: false, mensagem: motivo }
     }
     controle = new AbortController()
     mudar({ fase: 'trabalhando', etapa: 'preparando a cópia de trabalho' })
@@ -383,6 +387,9 @@ export function criarAutodev({
           return { ok: false, mensagem: 'Já há uma proposta aguardando. Confirme ou cancele antes.' }
         }
         if (EM_CURSO.has(estado.fase)) return { ok: false, mensagem: 'Já há um trabalho em andamento.' }
+        // Não adianta pedir confirmação de algo que não pode começar.
+        const motivo = await impedimento()
+        if (motivo) return { ok: false, mensagem: motivo }
         const id = new Date().toISOString().replace(/\D/g, '').slice(0, 14)
         mudar({ fase: 'proposto', id, pedido: texto, criadoEm: Date.now(), etapa: undefined })
         return { ok: true, mensagem: 'Proposta registrada. Falta a confirmação do Ricardo.' }

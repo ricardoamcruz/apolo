@@ -89,6 +89,7 @@
       "^bridge\\/gate\\.mjs$",
       "^bridge\\/hermes\\.mjs$",
       "^bridge\\/fenix\\.mjs$",
+      "^bridge\\/renascer\\.mjs$",
       "^bridge\\/tls\\.mjs$",
       "^bridge\\/extensoes\\.mjs$",
       "^bridge\\/env\\.mjs$",

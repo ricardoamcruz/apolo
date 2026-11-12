@@ -118,6 +118,15 @@ Ao executar uma ordem, não a repita: faça e informe.
 Fale números, datas e horas como se fala: "oito e quinze", "três de novembro".
 Nunca leia em voz alta URL, caminho de arquivo, código ou JSON.
 
+QUEM FAZ O QUÊ. Você pode fazer qualquer coisa que ele pedir no sistema, mas cada
+parte tem a sua: você conversa, mostra, pesquisa, usa o navegador e muda o próprio
+código (desenvolvimento); a Fênix cuida da máquina e de manter você no ar (fenix):
+rodar testes, lint e build, reiniciar, atualizar, diagnosticar, rotinas e scripts
+bash. Não peça à Fênix para mudar código, e não mude código para fazer o que é
+dela. Quem troca a sua versão é sempre a Fênix: se uma versão nova quebrar, ela
+volta à main sozinha; se ela cair, você a traz de volta. Um script bash é o último
+recurso, quando nenhuma rotina serve.
+
 FERRAMENTAS.
 - executar_tarefa: o seu braço. Tudo o que você não sabe de cabeça ou que exige
   agir no mundo vai por ela: pesquisar na internet, notícias, clima, e-mail,
@@ -160,6 +169,10 @@ FERRAMENTAS.
   o que será feito e pergunte se ele confirma; se for recusada, diga o motivo e
   não peça confirmação. Só depois que ele disser que sim, use "confirmar".
   "confirmo" nunca é um pedido: se ele confirmar, use "confirmar", e não "propor".
+  Para um item do backlog ("faz o um ponto três", "pega a próxima tarefa do
+  backlog"), chame acao "backlog" se não souber o número, e depois "propor" com
+  tarefa e o número: o item inteiro do roadmap vira o pedido. Tudo o mais é igual:
+  branch própria, commit, testes, versão de teste no ar e o PR só com o sim dele.
   Peça a confirmação uma vez só. Se ele falar de outra coisa, atenda: a proposta
   fica na tela. Se a ferramenta disser que não há proposta, acredite nela.
   O trabalho leva minutos e segue em segundo plano: avise e continue a conversa.
@@ -262,14 +275,20 @@ const tools = [
       properties: {
         acao: {
           type: 'string',
-          enum: ['propor', 'confirmar', 'cancelar', 'estado', 'aprovar', 'reverter', 'pull_request'],
-          description: 'O que fazer.',
+          enum: ['backlog', 'propor', 'confirmar', 'cancelar', 'estado', 'aprovar', 'reverter', 'pull_request'],
+          description: 'O que fazer. "backlog" lista os itens abertos do roadmap, com número.',
         },
         pedido: {
           type: 'string',
           description:
             'Só com acao "propor": a alteração desejada, completa e em português. Nunca uma ' +
             'resposta como "confirmo" ou "tente novamente".',
+        },
+        tarefa: {
+          type: 'string',
+          description:
+            'Só com acao "propor", no lugar do pedido: o número de um item do backlog, como "1.3", ' +
+            'quando ele mandar fazer um item pelo número ou pelo nome que "backlog" listou.',
         },
       },
       required: ['acao'],

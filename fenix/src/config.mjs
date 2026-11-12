@@ -146,11 +146,36 @@ export function lerConfig(arquivo, envDoTerminal = process.env) {
             ca: bruto.notificacoes.ca ? caminho(bruto.notificacoes.ca) : null,
           }
         : null,
+    tempos: tempos(bruto.tempos),
     comandos: {
       prazoMs: Number(bruto.comandos?.prazoMs ?? 120_000),
       validadeMs: Number(bruto.comandos?.validadeMs ?? 300_000),
     },
   }
+}
+
+/**
+ * Os prazos da guardiã e das versões, para quem precisa de outros (um projeto
+ * lento, os testes de resiliência). Só números, e só os que existem; o resto fica
+ * com o padrão do código.
+ */
+const TEMPOS = {
+  servicos: ['estavelMs', 'intervaloMs', 'subidaMs'],
+  versoes: ['subidaMs', 'estabilidadeMs', 'intervaloMs', 'vigiaMs'],
+}
+function tempos(bruto) {
+  const saida = {}
+  for (const [parte, campos] of Object.entries(TEMPOS)) {
+    const dados = bruto?.[parte] ?? {}
+    const valores = Object.fromEntries(
+      campos.filter((c) => Number(dados[c]) > 0).map((c) => [c, Number(dados[c])]),
+    )
+    if (parte === 'servicos' && Array.isArray(dados.esperasMs) && dados.esperasMs.every((n) => Number(n) > 0)) {
+      valores.esperasMs = dados.esperasMs.map(Number)
+    }
+    saida[parte] = valores
+  }
+  return saida
 }
 
 /** Lê um arquivo .env simples: CHAVE=valor, com # de comentário. */

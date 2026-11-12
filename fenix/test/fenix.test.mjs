@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { WebSocket } from 'ws'
 import { criarCanal, tokenConfere } from '../src/canal.mjs'
 import { expandir, lerAmbiente, lerConfig } from '../src/config.mjs'
-import { criarFenix } from '../src/fenix.mjs'
+import { criarFenix, receitaDoRenascimento } from '../src/fenix.mjs'
 import { criarComandos, montar, rodar, semSegredos } from '../src/rotinas.mjs'
 import { criarServicos } from '../src/servicos.mjs'
 
@@ -342,6 +342,79 @@ test('a Fênix sobe os serviços, roda rotinas pelo canal e passa o endereço ao
   )
   ws.close()
   await fenix.encerrar()
+})
+
+test('os tempos do config valem só como números positivos e só os que existem', () => {
+  const pasta = temp()
+  writeFileSync(
+    join(pasta, 'fenix.config.json'),
+    JSON.stringify({
+      servicos: [{ nome: 'app', comando: ['node', 'app.mjs'] }],
+      tempos: {
+        servicos: { esperasMs: [200, 400], intervaloMs: 300, inventado: 1 },
+        versoes: { subidaMs: '6000', estabilidadeMs: -1, vigiaMs: 'x' },
+      },
+    }),
+  )
+  const c = lerConfig(join(pasta, 'fenix.config.json'), {})
+  assert.deepEqual(c.tempos, { servicos: { intervaloMs: 300, esperasMs: [200, 400] }, versoes: { subidaMs: 6000 } })
+  writeFileSync(join(pasta, 'fenix.config.json'), JSON.stringify({ servicos: [{ nome: 'app', comando: ['node', 'app.mjs'] }] }))
+  assert.deepEqual(lerConfig(join(pasta, 'fenix.config.json'), {}).tempos, { servicos: {}, versoes: {} })
+})
+
+test('quem a Fênix sobe recebe o pid dela e a receita para revivê-la (docs/adr/0028)', async () => {
+  const pasta = temp()
+  writeFileSync(
+    join(pasta, 'app.mjs'),
+    `import { writeFileSync } from 'node:fs'
+     writeFileSync('visto.json', JSON.stringify({ pid: process.env.FENIX_PID, receita: process.env.FENIX_RENASCER ?? null }))
+     setInterval(() => {}, 1000)`,
+  )
+  writeFileSync(
+    join(pasta, 'fenix.config.json'),
+    JSON.stringify({
+      pasta: join(pasta, 'dados'),
+      escuta: { porta: 0 },
+      servicos: [{ nome: 'app', comando: ['node', 'app.mjs'], ambiente: { SO_DO_APP: '1' } }],
+      flags: { '--liga': { ambiente: { LIGADO: 'sim' } } },
+    }),
+  )
+  const config = lerConfig(join(pasta, 'fenix.config.json'), {})
+  const renascer = { comando: ['node', 'fenix.mjs', '--config', 'x.json', '--liga'], cwd: pasta }
+  const fenix = criarFenix(config, { flags: ['--liga'], token: TOKEN, log() {}, saida: mudo, renascer })
+  await fenix.iniciar()
+  await esperar(() => readdirSync(pasta).includes('visto.json'))
+  const visto = JSON.parse(readFileSync(join(pasta, 'visto.json'), 'utf8'))
+  await fenix.encerrar()
+  assert.equal(visto.pid, String(process.pid))
+  const receita = JSON.parse(visto.receita)
+  assert.deepEqual(receita, receitaDoRenascimento(config, renascer))
+  assert.deepEqual(receita.comando, renascer.comando)
+  assert.equal(receita.saida, join(pasta, 'dados', 'fenix.log'))
+  assert.equal(receita.registro, join(pasta, 'dados', 'renascimentos.log'))
+  // O que ela põe no ambiente não volta para a próxima; o token do arquivo, ela relê.
+  assert.deepEqual(receita.limpar.sort(), ['FENIX_TOKEN', 'LIGADO', 'SO_DO_APP'])
+  assert.equal(receitaDoRenascimento(config, { ...renascer, tokenDoAmbiente: true }).limpar.includes('FENIX_TOKEN'), false)
+})
+
+test('renascida, a Fênix registra e avisa que o A.P.O.L.O. a trouxe de volta', async () => {
+  const pasta = temp()
+  writeFileSync(join(pasta, 'app.mjs'), 'setInterval(() => {}, 1000)')
+  writeFileSync(
+    join(pasta, 'fenix.config.json'),
+    JSON.stringify({ pasta: join(pasta, 'dados'), escuta: { porta: 0 }, servicos: [{ nome: 'app', comando: ['node', 'app.mjs'] }] }),
+  )
+  const logs = []
+  const fenix = criarFenix(lerConfig(join(pasta, 'fenix.config.json'), {}), {
+    token: TOKEN,
+    log: (l) => logs.push(l),
+    saida: mudo,
+    renascida: true,
+  })
+  await fenix.iniciar()
+  await fenix.encerrar()
+  assert.ok(logs.some((l) => /renasci/.test(l)))
+  assert.match(readFileSync(join(pasta, 'dados', 'eventos.log'), 'utf8'), /o A\.P\.O\.L\.O\. me trouxe de volta das cinzas/)
 })
 
 // ── independência ───────────────────────────────────────────────────────────

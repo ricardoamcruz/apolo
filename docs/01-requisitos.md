@@ -22,7 +22,7 @@ Fase: ver `05-roadmap.md`.
 | RF-12 | **Painel de status**: módulos carregados, provedor de IA em uso, consumo/limites, erros | S | 1 | proposto |
 | RF-13 | **Registro de auditoria** de toda ação com efeito (quem pediu, qual módulo, resultado) | M | 1 | proposto |
 | RF-14 | **Configuração** por arquivo + variáveis de ambiente, com segredos fora do Git | M | 1 | proposto |
-| RF-15 | **Autodesenvolvimento**: por voz ou chat, alterar o próprio código com o Claude Code, seguir o roadmap, reiniciar para teste, voltar à `main` se quebrar ou se o Ricardo descartar, e guardar em `fase-x.x/nome` se ele aprovar (ADR 0011, ADR 0015) | S | 2 | em andamento |
+| RF-15 | **Autodesenvolvimento**: por voz ou chat, alterar o próprio código com o Claude Code, seguir o roadmap, reiniciar para teste, voltar à `main` se quebrar ou se o Ricardo descartar, e guardar em `fase-x.x/nome` se ele aprovar (ADR 0011, ADR 0015); tarefas do backlog pelo número (ADR 0028) | S | 2 | em andamento |
 | RF-16 | **Limpar a tela por comando**: entender pedidos como "limpe a bagunça" como fechar os popups abertos (painéis e artigos), preservando a conversa; "apague o histórico" e "limpe tudo" são os outros dois escopos. O A.P.O.L.O. diz o que saiu, ou que a tela já estava limpa | S | próxima versão | feito (03/11/2026) |
 | RF-17 | **Sub-módulo git**: fazer commits e gerar pull requests para a própria `main`, passando pelo gate de permissões; o merge continua sendo revisado pelo Ricardo (ADR 0014) | S | próxima versão | em andamento |
 | RF-18 | **Contexto compartilhado**: avaliar salvar informações importantes em uma branch local ou em um arquivo de contexto compartilhado, para uso futuro (relacionado a RF-06) | S | próxima versão | proposto |
@@ -50,6 +50,7 @@ Fase: ver `05-roadmap.md`.
 | RF-64 | **F.Ê.N.I.X., a guardiã**: sobe e mantém no ar a ponte, a interface e o H.E.R.M.E.S. (reinicia se cair ou travar), coloca no ar a versão nova e volta à estável se quebrar, atualiza a `main`, roda rotinas (testes, build, diagnóstico, app do iPhone, volume) e scripts bash só com confirmação; A.P.O.L.O., F.Ê.N.I.X. e H.E.R.M.E.S. independentes e comunicáveis entre máquinas (ADR 0025) | S | 2 | em andamento |
 | RF-66 | **Notificações push**: o H.E.R.M.E.S. entrega avisos dos serviços na central do macOS e no iPhone (ntfy), com botões de resposta de uso único, e leva ao Mac o que o Ricardo publicar pelo celular; a F.Ê.N.I.X. avisa versões, quedas e rotinas longas (ADR 0027) | S | 2 | em andamento |
 | RF-65 | **Avisos pelo WhatsApp**: testar o CallMeBot como canal gratuito de avisos curtos ao Ricardo, só para o número dele (`docs/poc/0001-callmebot-whatsapp.md`) | C | 3 | proposto |
+| RF-67 | **Pacto A.P.O.L.O. ↔ F.Ê.N.I.X.**: cada um faz a sua parte de qualquer ação pedida (ele conversa, mostra e muda o próprio código; ela cuida da máquina e da versão no ar); o A.P.O.L.O. pega tarefas do backlog pelo número e as faz como no chat (branch, commit, testes, versão de teste, PR); a Fênix volta à `main` uma branch que o derruba, e o A.P.O.L.O. revive a Fênix quando ela morre (ADR 0028) | S | 2 | em andamento |
 
 ## Requisitos não funcionais
 

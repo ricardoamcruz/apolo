@@ -47,6 +47,8 @@ export const SENSIVEIS = [
   /^fenix\//,
   /^fenix\.config\.json$/,
   /^bridge\/fenix\.mjs$/,
+  // Revive a Fênix: sobe processos soltos com o ambiente do terminal (docs/adr/0028).
+  /^bridge\/renascer\.mjs$/,
   // O gate, a proteção SSRF e o saneamento do HTML.
   /^bridge\/gate\.mjs$/,
   // O celular: quem muda isto decide quem fala com o agente de fora.

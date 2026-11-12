@@ -29,6 +29,7 @@
 | 0025 | F.Ê.N.I.X., H.E.R.M.E.S. e A.P.O.L.O. como serviços independentes | proposta |
 | 0026 | A.U.R.O.R.A., o bom dia com rock e o resumo do dia | proposta |
 | 0027 | Notificações push pelo H.E.R.M.E.S. | proposta |
+| 0028 | O pacto entre A.P.O.L.O. e F.Ê.N.I.X.: cada um revive o outro | proposta |
 
 ## Em aberto
 

@@ -7,17 +7,17 @@ O que ficou aberto depois da `fase-2.7/alvorada`, na ordem sugerida. Cada etapa
 vira uma branch nova a partir da `main` (ADR 0016).
 
 ### Etapa 1 — Validar o que já está pronto (sem código novo, só ajustes)
-- [ ] **Bom dia por voz (RF-55):** dizer "bom dia" no PC; ajustar volume e duração do trecho em `modules/aurora/aurora.config.json`. Em 09/11/2026: popups de notícias, compromissos e desenvolvimento em diagonal, "obrigado" fecha tudo e põe em espera, outro assunto minimiza; o tocador agora percebe quando o Chrome segura o autoplay e pede um clique; a confirmação do autodev recusada (fora da `main`) não trava mais o botão; com os popups na tela a conversa fica aberta até 3 min; o visual de espera só aparece quando ela é pedida (voz ou Esc), e a espera automática deixa a tela igual
-- [ ] **App do iPhone pelo H.E.R.M.E.S.:** conversar normalmente pelo relé (ADR 0025)
-- [ ] **Fênix por voz:** um script bash com confirmação (`--writes`) e uma rotina respondendo depois de rodar (correção do id da resposta)
-- [ ] **Notificações (RF-66):** o sentido iPhone → Mac pelo tópico `<tópico>-mac`; o botão **Descartar** numa versão em teste
-- [ ] **Autodesenvolvimento com o agente real (RF-15):** pedido por voz, conferência com `npm test`, teste ao vivo, aprovar e abrir o PR. Desde 12/11/2026 também pelo número do backlog ("Apolo, faz o item 1.3"; ADR 0028)
-- [ ] **Pacto com a Fênix (RF-67, ADR 0028):** no Mac, `kill -9` na Fênix com tudo no ar e ver o A.P.O.L.O. revivê-la (a interface reconecta e chega o aviso "a Fênix renasceu"); e um pedido de autodev que quebre a ponte, voltando à `main` sozinho. Os dois já passam em `npm run test:resiliencia`
-- [ ] **Asas próprias (ADR 0029):** no Mac, `kill -9` na Fênix com tudo no ar e ver o celular, as notificações e o bom dia seguirem (SISTEMAS mostra a Fênix caída e os outros de pé); quando ela voltar, o H.E.R.M.E.S. e a Aurora são adotados, sem reiniciar. Na `main`, `npm run atualizar` com um commit novo no GitHub
-- [ ] **Autonomia no iPhone (ADR 0030):** pelo app, "qual o backlog?", um item do backlog pelo número até aprovar, uma rotina da Fênix e um script bash confirmado falando (com `npm start -- --writes --autodev`)
-- [ ] **Git (RF-17):** push e `gh pr create` no Mac do Ricardo
-- [ ] **Navegador (RF-19):** abrir abas com os pop-ups liberados
-- [ ] **Espera natural (6.a):** conversa contínua com a TV ligada e alguém conversando ao lado
+- [x] **Bom dia por voz (RF-55):** dizer "bom dia" no PC; ajustar volume e duração do trecho em `modules/aurora/aurora.config.json`. Em 09/11/2026: popups de notícias, compromissos e desenvolvimento em diagonal, "obrigado" fecha tudo e põe em espera, outro assunto minimiza; o tocador agora percebe quando o Chrome segura o autoplay e pede um clique; a confirmação do autodev recusada (fora da `main`) não trava mais o botão; com os popups na tela a conversa fica aberta até 3 min; o visual de espera só aparece quando ela é pedida (voz ou Esc), e a espera automática deixa a tela igual
+- [x] **App do iPhone pelo H.E.R.M.E.S.:** conversar normalmente pelo relé (ADR 0025)
+- [x] **Fênix por voz:** um script bash com confirmação (`--writes`) e uma rotina respondendo depois de rodar (correção do id da resposta)
+- [x] **Notificações (RF-66):** o sentido iPhone → Mac pelo tópico `<tópico>-mac`; o botão **Descartar** numa versão em teste
+- [x] **Autodesenvolvimento com o agente real (RF-15):** pedido por voz, conferência com `npm test`, teste ao vivo, aprovar e abrir o PR. Desde 12/11/2026 também pelo número do backlog ("Apolo, faz o item 1.3"; ADR 0028)
+- [x] **Pacto com a Fênix (RF-67, ADR 0028):** no Mac, `kill -9` na Fênix com tudo no ar e ver o A.P.O.L.O. revivê-la (a interface reconecta e chega o aviso "a Fênix renasceu"); e um pedido de autodev que quebre a ponte, voltando à `main` sozinho. Os dois já passam em `npm run test:resiliencia`
+- [x] **Asas próprias (ADR 0029):** no Mac, `kill -9` na Fênix com tudo no ar e ver o celular, as notificações e o bom dia seguirem (SISTEMAS mostra a Fênix caída e os outros de pé); quando ela voltar, o H.E.R.M.E.S. e a Aurora são adotados, sem reiniciar. Na `main`, `npm run atualizar` com um commit novo no GitHub
+- [x] **Autonomia no iPhone (ADR 0030):** pelo app, "qual o backlog?", um item do backlog pelo número até aprovar, uma rotina da Fênix e um script bash confirmado falando (com `npm start -- --writes --autodev`)
+- [x] **Git (RF-17):** push e `gh pr create` no Mac do Ricardo
+- [x] **Navegador (RF-19):** abrir abas com os pop-ups liberados
+- [x] **Espera natural (6.a):** conversa contínua com a TV ligada e alguém conversando ao lado
 - [x] Revogar a senha de app da Microsoft, que não funciona, e apagar `APOLO_OUTLOOK_SENHA_APP` do `.env.local` (12/11/2026: revogada pelo Ricardo e apagada)
 
 ### Etapa 2 — Identidade visual inspirada em Horizon (ADR 0013)

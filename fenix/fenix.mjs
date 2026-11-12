@@ -17,6 +17,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { lerConfig } from './src/config.mjs'
 import { criarFenix, garantirToken } from './src/fenix.mjs'
 import { encerrarNaPorta } from './src/servicos.mjs'
@@ -76,7 +77,17 @@ for (const passo of config.preparar) {
 // Uma Fênix antiga esquecida num terminal seguraria a porta do canal.
 encerrarNaPorta(config.escuta.porta, 'fenix/fenix.mjs', process.cwd())
 
-const fenix = criarFenix(config, { flags: args, token: garantirToken(config.pasta) })
+// Como subir esta mesma Fênix de novo, se ela morrer (docs/adr/0028): o mesmo
+// programa, a mesma configuração e as mesmas opções.
+const renascer = {
+  comando: [process.execPath, fileURLToPath(import.meta.url), '--config', arquivo, ...args],
+  cwd: process.cwd(),
+}
+const renascida = process.env.FENIX_RENASCIDA === '1'
+// A marca é desta partida: os serviços e uma próxima Fênix não a herdam.
+delete process.env.FENIX_RENASCIDA
+delete config.ambiente.FENIX_RENASCIDA
+const fenix = criarFenix(config, { flags: args, token: garantirToken(config.pasta), renascer, renascida })
 
 let saindo = false
 async function sair(codigo) {

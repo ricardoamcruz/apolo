@@ -25,6 +25,12 @@ npm test   # dentro desta pasta: node --test test/
 - **Rotinas.** As do config (sem shell, parâmetros por formato) e três próprias:
   `reiniciar`, `atualizar` (pull, reinstala se preciso, sobe, volta se quebrar) e
   `diagnostico`.
+- **Renascimento.** A quem sobe, ela passa `FENIX_PID` e `FENIX_RENASCER`: como subi-la
+  de novo, com as mesmas opções. O projeto pode usar isso para revivê-la se ela morrer
+  (no A.P.O.L.O., `bridge/renascer.mjs`; docs/adr/0028). Renascida (`FENIX_RENASCIDA=1`),
+  ela registra em `eventos.log`, avisa e escreve a saída em `fenix.log`.
+- **Prazos.** `tempos.servicos` (`esperasMs`, `estavelMs`, `intervaloMs`, `subidaMs`) e
+  `tempos.versoes` (`subidaMs`, `estabilidadeMs`, `intervaloMs`, `vigiaMs`) no config.
 - **Comandos livres.** Script bash vira proposta; só roda confirmado, no prazo, com
   o texto exato, se uma opção com `comandosLivres` estiver ligada, e nunca com
   uma versão sem revisão no ar.

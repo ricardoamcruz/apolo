@@ -113,6 +113,15 @@ detalhe está em `docs/`.
   diferentes, e os testes cobram isso. A proteção do `fenix.config.json` tem de
   bater com `bridge/autodev/politica.mjs` (`scripts/fenix.test.mjs`). Estado,
   transição, token e eventos ficam em `~/.apolo/fenix/`.
+- **Pacto A.P.O.L.O. ↔ F.Ê.N.I.X. (ADR 0028, RF-67):** ele conversa, mostra e muda o
+  próprio código; ela cuida da máquina e da versão no ar ("QUEM FAZ O QUÊ" em
+  `bridge/realtime.mjs`). A Fênix passa a quem sobe `FENIX_PID` e `FENIX_RENASCER` (a
+  receita: comando, pasta, `fenix.log`, `renascimentos.log`, variáveis dela); se ela
+  morre, a ponte (`bridge/renascer.mjs`, sensível) a sobe de novo, solta, e sai; três
+  vezes em 10 min, desiste. Ctrl-C não ressuscita. `scripts/resiliencia.test.mjs` roda
+  isso com a Fênix real e uma ponte mínima (`scripts/resiliencia/ponte.mjs`): mudou a
+  Fênix, o cliente ou o renascimento, rode `npm run test:resiliencia`. Prazos da Fênix
+  podem vir de `tempos` no `fenix.config.json`.
 - **Notificações (ADR 0027, RF-66):** o H.E.R.M.E.S. é a central: serviços pedem por
   WSS em `/notificacoes` (porta local 8792, `APOLO_NOTIFICAR_TOKEN`) e ele entrega na
   central do macOS (`osascript`, com argumentos, nunca interpolados) e no iPhone pelo
@@ -143,6 +152,9 @@ detalhe está em `docs/`.
   sensíveis (`bridge/autodev/politica.mjs`) nunca entram em teste sem revisão.
   A conferência roda lint, tipos, build e `npm test`; ao aprovar, ele oferece o PR
   para a `main`, que só sai com o sim falado e `--writes` (revisão da ADR 0015).
+  `desenvolvimento` com acao `backlog` lista "Pendências em etapas" numeradas
+  (`etapa.posição`, contando os feitos); `propor` com `tarefa: "1.3"` faz o item
+  inteiro como pedido (`pedidoDaTarefa`, em `bridge/desenvolvimento.mjs`).
   Motivos de rollback ficam em `~/.apolo/fenix/eventos.log`.
 - Escopo atual: **apenas o core e os pontos de extensão**. Módulos de domínio
   (e-mail, agenda, finanças, automação residencial) vêm depois.
@@ -221,6 +233,7 @@ npm run test:hermes  # testes do H.E.R.M.E.S.
 npm run test:aurora  # testes da A.U.R.O.R.A.
 npm run test:comandos # testes dos comandos por voz (RF-20)
 npm run test:conversa # testes da janela de conversa (ADR 0024)
+npm run test:resiliencia # o pacto (ADR 0028): branch que mata a ponte volta à main; a Fênix morta é revivida
 npm test             # todos os testes (scripts/, fenix/test/, hermes/test/, modules/aurora/test/)
 ```
 

@@ -315,7 +315,10 @@ export default function App() {
           }
         }
       }
-      const { mensagem } = await autodev(acao, { pedido: String(args.pedido ?? '') })
+      const { mensagem } = await autodev(acao, {
+        pedido: String(args.pedido ?? ''),
+        ...(typeof args.tarefa === 'string' && args.tarefa.trim() ? { tarefa: args.tarefa.trim() } : {}),
+      })
       return { output: mensagem }
     }
 

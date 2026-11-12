@@ -11,7 +11,8 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [ ] **App do iPhone pelo H.E.R.M.E.S.:** conversar normalmente pelo relé (ADR 0025)
 - [ ] **Fênix por voz:** um script bash com confirmação (`--writes`) e uma rotina respondendo depois de rodar (correção do id da resposta)
 - [ ] **Notificações (RF-66):** o sentido iPhone → Mac pelo tópico `<tópico>-mac`; o botão **Descartar** numa versão em teste
-- [ ] **Autodesenvolvimento com o agente real (RF-15):** pedido por voz, conferência com `npm test`, teste ao vivo, aprovar e abrir o PR
+- [ ] **Autodesenvolvimento com o agente real (RF-15):** pedido por voz, conferência com `npm test`, teste ao vivo, aprovar e abrir o PR. Desde 12/11/2026 também pelo número do backlog ("Apolo, faz o item 1.3"; ADR 0028)
+- [ ] **Pacto com a Fênix (RF-67, ADR 0028):** no Mac, `kill -9` na Fênix com tudo no ar e ver o A.P.O.L.O. revivê-la (a interface reconecta e chega o aviso "a Fênix renasceu"); e um pedido de autodev que quebre a ponte, voltando à `main` sozinho. Os dois já passam em `npm run test:resiliencia`
 - [ ] **Git (RF-17):** push e `gh pr create` no Mac do Ricardo
 - [ ] **Navegador (RF-19):** abrir abas com os pop-ups liberados
 - [ ] **Espera natural (6.a):** conversa contínua com a TV ligada e alguém conversando ao lado
@@ -59,6 +60,7 @@ sobre a ordem das fases abaixo.
 
 ### Depois da próxima versão
 - [ ] **F.Ê.N.I.X. (RF-64):** guardiã, versões, atualizar, rotinas e scripts confirmados — **em andamento** (ADR 0025, 08/11/2026); falta validar o celular pelo H.E.R.M.E.S. no aparelho, um script por voz e a rotina `app_iphone`
+- [ ] **Pacto A.P.O.L.O. ↔ F.Ê.N.I.X. (RF-67):** quem faz o quê nas instruções da voz, backlog pelo número no autodev, a Fênix deixa a receita do renascimento e a ponte a revive quando ela morre, com limite de 3 em 10 min — **em andamento** (ADR 0028, 12/11/2026); testado com processos de verdade em `scripts/resiliencia.test.mjs`; falta validar no Mac. Depois: reviver também quando os dois morrem juntos (um vigia no `launchd`) e uma Fênix viva mas travada
 - [ ] **Bom dia com rock (RF-55):** A.U.R.O.R.A. com trecho do YouTube Music, agenda (.ics), notícias por tema e GitHub — **em andamento** (ADR 0026, 08/11/2026); falta e-mail e To Do (exigem app na Microsoft) e validar por voz
 - [ ] **Notificações push (RF-66):** central no H.E.R.M.E.S. (Mac e ntfy), botões de resposta e avisos da F.Ê.N.I.X. — **em andamento** (ADR 0027, 08/11/2026); falta validar no iPhone
 - [ ] **Avisos pelo WhatsApp (RF-65):** P.O.C. com o CallMeBot (`docs/poc/0001-callmebot-whatsapp.md`)

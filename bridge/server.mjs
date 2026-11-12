@@ -56,8 +56,9 @@ import {
   tokenDoHermes,
 } from './hermes.mjs'
 import { criarClienteFenix } from './fenix.mjs'
+import { criarRenascimento, lerReceita } from './renascer.mjs'
 import { criarClienteAurora } from './aurora.mjs'
-import { estadoDoDesenvolvimento } from './desenvolvimento.mjs'
+import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog } from './desenvolvimento.mjs'
 import { criarTelemetria } from './telemetria.mjs'
 import { garantirCertificado } from './tls.mjs'
 import { criarCentral } from './extensoes.mjs'
@@ -846,6 +847,8 @@ const fenix = criarClienteFenix({
   aoMudar: (conectada) => {
     canais.fenix = conectada ? 'connected' : 'failed'
     if (!conectada) canais.hermes = canais.aurora = null
+    // Caiu a conexão: se foi ela que morreu, a ponte a revive (docs/adr/0028).
+    if (!conectada) renascimento?.vigiar()
     canaisMudaram()
   },
   aoReceber: (msg) => {
@@ -864,6 +867,13 @@ const fenix = criarClienteFenix({
 })
 if (fenix) canais.fenix = 'pending'
 
+/**
+ * O pacto (docs/adr/0028): a Fênix volta a ponte para a main quando uma versão
+ * quebra; a ponte sobe a Fênix de novo quando é ela quem morre. Só liga quando foi
+ * ela quem subiu esta ponte, nesta máquina, e deixou a receita.
+ */
+const renascimento = fenix ? criarRenascimento({ receita: lerReceita(), conectado: () => fenix.conectado() }) : null
+
 /** O que a interface precisa saber da Fênix: as propostas de comando em aberto. */
 const resumoDaFenix = () => ({
   conectada: Boolean(fenix?.conectado()),
@@ -879,6 +889,24 @@ const autodev = criarAutodev({
   // Abrir o PR de uma alteração aprovada é efeito no mundo: só com --writes (ADR 0014).
   abrirPr: ALLOW_WRITES ? (pedido) => criarGit({ repo: REPO }).pullRequest(pedido) : null,
 })
+
+/** O backlog do roadmap, lido da cópia no ar: é dela que todo trabalho parte. */
+const lerBacklog = () => readFile(join(REPO, 'docs/05-roadmap.md'), 'utf8').then(backlogDoRoadmap, () => [])
+
+/**
+ * Uma ação do autodesenvolvimento vinda da interface. "backlog" lista os itens
+ * abertos; "propor" com `tarefa` ("1.3") pega o item inteiro do roadmap como
+ * pedido, do jeito que o Ricardo pede no chat (docs/adr/0028).
+ */
+async function acaoDoAutodev({ acao, pedido, tarefa }) {
+  if (acao === 'backlog') return { ok: true, mensagem: textoDoBacklog(await lerBacklog()) }
+  if (acao === 'propor' && typeof tarefa === 'string' && tarefa.trim()) {
+    const item = (await lerBacklog()).find((i) => i.id === tarefa.trim())
+    if (!item) return { ok: false, mensagem: `Não há item ${tarefa.trim()} aberto no backlog. ${textoDoBacklog(await lerBacklog())}` }
+    return autodev.acao('propor', { pedido: pedidoDaTarefa(item) })
+  }
+  return autodev.acao(acao, { pedido })
+}
 
 /** O bom dia (RF-55, docs/adr/0026): a faixa de rock e o resumo do dia. */
 const aurora = criarClienteAurora({
@@ -1441,8 +1469,7 @@ const atender = (socket, { celular = false } = {}) => {
     }
 
     if (msg.type === 'autodev' && typeof msg.acao === 'string') {
-      void autodev
-        .acao(msg.acao, { pedido: msg.pedido })
+      void acaoDoAutodev(msg)
         .catch((err) => ({ ok: false, mensagem: err.message }))
         .then((r) => send({ type: 'autodev', resposta: msg.id, ...r }))
     }

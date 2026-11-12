@@ -6,7 +6,7 @@
  */
 import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { freemem, loadavg, totalmem } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -34,10 +34,35 @@ export function garantirToken(pasta, env = process.env) {
 }
 
 /**
- * @param config   o resultado de lerConfig
- * @param flags    as opções da linha de comando que existem no config (ex.: --writes)
+ * A receita do renascimento (docs/adr/0028): o que um serviço precisa para subir
+ * esta Fênix de novo se ela morrer. Só dados: o comando, a pasta, onde escrever e
+ * o que no ambiente é dela, e não do terminal. Quem a usa não importa nada daqui.
  */
-export function criarFenix(config, { flags = [], token, log = console.log, saida, tempos = {} } = {}) {
+export function receitaDoRenascimento(config, { comando, cwd, tokenDoAmbiente = false }) {
+  const limpar = new Set()
+  for (const f of Object.values(config.flags)) for (const k of Object.keys(f.ambiente)) limpar.add(k)
+  for (const s of config.servicos) for (const k of Object.keys(s.ambiente)) limpar.add(k)
+  // Com o token gerado em arquivo, a Fênix nova lê o mesmo arquivo; o do terminal fica.
+  if (!tokenDoAmbiente) limpar.add('FENIX_TOKEN')
+  return {
+    comando,
+    cwd,
+    saida: join(config.pasta, 'fenix.log'),
+    registro: join(config.pasta, 'renascimentos.log'),
+    limpar: [...limpar],
+  }
+}
+
+/**
+ * @param config     o resultado de lerConfig
+ * @param flags      as opções da linha de comando que existem no config (ex.: --writes)
+ * @param renascer   `{ comando, cwd }`: como subir esta Fênix de novo (docs/adr/0028)
+ * @param renascida  ela foi trazida de volta pelo A.P.O.L.O., e não iniciada à mão
+ */
+export function criarFenix(
+  config,
+  { flags = [], token, log = console.log, saida, tempos = config.tempos ?? {}, renascer = null, renascida = false } = {},
+) {
   mkdirSync(config.pasta, { recursive: true })
   const ativas = flags.filter((f) => f in config.flags).map((f) => config.flags[f])
   const tls = config.tls
@@ -48,11 +73,17 @@ export function criarFenix(config, { flags = [], token, log = console.log, saida
 
   let canal
   let porta = config.escuta.porta
+  const receita = renascer
+    ? JSON.stringify(receitaDoRenascimento(config, { ...renascer, tokenDoAmbiente: Boolean((config.ambiente ?? process.env).FENIX_TOKEN?.trim()) }))
+    : null
   const ambiente = () => ({
     ...(config.ambiente ?? process.env),
     ...Object.assign({}, ...ativas.map((f) => f.ambiente)),
     FENIX_URL: url(porta),
     FENIX_TOKEN: token,
+    // O pacto (docs/adr/0028): quem ela sobe sabe como revivê-la.
+    FENIX_PID: String(process.pid),
+    ...(receita ? { FENIX_RENASCER: receita } : {}),
   })
 
   let avisarEstado = null
@@ -279,6 +310,20 @@ export function criarFenix(config, { flags = [], token, log = console.log, saida
     url: () => url(porta),
     /** Volta o que não foi aprovado, abre o canal e sobe os serviços. */
     async iniciar() {
+      if (renascida) {
+        const linha = '[fenix] renasci: o A.P.O.L.O. me trouxe de volta das cinzas'
+        log(linha)
+        try {
+          appendFileSync(join(config.pasta, 'eventos.log'), `${new Date().toISOString()} ${linha}\n`)
+        } catch {
+          /* o registro nunca impede a partida */
+        }
+        avisos.avisar({
+          titulo: `${config.nome}: a Fênix renasceu`,
+          texto: 'Ela tinha caído, e o A.P.O.L.O. a subiu de novo. Os serviços estão voltando.',
+          prioridade: 'alta',
+        })
+      }
       const interrompida = await versoes.recuperar()
       porta = await canal.ligar()
       servicos.liberarPortas()

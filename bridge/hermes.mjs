@@ -21,10 +21,16 @@ export const ROTAS_DE_MIDIA = /^\/(img|media|file|page)\?/
 /**
  * O celular conversa, pede a credencial da voz e manda medições, que só viram
  * linhas de log (bridge/telemetria.mjs). `extensao` só chega a uma extensão
- * registrada, e hoje não há nenhuma (bridge/extensoes.mjs). Autodev, preferências,
- * a F.Ê.N.I.X. e o resto continuam só no PC.
+ * registrada, e hoje não há nenhuma (bridge/extensoes.mjs).
+ *
+ * Desde a ADR 0030, ele também tem a autonomia do PC no core: `autodev` (backlog,
+ * propor, confirmar, aprovar, reverter, pull request) e `fenix` (rotinas e scripts
+ * bash). As mesmas travas valem: scripts só com --writes, autodev só com --autodev,
+ * e confirmar, aprovar e abrir o PR só com o sim falado do Ricardo, conferido na
+ * transcrição do microfone do celular (src/lib/voz/celular.ts), como no PC.
+ * Preferências e o bom dia continuam só no PC.
  */
-export const MENSAGENS_DO_CELULAR = new Set(['ask', 'interrupt', 'voz_sessao', 'telemetria', 'extensao'])
+export const MENSAGENS_DO_CELULAR = new Set(['ask', 'interrupt', 'voz_sessao', 'telemetria', 'extensao', 'autodev', 'fenix'])
 
 export const TOKEN_MINIMO = 32
 

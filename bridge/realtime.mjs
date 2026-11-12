@@ -519,18 +519,23 @@ function toGeminiSchema(schema) {
 }
 
 /**
- * O que muda na voz pelo iPhone (docs/adr/0019). Fica só o que funciona sem o HUD:
- * câmera, ajustes de interface e autodesenvolvimento dependem da tela do PC.
+ * O que muda na voz pelo iPhone (docs/adr/0019 e 0030). Fica tudo o que não depende
+ * do HUD: câmera, modo mãos, diagnóstico e o resto dos ajustes da interface são da
+ * tela do PC. O desenvolvimento e a Fênix vão junto, com a confirmação falada.
  */
-const FERRAMENTAS_DO_CELULAR = new Set(['executar_tarefa', 'ajustar_interface', 'ignorar_fala', 'dormir'])
+const FERRAMENTAS_DO_CELULAR = new Set(['executar_tarefa', 'desenvolvimento', 'fenix', 'ajustar_interface', 'ignorar_fala', 'dormir'])
 const INSTRUCOES_DO_CELULAR = `
 
 CANAL DESTA SESSÃO. Agora o Ricardo fala com você pelo app do iPhone. Só existem as
-ferramentas executar_tarefa, ajustar_interface, ignorar_fala e dormir. Aqui,
-ajustar_interface só mexe nos popups: "limpe a bagunça" e "fechar tudo" são limpar_tela
-com "popups", e "fechar este popup", "próximo popup" e "tela cheia" são o campo popups.
-O que for dito acima sobre câmera, modo mãos, outros ajustes da
-interface, diagnóstico, desenvolvimento ou Fênix não vale aqui, e se ele pedir algo disso,
+ferramentas executar_tarefa, desenvolvimento, fenix, ajustar_interface, ignorar_fala e
+dormir. Aqui, ajustar_interface só mexe nos popups: "limpe a bagunça" e "fechar tudo"
+são limpar_tela com "popups", e "fechar este popup", "próximo popup" e "tela cheia" são
+o campo popups. O desenvolvimento (backlog, propor, confirmar, aprovar, reverter, pull
+request) e a Fênix (rotinas e scripts bash) funcionam aqui como no computador, com a
+mesma ordem e as mesmas travas. A diferença: no celular não há botões de Confirmar ou
+Aprovar, então quando for a hora, peça que ele diga "confirmo" (ou "aprovo"), e leia o
+script ou o pedido em uma frase antes. O que for dito acima sobre câmera, modo mãos,
+outros ajustes da interface ou diagnóstico não vale aqui, e se ele pedir algo disso,
 diga que só funciona no computador. Em espera, ele acorda você pelo nome ou com um
 toque na tela; sem o nome, nada do que você disser em espera chega a ele. O que for visual o agente de tarefas abre como popup
 na tela do celular.`

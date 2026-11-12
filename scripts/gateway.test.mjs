@@ -65,8 +65,8 @@ before(async () => {
 })
 after(() => gateway.fechar())
 
-test('o celular só pode conversar e mandar medições', () => {
-  assert.deepEqual([...MENSAGENS_DO_CELULAR].sort(), ['ask', 'extensao', 'interrupt', 'telemetria', 'voz_sessao'])
+test('o celular conversa, manda medições e pede ao core como o PC (ADR 0030)', () => {
+  assert.deepEqual([...MENSAGENS_DO_CELULAR].sort(), ['ask', 'autodev', 'extensao', 'fenix', 'interrupt', 'telemetria', 'voz_sessao'])
 })
 
 test('o H.E.R.M.E.S. e o lado dele na ponte são sensíveis: não entram em teste sem revisão', () => {
@@ -142,6 +142,7 @@ function canalDeTeste(pulsoMs) {
       aoFalhar: anotar('falha'),
       aoCredencial: (id, sessao, erro) => eventos.push(['credencial', { id, sessao, erro }]),
       aoMedir: (nome, ms, info) => medidas.push({ nome, ms, info }),
+      aoCore: anotar('core'),
     },
     ({ url, token: t }) => new WebSocket(url, { headers: { Authorization: `Bearer ${t}` } }),
     pulsoMs,
@@ -242,6 +243,40 @@ test('sem resposta ao ping, deixa de estar conectado mesmo com o socket aberto',
   await ate(() => eventos.slice(depois).some(([, v]) => v === 'conectando'))
   canal.desligar()
   mudo.close()
+})
+
+test('os pedidos ao core vão pelo canal, e a resposta e o estado voltam para a voz', async () => {
+  const recebidas = []
+  const gw = criarGateway({
+    token: TOKEN,
+    porta: 0,
+    atender: (ws) =>
+      ws.on('message', (bruto) => {
+        const msg = JSON.parse(bruto.toString())
+        if (msg.type === 'ping') return
+        recebidas.push(msg)
+        if (msg.type === 'fenix') {
+          ws.send(JSON.stringify({ type: 'fenix', estado: { conectada: true, propostas: [{ id: 'p1', script: 'ls', motivo: 'listar' }] } }))
+          ws.send(JSON.stringify({ ok: true, mensagem: 'proposta', type: 'fenix', resposta: msg.id }))
+        }
+      }),
+  })
+  const p = await gw.ligar()
+  const { canal, eventos } = canalDeTeste()
+  // Desconectado, o pedido não sai: quem chamou responde à voz.
+  assert.equal(canal.pedirAoCore({ tipo: 'fenix', id: 'f0', acao: 'estado' }), false)
+  canal.ligar({ url: `ws://127.0.0.1:${p}${CAMINHO}`, token: TOKEN })
+  await ate(() => eventos.some(([, v]) => v === 'conectado'))
+  // Só os tipos do core: nada de usar o caminho para outra mensagem.
+  assert.equal(canal.pedirAoCore({ tipo: 'preferencias', id: 'x', acao: 'gravar' }), false)
+  assert.equal(canal.pedirAoCore({ tipo: 'fenix', id: 'f1', acao: 'comando', script: 'ls', motivo: 'listar' }), true)
+  await ate(() => eventos.filter(([n]) => n === 'core').length === 2)
+  assert.deepEqual(recebidas, [{ id: 'f1', acao: 'comando', script: 'ls', motivo: 'listar', type: 'fenix' }])
+  const doCore = eventos.filter(([n]) => n === 'core').map(([, v]) => v)
+  assert.equal(doCore[0].estado.propostas[0].id, 'p1')
+  assert.deepEqual(doCore[1], { ok: true, mensagem: 'proposta', type: 'fenix', resposta: 'f1' })
+  canal.desligar()
+  await gw.fechar()
 })
 
 test('a credencial da voz volta pelo canal', async () => {

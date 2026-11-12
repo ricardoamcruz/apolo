@@ -56,7 +56,10 @@ detalhe está em `docs/`.
 - **App mobile (ADR 0019):** `apps/mobile` (Expo SDK 58, RN 0.88, bundle
   `com.ricardocruz.apolo`, Personal Team `9F2MVYQ9SF`). Ele ouve e responde por
   voz, como o PC, sem conversa escrita, pelo H.E.R.M.E.S. (`hermes/`, porta 8788 com
-  token, só com o canal e a mídia dos popups, publicada pelo Tailscale). A
+  token, só com o canal e a mídia dos popups, publicada pelo Tailscale). Desde a
+  ADR 0030 ele tem a autonomia do PC no core: backlog, autodesenvolvimento e Fênix
+  (rotinas e scripts bash), com as mesmas travas e a confirmação falada conferida na
+  transcrição do microfone do celular; sem botões, ele confirma dizendo "confirmo". A
   voz (`src/lib/voz/celular.ts`) e os `Panels` e `Blades` da web são compilados por
   `npm run popups` e rodam numa WebView; os shaders ficam em `src/scene/shaders.ts`.
   Mudar esse código muda o app. Popup é só para conteúdo visual, nunca para a

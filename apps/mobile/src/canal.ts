@@ -18,7 +18,12 @@ export type EventosDoCanal = {
   aoMedir?: (nome: string, ms?: number, info?: string) => void
   /** Mensagem de uma extensão entre dispositivos (docs/adr/0022). Nada usa ainda. */
   aoExtensao?: (extensao: string, dados: unknown) => void
+  /** Resposta ou estado do autodesenvolvimento e da Fênix, para a voz (docs/adr/0030). */
+  aoCore?: (quadro: Record<string, unknown>) => void
 }
+
+/** Os pedidos ao core que o celular pode fazer, como a interface do PC (docs/adr/0030). */
+export const TIPOS_DO_CORE = new Set(['autodev', 'fenix'])
 
 /** O pedaço do WebSocket que o canal usa. Nos testes, entra o pacote `ws`. */
 export type SocketDoCanal = {
@@ -167,6 +172,16 @@ export class Canal {
     return true
   }
 
+  /**
+   * Um pedido ao core (`autodev` ou `fenix`), com o id da voz. A resposta volta por
+   * `aoCore`, com `resposta` igual a esse id. Quem decide se pode é a ponte.
+   */
+  pedirAoCore({ tipo, ...pedido }: { tipo: string; id: string; acao: string } & Record<string, unknown>) {
+    if (this.socket?.readyState !== ABERTO || !TIPOS_DO_CORE.has(tipo)) return false
+    this.socket.send(JSON.stringify({ ...pedido, type: tipo }))
+    return true
+  }
+
   enviarExtensao(extensao: string, dados: unknown) {
     if (this.socket?.readyState !== ABERTO) return false
     this.socket.send(JSON.stringify({ type: 'extensao', extensao, dados }))
@@ -268,6 +283,9 @@ export class Canal {
       this.eventos.aoMedir?.('canal_conectou', this.conectadoEm - this.abertoEm)
       this.mudar('conectado')
       return this.eventos.aoMidia(baseDeMidia(this.par.url, quadro.chave))
+    }
+    if (quadro.type && TIPOS_DO_CORE.has(quadro.type)) {
+      return this.eventos.aoCore?.(quadro as Record<string, unknown>)
     }
     if (quadro.type === 'extensao' && quadro.extensao) {
       return this.eventos.aoExtensao?.(quadro.extensao, quadro.dados)

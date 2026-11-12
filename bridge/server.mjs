@@ -835,6 +835,18 @@ const broadcast = (msg) => {
     if (client.readyState === client.OPEN) client.send(JSON.stringify(msg))
   }
 }
+/**
+ * Os celulares conectados pelo H.E.R.M.E.S. Recebem só o estado do core que a voz
+ * dele precisa para decidir (docs/adr/0030): o autodesenvolvimento e as propostas
+ * da Fênix. O resto do que vai às interfaces do PC (preferências, HUD) fica lá.
+ */
+const celularesNoAr = new Set()
+const avisarTodos = (msg) => {
+  broadcast(msg)
+  for (const client of celularesNoAr) {
+    if (client.readyState === client.OPEN) client.send(JSON.stringify(msg))
+  }
+}
 const preferencias = criarPreferencias()
 const telemetria = criarTelemetria()
 /** Ponto de extensão entre dispositivos (docs/adr/0022). Nenhuma registrada ainda. */
@@ -871,7 +883,7 @@ const fenix = criarClienteFenix({
       canais.aurora = (doAurora && STATUS_DO_SERVICO[doAurora.status]) ?? null
       if (msg.inicial) autodev.sincronizar(msg.versao)
       canaisMudaram()
-      broadcast({ type: 'fenix', estado: resumoDaFenix() })
+      avisarTodos({ type: 'fenix', estado: resumoDaFenix() })
     }
   },
 })
@@ -894,7 +906,7 @@ const autodev = criarAutodev({
   repo: REPO,
   ligado: process.env.APOLO_AUTODEV === '1',
   supervisor: fenix ? (msg) => fenix.enviar(msg) : null,
-  avisar: (estado) => broadcast({ type: 'autodev', estado }),
+  avisar: (estado) => avisarTodos({ type: 'autodev', estado }),
   interfaces: () => interfacesDoPc.size,
   // Abrir o PR de uma alteração aprovada é efeito no mundo: só com --writes (ADR 0014).
   abrirPr: ALLOW_WRITES ? (pedido) => criarGit({ repo: REPO }).pullRequest(pedido) : null,
@@ -960,7 +972,7 @@ async function pedirAFenix({ acao, nome, parametros, script, motivo, proposta })
     const estado = await fenix.pedir({ type: 'estado' })
     if (estado.ok) {
       estadoDaFenix = estado
-      broadcast({ type: 'fenix', estado: resumoDaFenix() })
+      avisarTodos({ type: 'fenix', estado: resumoDaFenix() })
     }
     return r
   }
@@ -1055,7 +1067,11 @@ const atender = (socket, { celular = false } = {}) => {
   const reenviarCanais = () => send({ type: 'ready', servers: comCanais(ultimosServidores) })
   if (celular) {
     celularesConectados++
+    celularesNoAr.add(socket)
     canaisMudaram()
+    // O retrato do core para a voz do celular decidir, como o PC recebe ao conectar.
+    socket.send(JSON.stringify({ type: 'autodev', estado: autodev.estado() }))
+    socket.send(JSON.stringify({ type: 'fenix', estado: resumoDaFenix() }))
   } else {
     interfacesDoPc.add(socket)
     ouvintesDosCanais.add(reenviarCanais)
@@ -1535,6 +1551,7 @@ const atender = (socket, { celular = false } = {}) => {
       canaisMudaram()
     }
     interfacesDoPc.delete(socket)
+    celularesNoAr.delete(socket)
     ouvintesDosCanais.delete(reenviarCanais)
     dispositivo.sair()
     closed = true

@@ -36,6 +36,17 @@ test('o celular pode alternar popups, sem ganhar os outros ajustes', () => {
   assert.ok(ajuste.parameters.properties.popups.enum.includes('tela_cheia'))
 })
 
+test('no celular, o desenvolvimento e a Fênix valem como no PC, confirmados pela fala (ADR 0030)', () => {
+  const declaracoes = geminiSetup({ celular: true }).tools[0].functionDeclarations.map((f) => f.name)
+  for (const nome of ['executar_tarefa', 'desenvolvimento', 'fenix', 'ajustar_interface', 'ignorar_fala', 'dormir']) {
+    assert.ok(declaracoes.includes(nome), nome)
+  }
+  for (const nome of ['olhar_camera', 'diagnostico', 'bom_dia', 'musica']) assert.equal(declaracoes.includes(nome), false, nome)
+  const texto = geminiSetup({ celular: true }).systemInstruction.parts[0].text
+  assert.match(texto, /no celular não há botões de Confirmar ou\s+Aprovar/)
+  assert.match(texto, /diga "confirmo"/)
+})
+
 test('cancelar exige que a frase inteira seja a ordem', () => {
   for (const fala of ['cancela', 'Cancela!', 'cancela a tarefa', 'Apolo, cancela isso', 'pode cancelar', 'deixa pra lá', 'para tudo', 'esquece essa pesquisa', 'cancela, por favor']) {
     assert.equal(pedeCancelamento(fala), true, fala)

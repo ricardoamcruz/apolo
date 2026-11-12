@@ -18,7 +18,7 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [ ] **Git (RF-17):** push e `gh pr create` no Mac do Ricardo
 - [ ] **Navegador (RF-19):** abrir abas com os pop-ups liberados
 - [ ] **Espera natural (6.a):** conversa contínua com a TV ligada e alguém conversando ao lado
-- [ ] Revogar a senha de app da Microsoft, que não funciona, e apagar `APOLO_OUTLOOK_SENHA_APP` do `.env.local`
+- [x] Revogar a senha de app da Microsoft, que não funciona, e apagar `APOLO_OUTLOOK_SENHA_APP` do `.env.local` (12/11/2026: revogada pelo Ricardo e apagada)
 
 ### Etapa 2 — Identidade visual inspirada em Horizon (ADR 0013)
 - [ ] Página de comparação com 2 ou 3 paletas (ciano atual × âmbar sobre azul profundo) e propostas de núcleo 3D original; **a escolha é do Ricardo**

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { useStore, accentFor, atividadeAtual, type Phase } from '../store'
+import { useStore, accentFor, atividadeAtual, faseNaTela, type Phase } from '../store'
 import { ROTULO_DE_ATIVIDADE } from '../lib/estados'
 import { Suggestions } from './Suggestions'
 import { BladeSweep, Blades, BladeTray } from './Blades'
@@ -153,12 +153,16 @@ function DecodeText({ text }: { text: string }) {
 /* --------------------------------------------------------------------- hud */
 
 export function Hud() {
-  const phase = useStore((s) => s.phase)
+  const phase = useStore(faseNaTela)
+  /** A dica de rodapé diz a verdade: em espera, como acordar. */
+  const emEspera = useStore((s) => s.phase === 'dormant')
   const caption = useStore((s) => s.caption)
   const turns = useStore((s) => s.turns)
   const exibirChat = useStore((s) => s.exibicao.exibirChat)
   const activeTool = useStore((s) => s.activeTool)
   const error = useStore((s) => s.error)
+  // Os avisos em vermelho são para depurar: só aparecem com o diagnóstico aberto (D).
+  const diagnostico = useStore((s) => s.sistemas !== 'fechado')
   const voice = useStore((s) => s.voice)
   const bootNote = useStore((s) => s.bootNote)
   const gestures = useStore((s) => s.gestures)
@@ -303,11 +307,11 @@ export function Hud() {
       <Fenix />
       <Tocador />
 
-      {error && <div className="error">{error}</div>}
+      {error && diagnostico && <div className="error">{error}</div>}
 
       <footer className="hud-bottom">
         <span className="hint">
-          {phase === 'dormant' ? (
+          {emEspera ? (
             <>
               {chamadaDisponivel() ? 'diga “Apolo” ou ' : 'palmas ou '}
               <kbd>Espaço</kbd> para acordar

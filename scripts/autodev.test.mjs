@@ -308,10 +308,24 @@ test('só trabalha a partir da main, sem alterações pendentes', async () => {
   const r = repositorio()
   r.git('switch', '-qc', 'fase-2.2/outra')
   const g = gerente(r, { agente: edita('novo.txt') })
-  await g.a.acao('propor', { pedido: 'criar' })
-  const resposta = await g.a.acao('confirmar')
+  const resposta = await g.a.acao('propor', { pedido: 'criar' })
   assert.equal(resposta.ok, false)
   assert.match(resposta.mensagem, /main/)
+  assert.equal(g.a.estado().fase, 'ocioso')
+})
+
+test('confirmação recusada encerra a proposta em vez de travar o botão', async () => {
+  const r = repositorio()
+  let rodou = false
+  const g = gerente(r, { agente: async () => ((rodou = true), { ok: true, texto: '' }) })
+  assert.equal((await g.a.acao('propor', { pedido: 'criar' })).ok, true)
+  r.git('switch', '-qc', 'fase-2.2/outra')
+  const resposta = await g.a.acao('confirmar')
+  assert.equal(resposta.ok, false)
+  assert.equal(g.a.estado().fase, 'ocioso')
+  assert.equal(g.a.estado().resultado.tipo, 'falhou')
+  assert.match(g.a.estado().resultado.mensagem, /main/)
+  assert.equal(rodou, false)
 })
 
 test('se a Fênix volta sem nada em teste, a alteração que estava no ar acabou', async () => {

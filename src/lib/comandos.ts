@@ -30,6 +30,14 @@ const CANCELA = new RegExp(`^(pode )?${ORDEM}( ${ALVO})?$`)
 
 export const pedeCancelamento = (fala: string) => CANCELA.test(normalizar(fala))
 
+/**
+ * Um agradecimento que encerra a conversa: a frase inteira, porque "obrigado, e a
+ * agenda de amanhã?" continua o assunto.
+ */
+const AGRADECE = /^(ok |beleza |perfeito |otimo |show |certo )?(muito )?(obrigad[oa]|brigad[oa]|valeu|grato|grata)( (mesmo|demais|viu|ta|pelo resumo|pelas noticias))?$/
+
+export const agradece = (fala: string) => AGRADECE.test(normalizar(fala))
+
 export const pedeModoMaos = (fala: string) => /\b(maos?|gestos?|camera)\b/.test(normalizar(fala))
 
 /**

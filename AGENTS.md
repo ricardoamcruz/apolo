@@ -81,6 +81,11 @@ detalhe está em `docs/`.
   (`dormir`: "em espera", "já volto", "boa noite" de despedida). Nela, só o nome
   ou Espaço acordam: `src/lib/chamada.ts` usa a Web Speech API, com o microfone do
   modelo fechado. `ignorar_fala` é como ele fica calado quando a fala não é para ele.
+  O visual de espera (círculo compacto e agrupado, popups na bandeja) é só para a
+  espera **pedida** (`dormir` ou Esc, `esperaPedida` no store); a automática, por
+  silêncio, fecha o microfone e deixa a tela igual. Componentes visuais leem a fase
+  por `faseNaTela()` (`src/store.ts`), não por `phase`. Com os popups do bom dia na
+  tela, a conversa fica aberta por até 3 minutos.
 - **Nomes dos sistemas (ADR 0018):** cada sistema plugável ganha um nome próprio,
   no espírito de GAIA (*Horizon Zero Dawn*): criativo, fácil de falar, ligado ao
   tema e interessante, nesta ordem, escrito com pontos como C.O.R.E. O canal do
@@ -122,7 +127,12 @@ detalhe está em `docs/`.
   esconder; `musica` pausa ou abre a playlist no YouTube Music) e ela narra agenda (.ics),
   notícias por tema e GitHub. Temas e playlists em `modules/aurora/aurora.config.json`.
   E-mail e To Do esperam um app registrado na Microsoft. Nada fora de `modules/aurora`
-  importa o módulo.
+  importa o módulo. O bom dia abre em diagonal os popups de notícias, compromissos e
+  desenvolvimento (`src/lib/bomDia.ts`, ids `bomdia-*`; o desenvolvimento vem de
+  `bridge/desenvolvimento.mjs`). "Obrigado" sai da transcrição (`agradece`, em
+  `src/lib/comandos.ts`): fecha tudo e entra em espera. O Chrome só toca o iframe com
+  som depois de um clique: `scripts/subir-apolo.command` abre a interface com
+  `--autoplay-policy=no-user-gesture-required`; fora dela, o tocador pede o clique.
 - **Autodesenvolvimento (ADR 0011 e 0015):** com `npm start -- --autodev`, o
   A.P.O.L.O. altera o próprio código por voz ou chat, com confirmação, numa
   worktree em `~/.apolo/autodev`, sempre a partir da `main`. Depois das checagens,
@@ -187,6 +197,7 @@ Ao concluir uma tarefa, atualize **no mesmo commit**:
 ```bash
 npm install          # dependências
 npm start            # a F.Ê.N.I.X. sobe ponte (cérebro), interface e H.E.R.M.E.S.
+scripts/subir-apolo.command # o mesmo, por dois cliques; abre a interface em janela própria do Chrome (perfil ~/.apolo/chrome, autoplay liberado para a música do bom dia)
 npm run bridge       # só o cérebro, modo somente leitura
 npm run dev          # só a interface (Vite, https://localhost:5173)
 npm run lint         # oxlint

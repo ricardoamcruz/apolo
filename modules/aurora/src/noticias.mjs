@@ -22,7 +22,8 @@ export function lerFeed(xml, max = 3) {
     const fonte = limpar(/<source[^>]*>([\s\S]*?)<\/source>/.exec(item)?.[1] ?? '')
     if (!titulo) continue
     const semFonte = fonte && titulo.endsWith(` - ${fonte}`) ? titulo.slice(0, -fonte.length - 3) : titulo
-    itens.push({ titulo: semFonte, fonte: fonte || null })
+    const link = limpar(/<link>([\s\S]*?)<\/link>/.exec(item)?.[1] ?? '')
+    itens.push({ titulo: semFonte, fonte: fonte || null, link: /^https:\/\//.test(link) ? link : null })
     if (itens.length >= max) break
   }
   return itens

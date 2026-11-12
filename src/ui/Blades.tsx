@@ -476,6 +476,15 @@ function Card({
    * cursor crosses into the article it is showing, which is precisely where it
    * always crosses.
    */
+  // Uma série em diagonal (o bom dia): o do meio no centro, os outros para os lados.
+  const diagonal =
+    blade.cascata === undefined
+      ? null
+      : {
+          x: (blade.cascata - 1) * Math.min(260, window.innerWidth * 0.18),
+          y: (blade.cascata - 1) * Math.min(150, window.innerHeight * 0.16),
+        }
+
   return (
     /**
      * Two elements, because two different things want the transform.
@@ -488,14 +497,19 @@ function Card({
      */
     <motion.div
       className="bl-slot"
-      initial={{ opacity: 0, y: 26, scale: 0.96, filter: 'blur(6px)' }}
-      animate={{
-        opacity: expanded || depth === 0 ? 1 : Math.max(0.3, 1 - depth * 0.24),
-        y: expanded ? 0 : depth * -13,
-        x: expanded ? 0 : depth * 15,
-        scale: expanded ? 1 : 1 - depth * 0.035,
-        filter: depth === 0 || expanded ? 'blur(0px)' : `blur(${depth * 0.7}px)`,
-      }}
+      initial={{ opacity: 0, y: 26 + (diagonal?.y ?? 0), x: diagonal?.x ?? 0, scale: 0.96, filter: 'blur(6px)' }}
+      animate={
+        diagonal && !expanded
+          ? // Em diagonal, cada um precisa ser lido: nada de apagar os de trás.
+            { opacity: depth === 0 ? 1 : 0.92, x: diagonal.x, y: diagonal.y, scale: 1, filter: 'blur(0px)' }
+          : {
+              opacity: expanded || depth === 0 ? 1 : Math.max(0.3, 1 - depth * 0.24),
+              y: expanded ? 0 : depth * -13,
+              x: expanded ? 0 : depth * 15,
+              scale: expanded ? 1 : 1 - depth * 0.035,
+              filter: depth === 0 || expanded ? 'blur(0px)' : `blur(${depth * 0.7}px)`,
+            }
+      }
       exit={{ opacity: 0, y: 18, filter: 'blur(8px)', transition: { duration: 0.28 } }}
       transition={{ type: 'spring', stiffness: 260, damping: 30 }}
       style={{ zIndex: expanded ? 60 : 40 - depth }}

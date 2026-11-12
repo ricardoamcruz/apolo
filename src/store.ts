@@ -59,6 +59,11 @@ export type Blade = {
   hold: 'turn' | 'sticky'
   /** Na bandeja da direita: fica lá até ser aberto ou fechado de vez. */
   minimized?: boolean
+  /**
+   * A posição numa série aberta em diagonal (o bom dia): 0 no alto à esquerda, cada
+   * próximo mais abaixo e à direita, todos legíveis em vez de empilhados.
+   */
+  cascata?: number
 }
 
 /** O que aparece só se ele pedir, e continua como estava ao religar. */
@@ -224,6 +229,11 @@ const MAX_ORBITS = 8
 
 type State = {
   phase: Phase
+  /**
+   * A espera foi pedida (por voz ou Esc). Só assim a tela muda para o visual de
+   * espera; a espera automática, por silêncio, fecha o microfone e deixa a tela igual.
+   */
+  esperaPedida: boolean
   /** 0..1 mic loudness, drives the reactor pulse. */
   level: number
   /** What JARVIS is currently reading aloud or has just said. */
@@ -288,6 +298,7 @@ type State = {
   focusBlade: (id: string | null) => void
   expandBlade: (id: string | null) => void
   setPhase: (p: Phase) => void
+  setEsperaPedida: (pedida: boolean) => void
   setLevel: (l: number) => void
   setCaption: (c: string) => void
   setActiveTool: (t: string | null) => void
@@ -310,6 +321,7 @@ type State = {
 
 export const useStore = create<State>((set, get) => ({
   phase: 'offline',
+  esperaPedida: false,
   level: 0,
   caption: '',
   turns: [],
@@ -427,7 +439,9 @@ export const useStore = create<State>((set, get) => ({
   },
   focusBlade: (focusedBlade) => set({ focusedBlade }),
   expandBlade: (expandedBlade) => set({ expandedBlade }),
-  setPhase: (phase) => set({ phase }),
+  // Saindo da espera, a marca vai junto: a próxima espera decide de novo.
+  setPhase: (phase) => set(phase === 'dormant' ? { phase } : { phase, esperaPedida: false }),
+  setEsperaPedida: (esperaPedida) => set({ esperaPedida }),
   setLevel: (level) => set({ level }),
   setCaption: (caption) => set({ caption }),
   setActiveTool: (activeTool) => set({ activeTool }),
@@ -499,6 +513,13 @@ export const useStore = create<State>((set, get) => ({
     )
   },
 }))
+
+/**
+ * A fase que a tela mostra. Em espera automática a tela continua como estava, com
+ * o visual de ouvindo: o círculo compacto e agrupado é só para a espera pedida.
+ */
+export const faseNaTela = (s: { phase: Phase; esperaPedida: boolean }): Phase =>
+  s.phase === 'dormant' && !s.esperaPedida ? 'listening' : s.phase
 
 /** Colour identity per phase — shared by the 3D scene and the 2D HUD. */
 export const phaseColor: Record<Phase, string> = {

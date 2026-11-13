@@ -43,6 +43,11 @@ vira uma branch nova a partir da `main` (ADR 0016).
 ### Etapa 5 — Fase 1 — Core
 - [ ] Ver a seção "Fase 1 — Core" abaixo: `core/` em TypeScript, `Provider`, host de módulos (com a fachada MCP da A.U.R.O.R.A.)
 
+### Etapa 6 — Bugs para corrigir
+- [ ] **Entra em espera no meio da conversa (13/11/2026):** às vezes o Ricardo fala com o Apolo, ele não responde e entra em espera; ao apertar espaço, ele volta e responde o que foi dito. Suspeitas: a janela de conversa (`criarJanela`, 20 s sem nada dirigido a ele) fecha o microfone enquanto ele ainda está ouvindo ou pensando; o filtro da espera natural (6.a) julga a fala como conversa ao lado; ou a resposta chega com o microfone já fechado e só sai quando ele acorda. Os logs da voz (`[apolo] voz: …` no Terminal) ajudam a ver o momento em que ele entrou em espera
+- [ ] **Popup aberta que ele não reconhece (13/11/2026):** o Apolo abriu uma popup e, depois, não conseguiu identificar que ela estava aberta
+- [ ] **Não registra bug no backlog (13/11/2026):** pedido por voz para relatar um bug no backlog, o Apolo não conseguiu incluir
+
 ## Próxima versão — backlog (registrado em 03/11/2026)
 Os 6 pontos que o Ricardo definiu para a próxima versão. Eles têm prioridade
 sobre a ordem das fases abaixo.

@@ -84,20 +84,54 @@ test('a alteração fica em teste, sem prazo, até alguém decidir', async () =>
   await sup.reverter({ id: 'r' })
 })
 
-test('aprovar guarda em fase-x.x/nome, apaga a autodev e volta à main', async () => {
+test('aprovar a partir da main cria a fase-x.y/nome, que segue no ar sem reiniciar (ADR 0031)', async () => {
   const r = repositorio()
-  const { sup, avisos } = montar(r, async () => ({ ok: true, interfaces: 0 }))
+  const { sup, avisos, eventos } = montar(r, async () => ({ ok: true, interfaces: 0 }))
   const e = evolucao(r)
+  const main = r.git('rev-parse', 'main')
   await sup.aplicar(e)
+  const antes = eventos.length
   await sup.aprovar({ id: e.id, branch: 'fase-2.2/nova-coisa' })
   assert.equal(avisos[1].tipo, 'aprovado')
   assert.equal(avisos[1].branch, 'fase-2.2/nova-coisa')
-  assert.equal(naBranch(r), 'main')
-  assert.equal(r.git('rev-parse', 'fase-2.2/nova-coisa'), e.sha)
+  assert.match(avisos[1].mensagem, /primeiro commit da fase-2\.2\/nova-coisa, que segue no ar/)
+  assert.equal(naBranch(r), 'fase-2.2/nova-coisa')
+  assert.equal(r.git('rev-parse', 'HEAD'), e.sha)
+  assert.equal(r.git('rev-parse', 'main'), main, 'a main não recebe commit direto')
+  assert.equal(autodevs(r), '')
+  assert.equal(eventos.length, antes, 'aprovar não derruba nem religa nada')
+  assert.equal(sup.emTeste(), false)
+})
+
+test('aprovar a partir de uma branch de fase soma o commit nela, e o próximo pedido parte dali', async () => {
+  const r = repositorio()
+  r.git('switch', '-qc', 'fase-2.9/trabalho')
+  const { sup, avisos } = montar(r, async () => ({ ok: true, interfaces: 0 }))
+  // Primeiro ajuste.
+  r.git('switch', '-qc', 'autodev/1')
+  writeFileSync(join(r.repo, 'app.txt'), 'ajuste 1\n')
+  r.git('commit', '-qam', 'ajuste 1')
+  const um = r.git('rev-parse', 'HEAD')
+  r.git('switch', '-q', 'fase-2.9/trabalho')
+  await sup.aplicar({ id: '1', sha: um, branch: 'autodev/1' })
+  await sup.aprovar({ id: '1', branch: 'fase-2.9/trabalho' })
+  assert.match(avisos.at(-1).mensagem, /virou um commit da fase-2\.9\/trabalho, que segue no ar/)
+  assert.equal(naBranch(r), 'fase-2.9/trabalho')
+  assert.equal(r.git('rev-parse', 'fase-2.9/trabalho'), um)
+  // Segundo ajuste, a partir do primeiro: commits separados na mesma branch.
+  r.git('switch', '-qc', 'autodev/2')
+  writeFileSync(join(r.repo, 'app.txt'), 'ajuste 2\n')
+  r.git('commit', '-qam', 'ajuste 2')
+  const dois = r.git('rev-parse', 'HEAD')
+  r.git('switch', '-q', 'fase-2.9/trabalho')
+  await sup.aplicar({ id: '2', sha: dois, branch: 'autodev/2' })
+  await sup.aprovar({ id: '2', branch: 'fase-2.9/trabalho' })
+  assert.equal(r.git('rev-parse', 'fase-2.9/trabalho'), dois)
+  assert.deepEqual(r.git('log', '--format=%s', 'main..fase-2.9/trabalho').split('\n'), ['ajuste 2', 'ajuste 1'])
   assert.equal(autodevs(r), '')
 })
 
-test('aprovar recusa nome fora do padrão e mantém o teste', async () => {
+test('aprovar recusa nome fora do padrão e a main, e mantém o teste', async () => {
   const r = repositorio()
   const { sup, avisos } = montar(r, async () => ({ ok: true, interfaces: 0 }))
   await sup.aplicar(evolucao(r))

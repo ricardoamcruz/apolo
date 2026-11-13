@@ -10,7 +10,7 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, writeFi
 import { freemem, loadavg, totalmem } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { criarAvisos } from './avisos.mjs'
+import { criarAvisos, explicacaoDaRotina } from './avisos.mjs'
 import { criarCanal } from './canal.mjs'
 import { criarComandos, montar, rodar } from './rotinas.mjs'
 import { criarServicos } from './servicos.mjs'
@@ -108,7 +108,9 @@ export function criarFenix(
     aoMudar: (nome, status, motivo) => {
       if (status === 'caiu' && motivo && Date.now() - (ultimaQuedaAvisada.get(nome) ?? 0) > 10 * 60_000) {
         ultimaQuedaAvisada.set(nome, Date.now())
-        avisos.avisar({ titulo: `${config.nome}: ${nome} caiu`, texto: `O serviço ${nome} ${motivo}. Já estou subindo de novo.`, prioridade: 'alta' })
+        // O motivo técnico (código de saída) fica no log; o aviso é para gente.
+        const como = /parou de responder/.test(motivo) ? 'parou de responder' : 'parou com erro'
+        avisos.avisar({ titulo: `${config.nome}: ${nome} caiu`, texto: `O serviço ${nome} ${como}. Já estou subindo de novo.`, prioridade: 'alta' })
       }
       // Várias mudanças juntas viram um aviso só.
       clearTimeout(avisarEstado)
@@ -248,12 +250,22 @@ export function criarFenix(
       }
       log(`[fenix] rotina ${nome}`)
       const r = await rodar(args, { cwd: config.repo, env: ambiente(), prazoMs: def.prazoMs })
-      log(`[fenix] rotina ${nome}: ${r.ok ? 'ok' : `falhou (${r.estourou ? 'prazo' : r.codigo})`}`)
-      // Rotina longa termina quando ele talvez nem esteja olhando: avisa.
-      if (r.tempoMs > 60_000) {
+      // A saída inteira vai para o log, e não para o aviso: é lá que se depura.
+      const registro = join(config.pasta, 'rotinas', `${nome}.log`)
+      try {
+        mkdirSync(join(config.pasta, 'rotinas'), { recursive: true })
+        writeFileSync(registro, `${new Date().toISOString()} ${nome}: ${r.ok ? 'ok' : `falhou (${r.estourou ? 'prazo' : r.codigo})`}\n${r.saida ?? ''}\n`)
+      } catch {
+        /* sem registro, a rotina vale do mesmo jeito */
+      }
+      log(`[fenix] rotina ${nome}: ${r.ok ? 'ok' : `falhou (${r.estourou ? 'prazo' : r.codigo}); saída em ${registro}`}`)
+      // Rotina longa termina quando ele talvez nem esteja olhando: avisa, só com palavras.
+      if (r.tempoMs > (tempos.rotinas?.avisoMs ?? 60_000)) {
+        const minutos = Math.max(1, Math.round(r.tempoMs / 60_000))
+        const porque = explicacaoDaRotina(r.saida) ?? (r.estourou ? 'Passou do prazo.' : 'Ela terminou com erro.')
         avisos.avisar({
           titulo: `${config.nome}: rotina ${nome} ${r.ok ? 'terminou' : 'falhou'}`,
-          texto: r.ok ? `Levou ${Math.round(r.tempoMs / 60_000)} min.` : (r.saida ?? '').slice(-300) || 'Sem saída.',
+          texto: r.ok ? `Levou ${minutos} min.` : `${porque} Os detalhes ficaram no log da Fênix.`,
           prioridade: r.ok ? 'normal' : 'alta',
         })
       }
@@ -263,8 +275,29 @@ export function criarFenix(
     }
   }
 
+  /**
+   * Um aviso pedido por quem fala com a Fênix (a linha de comando, `fenix avisar`).
+   * Vai para a central de notificações (o H.E.R.M.E.S.) com o nome do projeto no
+   * título, sem botões: um botão volta a quem o criou, e aqui não há quem.
+   */
+  async function avisar(msg) {
+    const titulo = typeof msg.titulo === 'string' ? msg.titulo.trim().slice(0, 120) : ''
+    const texto = typeof msg.texto === 'string' ? msg.texto.trim().slice(0, 1000) : ''
+    if (!titulo || !texto) return { ok: false, mensagem: 'O aviso precisa de título e texto.' }
+    const prioridade = msg.prioridade === 'alta' ? 'alta' : 'normal'
+    log(`[fenix] aviso pedido: ${titulo}`)
+    const r = await avisos.avisar({ titulo: `${config.nome}: ${titulo}`, texto, prioridade })
+    if (r.ok) {
+      const onde = [r.mac && 'no Mac', r.ntfy && 'no iPhone'].filter(Boolean).join(' e ')
+      return { ok: true, mensagem: `A central de notificações entregou o aviso${onde ? ` ${onde}` : ''}.`, entrega: r }
+    }
+    return { ok: false, mensagem: `O aviso não foi entregue: ${r.mensagem ?? 'a central não conseguiu entregar'}.`, entrega: r }
+  }
+
   async function atender(msg) {
     switch (msg.type) {
+      case 'avisar':
+        return avisar(msg)
       case 'estado':
         return { ok: true, ...estado() }
       case 'versao:aplicar':
@@ -326,7 +359,7 @@ export function criarFenix(
       }
       const interrompida = await versoes.recuperar()
       porta = await canal.ligar()
-      servicos.liberarPortas()
+      await servicos.liberarPortas()
       servicos.ligarTodos()
       if (interrompida) {
         canal.avisar({

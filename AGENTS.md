@@ -47,16 +47,24 @@ detalhe está em `docs/`.
 - O código ainda é o fork do JARVIS (`bridge/`, `src/`), já renomeado para
   A.P.O.L.O. e em pt-BR (persona, ativação "Apolo", voz masculina do sistema).
   O core (`core/`) ainda não existe. Variáveis de ambiente seguem `JARVIS_*`.
-- **Identidade visual (ADR 0013, 05/11/2026):** começada. Cor e tipografia são
-  tokens no `:root` de `src/index.css` (`--interface`, `--bg`, `--font-ui`,
-  `--font-mono`) — CSS novo usa os tokens, não valores escritos à mão. A cor por
-  fase fica em `phaseColor`/`accentFor()` (`src/store.ts`), porque a cena 3D e o
-  HUD precisam da mesma resposta. Faltam fontes locais, a paleta definitiva e a
-  geometria do núcleo; a decisão da paleta é do Ricardo.
+- **Identidade visual (ADR 0013, revisada em 12/11/2026):** paleta ciano (a de
+  sempre), núcleo **Enxame** (esfera de pontos em faixas que giram em sentidos
+  alternados, `src/scene/Enxame.tsx`, o mesmo `enxameVertex` no app do iPhone),
+  marca **Lira** (só o favicon desde 13/11/2026: o cabeçalho ficou só com o nome,
+  e o desenho segue em `src/ui/icones.tsx` para uso futuro) e um ícone por sistema na aba SISTEMAS
+  (`src/ui/icones.tsx`; ícone novo entra lá). Cor e tipografia são tokens no
+  `:root` de `src/index.css` (`--interface`, `--bg`, `--font-ui`, `--font-mono`) —
+  CSS novo usa os tokens, não valores escritos à mão. A cor por fase fica em
+  `phaseColor`/`accentFor()` (`src/store.ts`), porque a cena 3D e o HUD precisam da
+  mesma resposta. O anel antigo segue como estilo (`ring`, `sphere`, `wire`) que o
+  agente pode pedir. Faltam as fontes locais (item 2.3) e os ícones no app.
 - **App mobile (ADR 0019):** `apps/mobile` (Expo SDK 58, RN 0.88, bundle
   `com.ricardocruz.apolo`, Personal Team `9F2MVYQ9SF`). Ele ouve e responde por
   voz, como o PC, sem conversa escrita, pelo H.E.R.M.E.S. (`hermes/`, porta 8788 com
-  token, só com o canal e a mídia dos popups, publicada pelo Tailscale). A
+  token, só com o canal e a mídia dos popups, publicada pelo Tailscale). Desde a
+  ADR 0030 ele tem a autonomia do PC no core: backlog, autodesenvolvimento e Fênix
+  (rotinas e scripts bash), com as mesmas travas e a confirmação falada conferida na
+  transcrição do microfone do celular; sem botões, ele confirma dizendo "confirmo". A
   voz (`src/lib/voz/celular.ts`) e os `Panels` e `Blades` da web são compilados por
   `npm run popups` e rodam numa WebView; os shaders ficam em `src/scene/shaders.ts`.
   Mudar esse código muda o app. Popup é só para conteúdo visual, nunca para a
@@ -122,13 +130,27 @@ detalhe está em `docs/`.
   isso com a Fênix real e uma ponte mínima (`scripts/resiliencia/ponte.mjs`): mudou a
   Fênix, o cliente ou o renascimento, rode `npm run test:resiliencia`. Prazos da Fênix
   podem vir de `tempos` no `fenix.config.json`.
+- **Asas próprias (ADR 0029):** toda troca de versão e a atualização da `main`
+  passam por `conferirCopia` (`fenix/src/versoes.mjs`): motivo exato quando não dá
+  (arquivos, operação do Git pela metade, branch que não existe), Git com prazo e
+  sem pedir senha, `fetch` + `merge --ff-only` conferidos, e nenhum caminho deixa os
+  serviços desligados. Arquivo não rastreado só barra se o alvo o sobrescrever. O
+  H.E.R.M.E.S. e a A.U.R.O.R.A. sobem sozinhos (`npm run hermes`, `npm run aurora`),
+  sobrevivem à morte da Fênix (`src/saidas.mjs` de cada um) e são **adotados** quando
+  ela volta (`"independente": true` no `fenix.config.json`). O contrato entre eles é
+  `GET /saude` e os WSS com token: a ponte mede a saúde dos dois sozinha
+  (`bridge/sondas.mjs`). Não ponha estado de um deles só no relato da Fênix.
 - **Notificações (ADR 0027, RF-66):** o H.E.R.M.E.S. é a central: serviços pedem por
   WSS em `/notificacoes` (porta local 8792, `APOLO_NOTIFICAR_TOKEN`) e ele entrega na
   central do macOS (`osascript`, com argumentos, nunca interpolados) e no iPhone pelo
   ntfy (`APOLO_NTFY_TOPICO`, que é segredo). Botões são endereços de uso único na porta
   do celular (`/acao/<token>`) e voltam só a quem pediu. O tópico `<tópico>-mac` leva
   ao Mac o que o Ricardo publicar pelo celular. Notificação nunca leva segredo nem
-  conteúdo pessoal: o ntfy.sh vê o texto. A Fênix avisa versões, quedas e rotinas.
+  conteúdo pessoal: o ntfy.sh vê o texto. Também nunca leva exceção, rastro de erro,
+  código ou saída de comando, só frases para ele: o detalhe técnico fica no log
+  (`~/.apolo/fenix/rotinas/<rotina>.log`, `eventos.log`), e `textoDoAviso`
+  (`fenix/src/avisos.mjs`) barra o que escapar. Uma rotina explica a própria falha
+  numa última linha que começa com "✖", e é essa linha que vai no aviso. A Fênix avisa versões, quedas e rotinas.
 - **A.U.R.O.R.A., o bom dia (ADR 0026, RF-55):** `modules/aurora/`, serviço à parte
   (porta 8791, token `APOLO_AURORA_TOKEN`) que a Fênix sobe. A cada "bom dia", a voz
   chama `bom_dia`: um trecho de rock das playlists do YouTube toca baixinho no tocador
@@ -144,10 +166,13 @@ detalhe está em `docs/`.
   `--autoplay-policy=no-user-gesture-required`; fora dela, o tocador pede o clique.
 - **Autodesenvolvimento (ADR 0011 e 0015):** com `npm start -- --autodev`, o
   A.P.O.L.O. altera o próprio código por voz ou chat, com confirmação, numa
-  worktree em `~/.apolo/autodev`, sempre a partir da `main`. Depois das checagens,
-  reinicia no código novo e fica **em teste, sem prazo**: aprovar guarda em
-  `fase-x.x/nome` e volta à `main`; descartar, uma queda ou um `npm start` sem
-  aprovação voltam à `main` e apagam a branch. `autodev/<id>` só existe durante o
+  worktree em `~/.apolo/autodev`, **a partir da versão no ar** (a `main` ou uma
+  branch de fase, ADR 0031). Depois das checagens, reinicia no código novo e fica
+  **em teste, sem prazo**: aprovar vira **um commit da branch de trabalho, que
+  segue no ar** (a própria branch de fase; partindo da `main`, uma `fase-x.y/nome`
+  nova), e o próximo pedido soma outro commit; descartar, uma queda ou um
+  `npm start` sem aprovação voltam à versão de onde ela partiu e apagam a branch
+  de teste. A `main` nunca recebe commit direto: só pull request. `autodev/<id>` só existe durante o
   teste. O VS Code é opcional (`APOLO_AUTODEV_VSCODE=1`) e fecha sozinho. Arquivos
   sensíveis (`bridge/autodev/politica.mjs`) nunca entram em teste sem revisão.
   A conferência roda lint, tipos, build e `npm test`; ao aprovar, ele oferece o PR
@@ -221,7 +246,10 @@ npm run celular      # pareia o iPhone: token, Tailscale e código de pareamento
 npm run logs:celular # resume as medições do app (-- 7 para sete dias, --eventos para quedas)
 npm run popups       # compila os popups da web para o app do iPhone
 npm run rollback     # descarta a alteração em teste e volta à main (com tudo parado)
-npm run hermes       # só o H.E.R.M.E.S. (a F.Ê.N.I.X. já o sobe)
+npm run atualizar    # pede à F.Ê.N.I.X. no ar que traga a main nova; sai com 1 e o motivo se não der
+npm run avisar -- "título" "texto"  # a F.Ê.N.I.X. no ar manda o aviso pelo H.E.R.M.E.S. (Mac e iPhone)
+npm run hermes       # só o H.E.R.M.E.S., sem a Fênix (a F.Ê.N.I.X. já o sobe)
+npm run aurora       # só a A.U.R.O.R.A., sem a Fênix (a F.Ê.N.I.X. já a sobe)
 npm run aurora:autorizar # uma vez: autoriza a A.U.R.O.R.A. a ler as playlists do YouTube
 npm run aurora:resumo    # mostra o texto do bom dia de hoje
 npm run test:autodev # testes da política e do rollback

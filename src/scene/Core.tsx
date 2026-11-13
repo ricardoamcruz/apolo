@@ -34,8 +34,15 @@ const RING_R = 0.74
  * both edges of a portrait window.
  */
 const FIT = 0.60
+/** O mesmo enquadramento vale para o Enxame (Enxame.tsx). */
+export const FIT_DO_NUCLEO = FIT
 /** O tamanho do círculo em espera, em relação ao normal. */
-const STANDBY_SCALE = 0.42
+export const STANDBY_SCALE = 0.42
+/**
+ * O estilo do Enxame, o núcleo padrão desde a ADR 0013 revisada. Com ele, este anel
+ * fica escondido, mas segue calculando `standbyRing`, onde a poeira se junta.
+ */
+export const ESTILO_ENXAME = 3
 
 export function Core({ drive }: { drive: Drive }) {
   const mat = useRef<THREE.ShaderMaterial>(null)
@@ -66,7 +73,7 @@ export function Core({ drive }: { drive: Drive }) {
     const u = mat.current.uniforms
     const r = drive.reactor
 
-    mesh.current.visible = r.visible
+    mesh.current.visible = r.visible && r.style !== ESTILO_ENXAME
     // Scaling the mesh rather than the shader's field. The ring sits at a fixed
     // radius inside a fixed quad with dark margin around it, so zooming the
     // field out would push the ring past the quad's own edge and cut it off in

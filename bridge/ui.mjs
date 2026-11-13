@@ -169,11 +169,12 @@ const reactorSchema = {
       'and up reads as effort.',
   ),
   style: z
-    .enum(['ring', 'sphere', 'wire'])
+    .enum(['enxame', 'ring', 'sphere', 'wire'])
     .optional()
     .catch(undefined)
     .describe(
-      'ring = the stock arc-reactor halo. sphere = a solid core, heavier and ' +
+      'enxame = the default: a sphere of points in counter-rotating bands, the ' +
+        'A.P.O.L.O. core. ring = the old arc-reactor halo. sphere = a solid core, heavier and ' +
         'more present, good when you are the subject of the conversation. ' +
         'wire = a skeletal lattice, good for diagnostics, degraded states, and ' +
         'anything that should look like it is being taken apart.',

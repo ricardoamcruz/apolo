@@ -1,6 +1,7 @@
 import { getMic } from '../audio'
 import {
   diag,
+  logVoz,
   type RealtimeHandlers,
   type RealtimeSession,
   type SessionGrant,
@@ -363,10 +364,19 @@ export async function connectGemini(
   // -- conexão -------------------------------------------------------------------
   const open = (grant: Extract<SessionGrant, { provider: 'gemini' }>) =>
     new Promise<void>((resolve, reject) => {
+      const inicio = Date.now()
+      const passou = () => `${Date.now() - inicio} ms`
+      const ESTADOS = ['conectando', 'aberto', 'fechando', 'fechado']
+      logVoz(`abrindo a conexão com o Google (${handle ? 'retomada' : 'nova'}, modelo ${grant.model})`)
       const sock = new WebSocket(`${WS_URL}?access_token=${encodeURIComponent(grant.token)}`)
       sock.binaryType = 'arraybuffer'
       let ready = false
+      let mensagens = 0
       const timer = setTimeout(() => {
+        logVoz(
+          `o Google não confirmou em ${passou()}: socket ${ESTADOS[sock.readyState] ?? sock.readyState}, ` +
+            `${mensagens} mensagens recebidas`,
+        )
         sock.close()
         reject(new Error('O Google não confirmou a sessão de voz a tempo.'))
       }, 12000)
@@ -374,18 +384,27 @@ export async function connectGemini(
       sock.onopen = () => {
         const setup = { ...grant.setup }
         if (handle) setup.sessionResumption = { handle }
-        sock.send(JSON.stringify({ setup }))
+        const texto = JSON.stringify({ setup })
+        sock.send(texto)
+        logVoz(`conexão aberta em ${passou()}; configuração enviada (${texto.length} bytes)`)
       }
+      sock.onerror = () => logVoz(`erro no socket em ${passou()}`)
       sock.onmessage = (e: MessageEvent) => {
         const raw =
           typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data as ArrayBuffer)
         let msg: ServerMessage
+        mensagens++
         try {
           msg = JSON.parse(raw)
         } catch {
+          if (!ready) logVoz(`mensagem ilegível antes da confirmação: ${raw.slice(0, 120)}`)
           return
         }
+        if (!ready && msg.setupComplete === undefined) {
+          logVoz(`mensagem antes da confirmação: ${raw.slice(0, 160)}`)
+        }
         if (!ready && msg.setupComplete !== undefined) {
+          logVoz(`sessão confirmada pelo Google em ${passou()}`)
           ready = true
           clearTimeout(timer)
           ws = sock
@@ -400,6 +419,7 @@ export async function connectGemini(
       }
       sock.onclose = (e: CloseEvent) => {
         clearTimeout(timer)
+        logVoz(`conexão fechada em ${passou()}: código ${e.code}${e.reason ? `, ${e.reason}` : ''}`)
         if (!ready) {
           reject(new Error(explainClose(e.code, e.reason)))
           return

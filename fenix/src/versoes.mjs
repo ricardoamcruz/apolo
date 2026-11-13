@@ -11,13 +11,15 @@
  * `transicao.json` fica em disco. Uma queda a qualquer momento, até o Mac
  * desligando, volta para a versão segura — na hora ou na próxima partida.
  *
- *   aprovada   → vira a branch fase-x.x/nome e o projeto volta à versão segura
- *   descartada → a branch some e o projeto volta à versão segura
+ *   aprovada   → vira um commit da branch de trabalho, que continua no ar
+ *                (docs/adr/0031): a branch de onde ela partiu, ou uma fase-x.y/nome
+ *                nova quando ela partiu da versão segura, que nunca recebe commit direto
+ *   descartada → a branch some e o projeto volta à versão de onde ela partiu
  */
 
 import { execFile } from 'node:child_process'
-import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { isAbsolute, join } from 'node:path'
 import { promisify } from 'node:util'
 
 const exec = promisify(execFile)
@@ -34,6 +36,44 @@ const lerJson = (arquivo, padrao) => {
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms).unref())
 
 const FALHAS_SEGUIDAS = 3
+
+/** Um `git fetch` preso num pedido de senha ou numa rede lenta não segura a Fênix. */
+export const PRAZO_GIT_MS = 30_000
+export const PRAZO_REDE_MS = 120_000
+
+/** O que o Git deixa em disco quando uma operação ficou pela metade. */
+const PENDENTES = [
+  ['MERGE_HEAD', 'um merge'],
+  ['CHERRY_PICK_HEAD', 'um cherry-pick'],
+  ['REVERT_HEAD', 'um revert'],
+  ['rebase-merge', 'um rebase'],
+  ['rebase-apply', 'um rebase ou um am'],
+  ['BISECT_LOG', 'um bisect'],
+]
+
+/**
+ * O erro de um comando do Git em uma linha legível, com o comando e o motivo, no
+ * lugar do "Command failed" do Node com a saída inteira.
+ */
+export function erroDoGit(args, err) {
+  const linhas = String(err.stderr ?? '')
+    .split('\n')
+    .map((l) => l.replace(/^(fatal|error|erro):\s*/i, '').trim())
+    .filter((l) => l && !/^(hint|dica):/i.test(l))
+  const motivo = err.killed ? `passou de ${Math.round((err.prazo ?? PRAZO_GIT_MS) / 1000)} s sem terminar` : (linhas[0] ?? err.message)
+  const erro = new Error(`git ${args[0]} falhou: ${motivo}`)
+  erro.codigo = err.code
+  erro.detalhe = linhas.join('\n')
+  return erro
+}
+
+const real = (caminho) => {
+  try {
+    return realpathSync(caminho)
+  } catch {
+    return caminho
+  }
+}
 
 /**
  * O que exige revisão humana: a alteração para na branch e não entra em teste.
@@ -92,8 +132,27 @@ export function criarVersoes({
 
   const branchValida = (nome) => protecao.branch.test(String(nome ?? ''))
 
-  const git = async (...args) =>
-    (await exec('git', args, { cwd: repo, maxBuffer: 16 * 1024 * 1024 })).stdout.trim()
+  /**
+   * Todo comando do Git roda na pasta do projeto, com prazo e sem perguntar nada
+   * no terminal: sem isso, um pedido de senha prende a troca para sempre, calada.
+   */
+  const gitCom = (prazo) => async (...args) => {
+    try {
+      const r = await exec('git', args, {
+        cwd: repo,
+        maxBuffer: 16 * 1024 * 1024,
+        timeout: prazo,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', LC_ALL: 'C' },
+      })
+      return r.stdout.trim()
+    } catch (err) {
+      err.prazo = prazo
+      throw erroDoGit(args, err)
+    }
+  }
+  const git = gitCom(PRAZO_GIT_MS)
+  const gitRede = gitCom(PRAZO_REDE_MS)
+  const sim = (p) => p.then(() => true, () => false)
 
   const versaoAtual = async () => {
     const sha = await git('rev-parse', 'HEAD')
@@ -101,8 +160,81 @@ export function criarVersoes({
     return { ref, sha }
   }
 
-  const trocarPara = ({ ref, sha }) =>
-    ref === sha ? git('switch', '--detach', sha) : git('switch', ref)
+  const curto = (sha) => String(sha ?? '').slice(0, 7)
+  const existeLocal = (ref) => sim(git('show-ref', '--verify', '--quiet', `refs/heads/${ref}`))
+  const remotoDe = async (ref) => (await git('config', `branch.${ref}.remote`).catch(() => '')) || 'origin'
+
+  /** Com submódulos, a troca só termina quando eles também estão no commit certo. */
+  async function atualizarSubmodulos() {
+    if (!existsSync(join(repo, '.gitmodules'))) return
+    await gitRede('submodule', 'update', '--init', '--recursive', '--quiet')
+  }
+
+  /**
+   * A cópia está em condições de trocar de versão? Devolve o motivo exato quando
+   * não está, ou null. `alvo` é o commit para onde se vai: arquivos não rastreados
+   * só barram a troca quando o alvo traz um arquivo com o mesmo nome, porque aí o
+   * Git pararia no meio.
+   */
+  async function conferirCopia(alvo = null) {
+    const dentro = await git('rev-parse', '--is-inside-work-tree').catch(() => '')
+    if (dentro !== 'true') return `A pasta ${repo} não é um repositório Git; nada foi trocado.`
+    const topo = await git('rev-parse', '--show-toplevel')
+    if (real(topo) !== real(repo)) {
+      return `A Fênix aponta para ${repo}, mas o repositório começa em ${topo}; confira "repositorio" no fenix.config.json. Nada foi trocado.`
+    }
+    const caminhoGit = async (nome) => {
+      const c = await git('rev-parse', '--git-path', nome)
+      return isAbsolute(c) ? c : join(repo, c)
+    }
+    if (existsSync(await caminhoGit('index.lock'))) {
+      return 'Outro processo do Git está usando a cópia (há um index.lock); nada foi trocado.'
+    }
+    for (const [arquivo, operacao] of PENDENTES) {
+      if (existsSync(await caminhoGit(arquivo))) return `A cópia está no meio de ${operacao}; termine ou aborte antes. Nada foi trocado.`
+    }
+    const sujos = (await git('status', '--porcelain', '--untracked-files=no')).split('\n').filter(Boolean)
+    if (sujos.length) {
+      const lista = sujos.slice(0, 5).map((l) => l.trim().replace(/^\S{1,2}\s+/, '')).join(', ')
+      return `A cópia em execução tem alterações não commitadas (${lista}${sujos.length > 5 ? '...' : ''}); nada foi trocado.`
+    }
+    if (alvo) {
+      const soltos = (await git('ls-files', '--others', '--exclude-standard')).split('\n').filter(Boolean)
+      if (soltos.length) {
+        const doAlvo = new Set((await git('ls-tree', '-r', '--name-only', alvo)).split('\n'))
+        const batem = soltos.filter((f) => doAlvo.has(f))
+        if (batem.length) {
+          return `Arquivos não rastreados seriam sobrescritos (${batem.slice(0, 5).join(', ')}); guarde-os ou apague antes. Nada foi trocado.`
+        }
+      }
+    }
+    return null
+  }
+
+  /**
+   * Troca e confere: no fim, HEAD tem de estar na branch pedida (e no commit
+   * pedido, com `conferirSha`). Branch que só existe no remoto vira uma local que
+   * o acompanha; branch que não existe em lugar nenhum é erro, antes de mexer.
+   */
+  async function trocarPara({ ref, sha }, { conferirSha = true } = {}) {
+    if (ref === sha) {
+      await git('switch', '--quiet', '--detach', sha)
+    } else if (await existeLocal(ref)) {
+      await git('switch', '--quiet', ref)
+    } else {
+      const remoto = await remotoDe(ref)
+      if (!(await sim(git('show-ref', '--verify', '--quiet', `refs/remotes/${remoto}/${ref}`)))) {
+        throw new Error(`a branch ${ref} não existe nesta cópia nem em ${remoto}`)
+      }
+      await git('switch', '--quiet', '--create', ref, '--track', `${remoto}/${ref}`)
+    }
+    await atualizarSubmodulos()
+    const agora = await versaoAtual()
+    if (agora.ref !== ref || (conferirSha && sha && agora.sha !== sha)) {
+      throw new Error(`pedi ${ref} (${curto(sha)}), mas a cópia ficou em ${agora.ref} (${curto(agora.sha)})`)
+    }
+    return agora
+  }
 
   /** Ocupado com uma troca: a saída da ponte é esperada ou já está em análise. */
   let ocupado = false
@@ -113,15 +245,28 @@ export function criarVersoes({
 
   async function rodarInstalar() {
     const [comando, ...args] = instalar.comando
-    await exec(comando, args, { cwd: repo, maxBuffer: 64 * 1024 * 1024, timeout: 15 * 60_000 })
+    try {
+      await exec(comando, args, { cwd: repo, maxBuffer: 64 * 1024 * 1024, timeout: 15 * 60_000 })
+    } catch (err) {
+      const ultima = String(err.stderr ?? '').trim().split('\n').pop()
+      const como = err.killed ? 'passou de 15 min' : `saiu com ${err.code ?? err.signal ?? '?'}`
+      throw new Error(`a reinstalação (${instalar.comando.join(' ')}) ${como}${ultima ? `: ${ultima}` : ''}`)
+    }
   }
 
   const apagarBranch = (ref) => git('branch', '-D', ref).catch(() => {})
 
   async function recusaAplicar({ sha, branch }) {
-    if (await git('status', '--porcelain')) {
-      return 'A cópia em execução tem alterações não commitadas; nada foi trocado.'
+    // Nome que o Git leria como opção (começando por "-") nunca chega à linha de comando.
+    if (!/^\w[\w./-]*$/.test(String(branch ?? '')) || String(branch).includes('..')) {
+      return `Branch inválida: ${branch}; nada foi trocado.`
     }
+    if (!/^[0-9a-f]{7,40}$/i.test(String(sha ?? ''))) return 'A alteração veio sem um commit válido; nada foi trocado.'
+    if (!(await sim(git('cat-file', '-e', `${sha}^{commit}`)))) {
+      return `O commit ${curto(sha)} não existe nesta cópia; nada foi trocado.`
+    }
+    const copia = await conferirCopia(sha)
+    if (copia) return copia
     const atual = await git('rev-parse', 'HEAD')
     const descende = await git('merge-base', '--is-ancestor', atual, sha).then(
       () => true,
@@ -182,12 +327,14 @@ export function criarVersoes({
   async function voltar(transicao, motivo) {
     await desligar()
     let falha = null
-    await trocarPara(transicao.de).catch((err) => (falha = err))
+    // A main pode ter andado enquanto a alteração estava em teste: confere a branch.
+    await trocarPara(transicao.de, { conferirSha: false }).catch((err) => (falha = err))
     queda = null
     ligar()
     if (falha) {
+      // transicao.json fica em disco: a próxima partida tenta voltar de novo.
       anotar(`[fenix] ATENÇÃO: não consegui voltar para ${transicao.de.ref}: ${falha.message}`)
-      throw falha
+      throw new Error(`não consegui voltar para ${transicao.de.ref}: ${falha.message}`)
     }
     rmSync(arqTransicao, { force: true })
     anotar(`[fenix] rollback para ${transicao.de.ref}: ${motivo}`)
@@ -271,40 +418,74 @@ export function criarVersoes({
       } catch (err) {
         anotar(`[fenix] falha na troca: ${err.message}`)
         const transicao = lerJson(arqTransicao, null)
-        if (transicao) await descartar(transicao, err.message).catch((e) => anotar(`[fenix] ${e.message}`))
-        notificar({ id, tipo: 'revertido', mensagem: `A troca falhou: ${err.message}` })
+        let rollback = null
+        if (transicao) await descartar(transicao, err.message).catch((e) => (rollback = e))
+        if (rollback) {
+          // A pior notícia não pode chegar disfarçada de "voltei": quem pediu precisa agir.
+          notificar({
+            id,
+            tipo: 'falhou',
+            mensagem: `A troca falhou (${err.message}) e o rollback também (${rollback.message}). Rode npm run rollback com tudo parado.`,
+          })
+        } else {
+          notificar({ id, tipo: 'revertido', mensagem: `A troca falhou: ${err.message}. A versão segura voltou ao ar.` })
+        }
       } finally {
         ocupado = false
       }
     },
 
-    /** O Ricardo gostou: vira a branch definitiva e o A.P.O.L.O. volta à main. */
+    /**
+     * O Ricardo gostou: a alteração vira um commit da branch de trabalho, e é ela
+     * que fica no ar (docs/adr/0031). O próximo pedido parte dali e soma outro commit.
+     *
+     *   `branch` igual à de onde a alteração partiu → a branch avança até o commit
+     *   `branch` nova (a alteração partiu da versão segura) → a de teste é renomeada
+     *
+     * Os arquivos não mudam: o que está no ar já é o commit aprovado. Por isso não há
+     * reinício, e nada do que ele está usando cai.
+     */
     async aprovar({ id, branch }) {
       if (ocupado || !emTeste) return notificar({ id, tipo: 'recusado', mensagem: 'Não há alteração em teste.' })
       if (!branchValida(branch)) return notificar({ id, tipo: 'recusado', mensagem: `Branch inválida: ${branch}.` })
+      if (branch === versaoSegura) {
+        return notificar({ id, tipo: 'recusado', mensagem: `A ${versaoSegura} não recebe commit direto: só por pull request.` })
+      }
       const transicao = emTeste
       ocupado = true
       try {
-        if (await git('status', '--porcelain')) {
-          return notificar({
-            id,
-            tipo: 'recusado',
-            mensagem: 'A cópia em execução tem alterações não commitadas; nada foi trocado.',
-          })
+        const copia = await conferirCopia(transicao.para.sha)
+        if (copia) return notificar({ id, tipo: 'recusado', mensagem: copia })
+        const integrar = branch === transicao.de.ref
+        if (integrar && !(await sim(git('merge-base', '--is-ancestor', branch, transicao.para.sha)))) {
+          return notificar({ id, tipo: 'recusado', mensagem: `A ${branch} andou enquanto a alteração estava em teste; nada foi trocado.` })
         }
-        // Renomear não mexe nos arquivos. Depois disto, a alteração já está salva
-        // e uma troca interrompida só precisa voltar, sem apagar nada.
-        await git('branch', '-m', transicao.para.ref, branch)
-        emTeste = null
+        if (!integrar && (await existeLocal(branch))) {
+          return notificar({ id, tipo: 'recusado', mensagem: `Já existe uma branch ${branch}; nada foi trocado.` })
+        }
+        // Gravado antes de mexer: uma queda no meio volta sem apagar o que foi aprovado.
         const aprovada = { ...transicao, aprovada: true, para: { ...transicao.para, ref: branch } }
         writeFileSync(arqTransicao, JSON.stringify(aprovada, null, 2))
-        anotar(`[fenix] ${transicao.para.ref} aprovada como ${branch}`)
-
-        await voltar(aprovada, 'alteração aprovada')
+        if (integrar) {
+          await git('branch', '--force', branch, transicao.para.sha)
+          await trocarPara({ ref: branch, sha: transicao.para.sha })
+          await apagarBranch(transicao.para.ref)
+        } else {
+          await git('branch', '-m', transicao.para.ref, branch)
+          const agora = await versaoAtual()
+          if (agora.ref !== branch || agora.sha !== transicao.para.sha) {
+            throw new Error(`pedi ${branch} (${curto(transicao.para.sha)}), mas a cópia ficou em ${agora.ref} (${curto(agora.sha)})`)
+          }
+        }
+        emTeste = null
+        rmSync(arqTransicao, { force: true })
+        anotar(`[fenix] ${transicao.para.ref} aprovada: commit ${curto(transicao.para.sha)} em ${branch}, que segue no ar`)
         notificar({
           id,
           tipo: 'aprovado',
-          mensagem: 'Guardei a alteração na branch e voltei à versão segura.',
+          mensagem: integrar
+            ? `A alteração virou um commit da ${branch}, que segue no ar.`
+            : `A alteração virou o primeiro commit da ${branch}, que segue no ar.`,
           branch,
         })
       } catch (err) {
@@ -322,13 +503,8 @@ export function criarVersoes({
       const transicao = emTeste
       ocupado = true
       try {
-        if (await git('status', '--porcelain')) {
-          return notificar({
-            id,
-            tipo: 'recusado',
-            mensagem: 'A cópia em execução tem alterações não commitadas; nada foi trocado.',
-          })
-        }
+        const copia = await conferirCopia(transicao.de.sha)
+        if (copia) return notificar({ id, tipo: 'recusado', mensagem: copia })
         emTeste = null
         await descartar(transicao, 'pedido do Ricardo')
         notificar({ id, tipo: 'revertido', mensagem: 'A versão segura voltou ao ar.' })
@@ -344,7 +520,9 @@ export function criarVersoes({
       const transicao = lerJson(arqTransicao, null)
       if (!transicao) return null
       anotar(`[fenix] troca sem aprovação encontrada; voltando para ${transicao.de.ref}`)
-      await trocarPara(transicao.de)
+      const copia = await conferirCopia(transicao.de.sha)
+      if (copia) throw new Error(`não consegui voltar para ${transicao.de.ref}: ${copia}`)
+      await trocarPara(transicao.de, { conferirSha: false })
       if (!transicao.aprovada) {
         await apagarBranch(transicao.para.ref)
         anotar(`[fenix] ${transicao.para.ref} descartada (${transicao.para.sha})`)
@@ -379,49 +557,109 @@ export function criarVersoes({
      * Traz a versão segura mais nova do remoto e sobe com ela. Se a versão nova
      * não ficar de pé, volta para o commit de antes — a remota continua lá, e a
      * próxima atualização tenta de novo.
+     *
+     * Em etapas, uma depois da outra, e cada uma conferida: busca, confere que dá
+     * para avançar sem merge, troca, confere o commit, reinstala se precisar, sobe
+     * e observa. Qualquer falha no caminho volta ao commit de antes e religa os
+     * serviços: a cópia nunca fica no meio, e a resposta diz o motivo exato.
      */
     async atualizar() {
       if (ocupado || emTeste) return { ok: false, mensagem: 'Há uma troca em andamento ou uma alteração em teste.' }
       ocupado = true
+      let antes = null
+      let desligados = false
+      let mexeu = false
+      let reinstalar = false
+      const recusa = (mensagem) => {
+        anotar(`[fenix] atualização recusada: ${mensagem}`)
+        return { ok: false, mensagem }
+      }
+      const religar = () => {
+        queda = null
+        ligar()
+        desligados = false
+      }
+      /** Volta ao commit de antes; nunca deixa a troca pela metade. */
+      const restaurar = async () => {
+        if (!desligados) {
+          await desligar()
+          desligados = true
+        }
+        await git('reset', '--hard', '--quiet', antes)
+        await atualizarSubmodulos()
+        const agora = await git('rev-parse', 'HEAD')
+        if (agora !== antes) throw new Error(`a cópia ficou em ${curto(agora)}, e não em ${curto(antes)}`)
+        if (reinstalar) await rodarInstalar().catch((err) => anotar(`[fenix] ATENÇÃO: a reinstalação da versão anterior falhou: ${err.message}`))
+      }
       try {
-        if (await git('status', '--porcelain')) {
-          return { ok: false, mensagem: 'A cópia em execução tem alterações não commitadas; nada foi atualizado.' }
+        const copia = await conferirCopia()
+        if (copia) return recusa(copia.replace('nada foi trocado', 'nada foi atualizado').replace('Nada foi trocado', 'Nada foi atualizado'))
+        const { ref, sha } = await versaoAtual()
+        if (ref === sha) return recusa(`A cópia está com HEAD destacado em ${curto(sha)}; só atualizo na ${versaoSegura}.`)
+        if (ref !== versaoSegura) return recusa(`Só atualizo na ${versaoSegura}; agora estou em ${ref}.`)
+        antes = sha
+
+        const remoto = await remotoDe(versaoSegura)
+        const ramo = (await git('config', `branch.${versaoSegura}.merge`).catch(() => '')).replace(/^refs\/heads\//, '') || versaoSegura
+        if (!(await git('remote').catch(() => '')).split('\n').includes(remoto)) {
+          return recusa(`A cópia não tem o remoto ${remoto}; nada foi atualizado.`)
         }
-        const { ref } = await versaoAtual()
-        if (ref !== versaoSegura) {
-          return { ok: false, mensagem: `Só atualizo na ${versaoSegura}; agora estou em ${ref}.` }
+        await gitRede('fetch', '--prune', '--quiet', remoto)
+        const depois = await git('rev-parse', '--verify', '--quiet', `refs/remotes/${remoto}/${ramo}^{commit}`).catch(() => '')
+        if (!depois) return recusa(`O remoto ${remoto} não tem a branch ${ramo}; nada foi atualizado.`)
+        if (depois === antes) return { ok: true, mensagem: 'Já estava na versão mais nova.' }
+        if (!(await sim(git('merge-base', '--is-ancestor', antes, depois)))) {
+          const aFrente = await sim(git('merge-base', '--is-ancestor', depois, antes))
+          return recusa(
+            aFrente
+              ? `A ${versaoSegura} local tem commits que ${remoto}/${ramo} não tem; nada foi atualizado.`
+              : `A ${versaoSegura} local e ${remoto}/${ramo} divergiram; resolva à mão. Nada foi atualizado.`,
+          )
         }
-        const antes = await git('rev-parse', 'HEAD')
-        await git('pull', '--ff-only', '--quiet')
-        const depois = await git('rev-parse', 'HEAD')
-        if (antes === depois) return { ok: true, mensagem: 'Já estava na versão mais nova.' }
+        // Conferido de novo com o alvo: um arquivo solto com o nome de um que chega para a troca no meio.
+        const colisao = await conferirCopia(depois)
+        if (colisao) return recusa(colisao.replace('Nada foi trocado', 'Nada foi atualizado'))
+
         const mudados = (await git('diff', '--name-only', antes, depois)).split('\n').filter(Boolean)
-        const reinstalar = instalar && mudados.some((f) => instalar.quando.some((re) => re.test(f)))
-        anotar(`[fenix] atualizando ${versaoSegura} de ${antes.slice(0, 7)} para ${depois.slice(0, 7)}`)
+        reinstalar = Boolean(instalar && mudados.some((f) => instalar.quando.some((re) => re.test(f))))
+        anotar(`[fenix] atualizando ${versaoSegura} de ${curto(antes)} para ${curto(depois)}`)
 
         await desligar()
+        desligados = true
+        mexeu = true
+        await git('merge', '--ff-only', '--quiet', depois)
+        await atualizarSubmodulos()
+        const agora = await git('rev-parse', 'HEAD')
+        if (agora !== depois) throw new Error(`a cópia ficou em ${curto(agora)}, e não em ${curto(depois)}`)
         if (reinstalar) await rodarInstalar()
-        queda = null
-        ligar()
+        religar()
+
         const motivo = await observar(false)
         if (!motivo) {
-          anotar(`[fenix] ${versaoSegura} atualizada para ${depois.slice(0, 7)}`)
-          return {
-            ok: true,
-            mensagem: `Atualizei de ${antes.slice(0, 7)} para ${depois.slice(0, 7)}, ${mudados.length} arquivos.`,
-          }
+          anotar(`[fenix] ${versaoSegura} atualizada para ${curto(depois)}`)
+          return { ok: true, mensagem: `Atualizei de ${curto(antes)} para ${curto(depois)}, ${mudados.length} arquivos.` }
         }
-        await desligar()
-        await git('reset', '--hard', '--quiet', antes)
-        if (reinstalar) await rodarInstalar()
-        queda = null
-        ligar()
-        anotar(`[fenix] a atualização falhou (${motivo}); de volta a ${antes.slice(0, 7)}`)
-        return { ok: false, mensagem: `${motivo} Voltei para a versão de antes, ${antes.slice(0, 7)}.` }
+        await restaurar()
+        religar()
+        anotar(`[fenix] a atualização falhou (${motivo}); de volta a ${curto(antes)}`)
+        return { ok: false, mensagem: `${motivo} Voltei para a versão de antes, ${curto(antes)}.` }
       } catch (err) {
         anotar(`[fenix] falha ao atualizar: ${err.message}`)
-        return { ok: false, mensagem: `Não consegui atualizar: ${err.message}` }
+        if (!mexeu) return { ok: false, mensagem: `Não consegui atualizar: ${err.message}. Nada foi trocado.` }
+        try {
+          await restaurar()
+          anotar(`[fenix] de volta a ${curto(antes)} depois da falha`)
+          return { ok: false, mensagem: `Não consegui atualizar: ${err.message}. Voltei para a versão de antes, ${curto(antes)}.` }
+        } catch (falha) {
+          anotar(`[fenix] ATENÇÃO: não consegui voltar para ${curto(antes)}: ${falha.message}`)
+          return {
+            ok: false,
+            mensagem: `Não consegui atualizar (${err.message}) nem voltar para ${curto(antes)} (${falha.message}). Confira a cópia com git status.`,
+          }
+        }
       } finally {
+        // Nenhum caminho deixa os serviços desligados.
+        if (desligados) religar()
         ocupado = false
       }
     },

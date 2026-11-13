@@ -58,6 +58,7 @@ import {
 import { criarClienteFenix } from './fenix.mjs'
 import { criarRenascimento, lerReceita } from './renascer.mjs'
 import { criarClienteAurora } from './aurora.mjs'
+import { criarSondas } from './sondas.mjs'
 import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog } from './desenvolvimento.mjs'
 import { criarTelemetria } from './telemetria.mjs'
 import { garantirCertificado } from './tls.mjs'
@@ -128,6 +129,35 @@ const IGNORADOS = new Set(
     .filter(Boolean),
 )
 
+/**
+ * A voz do PC como a interface relatou: só ela vê a conexão com o provedor.
+ * `falhas` conta as tentativas seguidas que não ligaram; a F.Ê.N.I.X. lê isto
+ * em /health e registra quando muda.
+ */
+const vozDoPc = { estado: 'sem relato', falhas: 0, desde: Date.now(), ultimo: '' }
+// Uma tentativa vai do pedido da sessão à confirmação ou à primeira falha:
+// o tempo esgotado e o fechamento que vem depois dele contam uma vez só.
+let tentativaContada = false
+function registrarEstadoDaVoz(texto) {
+  const antes = vozDoPc.estado
+  if (texto.startsWith('abrindo a conexão') || texto.startsWith('pedindo a sessão')) {
+    tentativaContada = false
+    return
+  }
+  if (texto.startsWith('sessão confirmada')) {
+    vozDoPc.estado = 'ligada'
+    vozDoPc.falhas = 0
+    tentativaContada = true
+  } else if (/^(o Google não confirmou|a ponte não entregou|conexão fechada)/.test(texto)) {
+    if (tentativaContada) return
+    tentativaContada = true
+    vozDoPc.estado = 'falhando'
+    vozDoPc.falhas++
+  } else return
+  vozDoPc.ultimo = texto
+  if (vozDoPc.estado !== antes) vozDoPc.desde = Date.now()
+}
+
 function configuredServers() {
   try {
     const cfg = JSON.parse(
@@ -147,10 +177,16 @@ function configuredServers() {
 const MCP_SERVERS = configuredServers()
 
 /**
- * Os sistemas à parte, para a aba SISTEMAS (docs/adr/0025): a F.Ê.N.I.X. e o
- * H.E.R.M.E.S. O estado do H.E.R.M.E.S. vem da Fênix, que é quem o sobe.
+ * Os sistemas à parte, para a aba SISTEMAS (docs/adr/0025): a F.Ê.N.I.X., o
+ * H.E.R.M.E.S. e a A.U.R.O.R.A. A saúde dos dois últimos a ponte mede sozinha
+ * (`sondas`, docs/adr/0029); o que a Fênix conta deles (subindo, caiu) só vale
+ * enquanto ela está conectada, e some com ela sem levar os dois junto.
  */
 const canais = { fenix: null, hermes: null, aurora: null }
+/** A saúde medida pela própria ponte. Criada mais abaixo, depois do certificado. */
+let sondas = null
+/** De pé pela sonda vale mais que qualquer relato; sem relato da Fênix, vale a sonda. */
+const doServico = (nome) => (sondas?.estado(nome) === 'connected' ? 'connected' : (canais[nome] ?? sondas?.estado(nome) ?? null))
 /** Quantos celulares estão conectados agora pelo H.E.R.M.E.S. */
 let celularesConectados = 0
 const STATUS_DO_SERVICO = { ligado: 'connected', subindo: 'pending', caiu: 'failed' }
@@ -158,9 +194,10 @@ const STATUS_DO_SERVICO = { ligado: 'connected', subindo: 'pending', caiu: 'fail
 const comCanais = (servers) => {
   const extras = []
   if (canais.fenix) extras.push({ name: 'fenix', status: canais.fenix })
-  const hermes = canais.hermes ?? (celularesConectados ? 'connected' : null)
+  const hermes = doServico('hermes') ?? (celularesConectados ? 'connected' : null)
   if (hermes) extras.push({ name: 'celular', status: hermes })
-  if (canais.aurora) extras.push({ name: 'aurora', status: canais.aurora })
+  const doAurora = doServico('aurora')
+  if (doAurora) extras.push({ name: 'aurora', status: doAurora })
   return [...servers, ...extras]
 }
 /** Cada interface reenvia a própria lista quando um canal muda. */
@@ -595,6 +632,7 @@ const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
   }
 
   if (req.method === 'GET' && req.url === '/health') {
+    // `voz`: o que a interface do PC relatou da conexão de voz (registrarEstadoDaVoz).
     res.writeHead(200, { ...cors, 'content-type': 'application/json' })
     return res.end(
       JSON.stringify({
@@ -604,6 +642,7 @@ const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
         modelo: realtimeModel(),
         // A F.Ê.N.I.X. usa isto para saber se a interface voltou depois de uma troca.
         interfaces: interfacesDoPc.size,
+        voz: { ...vozDoPc },
       }),
     )
   }
@@ -611,8 +650,16 @@ const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
   // A chave temporária da sessão de voz. O navegador abre a conexão WebRTC
   // direto com a OpenAI usando ela; a chave permanente nunca sai daqui.
   if (req.method === 'POST' && req.url === '/realtime/sessao') {
+    const inicio = Date.now()
     try {
       const session = await createRealtimeSession()
+      // Sem a chave: só o que ajuda a ver por que a voz não ligou no navegador.
+      const ferramentas = session.setup?.tools?.[0]?.functionDeclarations?.length ?? 0
+      const tamanho = session.setup ? JSON.stringify(session.setup).length : 0
+      console.log(
+        `[apolo] voz: sessão entregue em ${Date.now() - inicio} ms (${session.provider ?? 'openai'}, ` +
+          `${session.model}, configuração ${tamanho} bytes, ${ferramentas} ferramentas)`,
+      )
       res.writeHead(200, { ...cors, 'content-type': 'application/json', 'cache-control': 'no-store' })
       return res.end(JSON.stringify(session))
     } catch (err) {
@@ -827,6 +874,18 @@ const broadcast = (msg) => {
     if (client.readyState === client.OPEN) client.send(JSON.stringify(msg))
   }
 }
+/**
+ * Os celulares conectados pelo H.E.R.M.E.S. Recebem só o estado do core que a voz
+ * dele precisa para decidir (docs/adr/0030): o autodesenvolvimento e as propostas
+ * da Fênix. O resto do que vai às interfaces do PC (preferências, HUD) fica lá.
+ */
+const celularesNoAr = new Set()
+const avisarTodos = (msg) => {
+  broadcast(msg)
+  for (const client of celularesNoAr) {
+    if (client.readyState === client.OPEN) client.send(JSON.stringify(msg))
+  }
+}
 const preferencias = criarPreferencias()
 const telemetria = criarTelemetria()
 /** Ponto de extensão entre dispositivos (docs/adr/0022). Nenhuma registrada ainda. */
@@ -846,7 +905,9 @@ const fenix = criarClienteFenix({
   ca: process.env.FENIX_CA?.trim() ? readFileSync(process.env.FENIX_CA.trim()) : tls.cert,
   aoMudar: (conectada) => {
     canais.fenix = conectada ? 'connected' : 'failed'
+    // O relato da Fênix sai com ela; a saúde medida pela ponte continua valendo.
     if (!conectada) canais.hermes = canais.aurora = null
+    if (!conectada) void sondas?.checar()
     // Caiu a conexão: se foi ela que morreu, a ponte a revive (docs/adr/0028).
     if (!conectada) renascimento?.vigiar()
     canaisMudaram()
@@ -861,7 +922,7 @@ const fenix = criarClienteFenix({
       canais.aurora = (doAurora && STATUS_DO_SERVICO[doAurora.status]) ?? null
       if (msg.inicial) autodev.sincronizar(msg.versao)
       canaisMudaram()
-      broadcast({ type: 'fenix', estado: resumoDaFenix() })
+      avisarTodos({ type: 'fenix', estado: resumoDaFenix() })
     }
   },
 })
@@ -884,7 +945,7 @@ const autodev = criarAutodev({
   repo: REPO,
   ligado: process.env.APOLO_AUTODEV === '1',
   supervisor: fenix ? (msg) => fenix.enviar(msg) : null,
-  avisar: (estado) => broadcast({ type: 'autodev', estado }),
+  avisar: (estado) => avisarTodos({ type: 'autodev', estado }),
   interfaces: () => interfacesDoPc.size,
   // Abrir o PR de uma alteração aprovada é efeito no mundo: só com --writes (ADR 0014).
   abrirPr: ALLOW_WRITES ? (pedido) => criarGit({ repo: REPO }).pullRequest(pedido) : null,
@@ -908,6 +969,26 @@ async function acaoDoAutodev({ acao, pedido, tarefa }) {
   return autodev.acao(acao, { pedido })
 }
 
+/**
+ * A saúde do H.E.R.M.E.S. e da A.U.R.O.R.A., medida daqui (docs/adr/0029). Só os
+ * que este .env.local configura: sem token, o serviço sai sozinho e não é queda.
+ */
+const portaDoHermes = process.env.APOLO_NOTIFICAR_PORTA?.trim() || '8792'
+sondas = criarSondas({
+  alvos: [
+    (process.env.APOLO_GATEWAY_TOKEN?.trim() || process.env.APOLO_NOTIFICAR_TOKEN?.trim()) && {
+      nome: 'hermes',
+      url: `https://localhost:${portaDoHermes}/saude`,
+    },
+    process.env.APOLO_AURORA_TOKEN?.trim() && {
+      nome: 'aurora',
+      url: new URL('/saude', process.env.APOLO_AURORA_URL?.trim() || 'https://localhost:8791').href,
+    },
+  ],
+  ca: tls.cert,
+  aoMudar: canaisMudaram,
+})
+
 /** O bom dia (RF-55, docs/adr/0026): a faixa de rock e o resumo do dia. */
 const aurora = criarClienteAurora({
   url: process.env.APOLO_AURORA_URL?.trim() || undefined,
@@ -930,7 +1011,7 @@ async function pedirAFenix({ acao, nome, parametros, script, motivo, proposta })
     const estado = await fenix.pedir({ type: 'estado' })
     if (estado.ok) {
       estadoDaFenix = estado
-      broadcast({ type: 'fenix', estado: resumoDaFenix() })
+      avisarTodos({ type: 'fenix', estado: resumoDaFenix() })
     }
     return r
   }
@@ -973,6 +1054,14 @@ console.log(
     : `[apolo] voz em tempo real DESLIGADA — falta a chave ${voiceProvider() === 'gemini' ? 'GEMINI_API_KEY' : 'OPENAI_API_KEY'} no .env.local`,
 )
 console.log(`[apolo] agente de tarefas: ${MODEL} · esforço ${EFFORT}`)
+// Só os nomes: mostra se o ambiente em que a ponte subiu tem o que a voz lê.
+console.log(
+  `[apolo] ambiente: ${Object.keys(process.env).length} variáveis; da voz e do A.P.O.L.O.: ` +
+    (Object.keys(process.env)
+      .filter((n) => /^(APOLO_|JARVIS_|GEMINI_|GOOGLE_|OPENAI_)/.test(n))
+      .sort()
+      .join(' ') || 'nenhuma'),
+)
 console.log(
   `[apolo] autodesenvolvimento ${autodev.estado().ligado ? 'LIGADO' : 'desligado — use npm start -- --autodev'}`,
 )
@@ -1025,7 +1114,11 @@ const atender = (socket, { celular = false } = {}) => {
   const reenviarCanais = () => send({ type: 'ready', servers: comCanais(ultimosServidores) })
   if (celular) {
     celularesConectados++
+    celularesNoAr.add(socket)
     canaisMudaram()
+    // O retrato do core para a voz do celular decidir, como o PC recebe ao conectar.
+    socket.send(JSON.stringify({ type: 'autodev', estado: autodev.estado() }))
+    socket.send(JSON.stringify({ type: 'fenix', estado: resumoDaFenix() }))
   } else {
     interfacesDoPc.add(socket)
     ouvintesDosCanais.add(reenviarCanais)
@@ -1450,6 +1543,13 @@ const atender = (socket, { celular = false } = {}) => {
         .catch((err) => send({ type: 'voz_sessao', id: msg.id, erro: err.message }))
     }
 
+    // Os passos da conexão de voz do navegador, que só ele vê (src/lib/voz/types.ts).
+    if (msg.type === 'voz_log' && !celular && typeof msg.texto === 'string') {
+      const texto = msg.texto.replace(/[\u0000-\u001f]+/g, ' ').slice(0, 300)
+      registrarEstadoDaVoz(texto)
+      return console.log(`[apolo] voz: ${texto}`)
+    }
+
     if (msg.type === 'preferencias') {
       broadcast({ type: 'preferencias', valores: preferencias.gravar(msg.valores) })
     }
@@ -1505,6 +1605,7 @@ const atender = (socket, { celular = false } = {}) => {
       canaisMudaram()
     }
     interfacesDoPc.delete(socket)
+    celularesNoAr.delete(socket)
     ouvintesDosCanais.delete(reenviarCanais)
     dispositivo.sair()
     closed = true

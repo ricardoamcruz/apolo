@@ -70,6 +70,9 @@ export function lerConfig(arquivo, envDoTerminal = process.env) {
       cor: s.cor ?? '37',
       opcional: s.opcional === true,
       versionado: s.versionado === true,
+      // Sobrevive à Fênix: ela o sobe, mas, se cair e voltar, adota a cópia que
+      // continuou de pé em vez de derrubá-la (docs/adr/0029).
+      independente: s.independente === true,
       portas: (s.portas ?? []).map(Number).filter(Boolean),
       ambiente: Object.fromEntries(
         Object.entries(s.ambiente ?? {}).map(([k, v]) => [k, v.startsWith('~/') ? casa(v) : v]),
@@ -162,6 +165,7 @@ export function lerConfig(arquivo, envDoTerminal = process.env) {
 const TEMPOS = {
   servicos: ['estavelMs', 'intervaloMs', 'subidaMs'],
   versoes: ['subidaMs', 'estabilidadeMs', 'intervaloMs', 'vigiaMs'],
+  rotinas: ['avisoMs'],
 }
 function tempos(bruto) {
   const saida = {}

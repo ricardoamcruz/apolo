@@ -67,6 +67,19 @@ export const diag = {
 }
 ;(globalThis as Record<string, unknown>).__rt = diag
 
+/**
+ * Os passos da conexão de voz. Eles acontecem só no navegador; no PC vão também
+ * para o log da ponte, onde dá para ver por que a voz não ligou.
+ */
+let destinoDoLog: ((texto: string) => void) | null = null
+export function registrarDestinoDaVoz(fn: (texto: string) => void) {
+  destinoDoLog = fn
+}
+export function logVoz(texto: string) {
+  console.info('[voz]', texto)
+  destinoDoLog?.(texto)
+}
+
 /** O que a ponte devolve em POST /realtime/sessao. */
 export type SessionGrant =
   | { provider: 'openai'; value: string; model: string }

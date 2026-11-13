@@ -1,30 +1,18 @@
 <!--
-  A marca do A.P.O.L.O.: os mesmos anéis da abertura, reduzidos ao que ainda se
-  lê a 16 pixels — um anel aberto, um anel interno e o núcleo.
+  A marca do A.P.O.L.O.: a Lira, o instrumento de Apolo, a voz e a música (ADR 0013
+  revisada, escolha de 12/11/2026). Substitui o anel da abertura.
 
-  Substitui um raio violeta herdado do projeto-base, que não era a identidade
-  dele e que, por não estar ligado no `index.html`, nunca apareceu em aba
-  nenhuma. Ver ADR 0013.
-
-  Desenhado à mão em SVG, sem dependência e sem binário: escala sozinho para
-  qualquer tamanho de aba e o ciano (`#00e5ff`, o `--interface` da folha de
-  estilo) fica num só lugar por arquivo.
+  Os mesmos traços de src/ui/icones.tsx, em 24 × 24, ampliados para 64. O ciano
+  (#00e5ff, o `--interface` da folha de estilo) está escrito aqui porque o
+  navegador não aplica CSS a um favicon.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="A.P.O.L.O.">
   <rect width="64" height="64" rx="12" fill="#01060c" />
-
-  <!-- Anel externo, aberto em cima e embaixo: é o corte que faz o anel ler
-       como instrumento em vez de círculo. -->
-  <circle
-    cx="32" cy="32" r="25"
-    fill="none" stroke="#00e5ff" stroke-width="3" stroke-linecap="round"
-    stroke-dasharray="33 16" stroke-dashoffset="16.5" opacity="0.55"
-  />
-
-  <!-- Anel interno, contínuo e mais aceso. -->
-  <circle cx="32" cy="32" r="16" fill="none" stroke="#00e5ff" stroke-width="3" opacity="0.9" />
-
-  <!-- O núcleo. A única coisa que sobrevive inteira no tamanho de favicon, e
-       por isso o que carrega a marca. -->
-  <circle cx="32" cy="32" r="7" fill="#9af6ff" />
+  <g transform="translate(5.6 5.6) scale(2.2)" fill="none" stroke="#00e5ff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.5 3.5C4.5 7 8 8 8 11.5V17" />
+    <path d="M19.5 3.5C19.5 7 16 8 16 11.5V17" />
+    <path d="M8 17c0 2 1.8 3.5 4 3.5s4-1.5 4-3.5z" />
+    <path d="M6 6.5h12" />
+    <path d="M10.5 6.5V17M13.5 6.5V17" />
+  </g>
 </svg>

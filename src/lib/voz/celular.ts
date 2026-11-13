@@ -3,6 +3,8 @@ import { chamouPeloNome } from '../chamada'
 import { criarJanela } from '../conversa'
 import { vigiarCancelamento } from '../comandos'
 import type { AcaoDePopup } from '../comandosDePopup'
+import { foraDeHora, ouviuConfirmacao, registrarFala, type AutodevEstado } from '../autodev'
+import { lerParametros, textoDaFenix } from '../fenix'
 import { connectGemini } from './gemini'
 import type { RealtimeSession, SessionGrant, ToolResult } from './types'
 
@@ -12,6 +14,11 @@ import type { RealtimeSession, SessionGrant, ToolResult } from './types'
  * O cliente é o mesmo `connectGemini`. O que muda é tudo o que no PC passa pela
  * ponte: aqui a página não tem o token, então a credencial e as tarefas pedem ao
  * app, que fala com o gateway. Popups continuam sendo o que o agente abrir.
+ *
+ * O desenvolvimento e a F.Ê.N.I.X. funcionam como no PC (docs/adr/0030): os
+ * pedidos vão ao core pelo app (`core`), e o estado volta por `doCore`. Quem
+ * confirma, aprova ou abre o PR é a fala do Ricardo, conferida aqui contra a
+ * transcrição do microfone do celular, e não contra o que o modelo afirma.
  */
 
 export type FaseDaVoz = 'desligada' | 'espera' | 'ouvindo' | 'pensando' | 'ferramenta' | 'falando'
@@ -27,6 +34,23 @@ export type MensagemDaVoz =
   | { tarefa: string; pedido: string }
   /** Ele mandou cancelar a tarefa em andamento. */
   | { cancelar: true }
+  /** Um pedido ao core (autodesenvolvimento ou Fênix); a resposta volta por `doCore`. */
+  | { core: PedidoAoCore }
+
+/** O que a voz pede ao core, como a interface do PC pede à ponte. */
+export type PedidoAoCore = { id: string; tipo: 'autodev' | 'fenix'; acao: string } & Record<string, unknown>
+/** O que o core manda de volta: a resposta de um pedido (`resposta`) ou o estado. */
+export type MensagemDoCore = {
+  type?: string
+  resposta?: string
+  ok?: boolean
+  mensagem?: string
+  saida?: string
+  proposta?: PropostaDaFenix
+  estado?: unknown
+}
+type PropostaDaFenix = { id: string; script: string; motivo: string }
+type RespostaDoCore = { ok: boolean; mensagem: string; saida?: string; proposta?: PropostaDaFenix }
 
 type Grant = Extract<SessionGrant, { provider: 'gemini' }>
 
@@ -59,6 +83,11 @@ export function criarVozDoCelular(
   let transcreveu = false
   const credenciais = new Map<string, { resolve: (g: Grant) => void; reject: (e: Error) => void }>()
   const tarefas = new Map<string, (texto: string) => void>()
+  /** Pedidos ao core esperando resposta. Enquanto houver um, a conversa não fecha. */
+  const pedidosAoCore = new Map<string, (r: RespostaDoCore) => void>()
+  let autodevEstado: AutodevEstado | null = null
+  /** `vistaEm`: quando a proposta chegou aqui; só uma fala depois disso confirma. */
+  let propostas: (PropostaDaFenix & { vistaEm: number })[] = []
   const vigia = vigiarCancelamento(() => {
     if (tarefas.size) enviar({ cancelar: true })
   })
@@ -84,7 +113,7 @@ export function criarVozDoCelular(
   const janela = criarJanela(
     () => dormir(),
     () => {
-      if (falando || tarefas.size) return 'sim'
+      if (falando || tarefas.size || pedidosAoCore.size) return 'sim'
       return Date.now() - ultimoSom < FALA_RECENTE_MS ? 'talvez' : 'nao'
     },
   )
@@ -142,6 +171,99 @@ export function criarVozDoCelular(
       enviar({ tarefa: id, pedido })
     })
 
+  /** Um pedido ao core. Nunca rejeita: sem resposta no prazo, `ok: false`. */
+  const pedirAoCore = (tipo: PedidoAoCore['tipo'], acao: string, extra: Record<string, unknown> = {}, prazoMs = 20_000) =>
+    new Promise<RespostaDoCore>((resolve) => {
+      const id = `${tipo === 'autodev' ? 'd' : 'f'}${++pedidos}`
+      const prazo = setTimeout(() => {
+        pedidosAoCore.delete(id)
+        resolve({ ok: false, mensagem: 'O computador não respondeu a tempo.' })
+      }, prazoMs)
+      pedidosAoCore.set(id, (r) => {
+        clearTimeout(prazo)
+        resolve(r)
+      })
+      enviar({ core: { id, tipo, acao, ...extra } })
+    })
+
+  /** Enquanto o core trabalha, a fase mostra que há algo rodando. */
+  const comCoreTrabalhando = async <T,>(pedir: () => Promise<T>) => {
+    fase('ferramenta')
+    try {
+      return await pedir()
+    } finally {
+      fase('pensando')
+      armarOcioso()
+    }
+  }
+
+  /** As mesmas regras do PC (src/App.tsx), sem os botões: aqui só a fala confirma. */
+  const desenvolvimento = async (args: Record<string, unknown>): Promise<ToolResult> => {
+    const acao = String(args.acao ?? '')
+    armarOcioso()
+    // Abrir o PR manda código para fora: também exige o sim falado dele.
+    if (acao === 'pull_request' && !(await ouviuConfirmacao(Date.now() - 60_000))) {
+      return {
+        output:
+          'O sim do Ricardo não foi ouvido. Pergunte uma vez se ele quer abrir o pull request; ' +
+          'se ele disser que sim, chame de novo. Nada foi enviado.',
+      }
+    }
+    if (acao === 'confirmar' || acao === 'aprovar') {
+      const impedimento = foraDeHora(acao, autodevEstado)
+      if (impedimento) return { output: impedimento.replace(', então também não há botão na tela', '') }
+      const desde = acao === 'aprovar' ? autodevEstado?.testeDesde : autodevEstado?.criadoEm
+      if (!(await ouviuConfirmacao(desde ?? Date.now()))) {
+        return {
+          output:
+            `A confirmação não foi ouvida do Ricardo. Peça uma vez que ele diga "${acao === 'aprovar' ? 'aprovo' : 'confirmo'}". ` +
+            'Se ele pedir outra coisa, atenda. Nada foi feito.',
+        }
+      }
+    }
+    const tarefa = typeof args.tarefa === 'string' && args.tarefa.trim() ? { tarefa: args.tarefa.trim() } : {}
+    const r = await comCoreTrabalhando(() => pedirAoCore('autodev', acao, { pedido: String(args.pedido ?? ''), ...tarefa }))
+    return { output: r.mensagem }
+  }
+
+  const fenix = async (args: Record<string, unknown>): Promise<ToolResult> => {
+    const acao = String(args.acao ?? '')
+    armarOcioso()
+    // Como no desenvolvimento: quem confirma um script é a fala do Ricardo.
+    if (acao === 'confirmar' || acao === 'cancelar') {
+      const proposta = propostas.at(-1)
+      if (!proposta) return { output: 'Não há comando da Fênix esperando confirmação.' }
+      if (acao === 'confirmar' && !(await ouviuConfirmacao(proposta.vistaEm))) {
+        return {
+          output: 'A confirmação não foi ouvida do Ricardo. Peça uma vez que ele diga "confirmo". Nada foi rodado.',
+        }
+      }
+      const r = await comCoreTrabalhando(() => pedirAoCore('fenix', acao, { proposta: proposta.id }, 6 * 60_000))
+      return { output: textoDaFenix(r) }
+    }
+    const extra = {
+      nome: String(args.nome ?? ''),
+      parametros: lerParametros(String(args.parametros ?? '')),
+      script: String(args.script ?? ''),
+      motivo: String(args.motivo ?? ''),
+    }
+    if (acao === 'comando') {
+      const r = await pedirAoCore('fenix', 'comando', extra)
+      if (!r.ok || !r.proposta) return { output: r.mensagem }
+      // A proposta vale a partir de agora, mesmo que o estado chegue depois.
+      if (!propostas.some((p) => p.id === r.proposta?.id)) propostas = [...propostas, { ...r.proposta, vistaEm: Date.now() }]
+      return {
+        output:
+          `Proposta registrada, ainda sem rodar: ${r.proposta.script}\n` +
+          'Diga em uma frase o que o script faz e pergunte se ele confirma. No celular não há botão: ele confirma falando.',
+      }
+    }
+    if (acao === 'rotina') {
+      return { output: textoDaFenix(await comCoreTrabalhando(() => pedirAoCore('fenix', 'rotina', extra, 50 * 60_000))) }
+    }
+    return { output: textoDaFenix(await pedirAoCore('fenix', acao, extra)) }
+  }
+
   const usarFerramenta = async (
     nome: string,
     args: Record<string, unknown>,
@@ -159,6 +281,8 @@ export function criarVozDoCelular(
       armarOcioso()
       return { output: texto || 'Tarefa concluída, sem nada a relatar.' }
     }
+    if (nome === 'desenvolvimento') return desenvolvimento(args)
+    if (nome === 'fenix') return fenix(args)
     if (nome === 'ajustar_interface') {
       armarOcioso()
       if (typeof args.popups === 'string') {
@@ -215,12 +339,17 @@ export function criarVozDoCelular(
             medir('voz_transcricao', Date.now() - inicioDaFala)
           }
           enviar({ ouviu: texto })
+          // A transcrição é o que confere o "confirmo": nunca o que o modelo diz.
+          registrarFala(texto)
           if (tarefas.size) vigia.ouvir(texto)
         },
         onUserText: (texto) => {
           // Chega antes do áudio da resposta: acordar aqui deixa a resposta ao chamado tocar.
           if (emEspera && chamouPeloNome(texto).chamou) sairDaEspera()
-          if (!emEspera) enviar({ ouviu: texto, fim: true })
+          if (!emEspera) {
+            registrarFala(texto)
+            enviar({ ouviu: texto, fim: true })
+          }
         },
         onAssistantStart: () => {},
         onAssistantDelta: () => {},
@@ -276,6 +405,8 @@ export function criarVozDoCelular(
       encerrar()
       for (const concluir of tarefas.values()) concluir('A conexão com o computador caiu.')
       tarefas.clear()
+      for (const concluir of pedidosAoCore.values()) concluir({ ok: false, mensagem: 'A conexão com o computador caiu.' })
+      pedidosAoCore.clear()
       fase('desligada')
     },
     /** Um toque fora dos popups: interrompe a fala, acorda ou tenta de novo. */
@@ -294,6 +425,27 @@ export function criarVozDoCelular(
     fimDaTarefa: (id: string, texto: string) => {
       tarefas.get(id)?.(texto)
       tarefas.delete(id)
+    },
+    /** O que o core mandou: a resposta de um pedido, ou o estado do autodev e da Fênix. */
+    doCore: (msg: MensagemDoCore) => {
+      if (!msg || typeof msg !== 'object') return
+      if (typeof msg.resposta === 'string') {
+        const concluir = pedidosAoCore.get(msg.resposta)
+        pedidosAoCore.delete(msg.resposta)
+        concluir?.({
+          ok: msg.ok === true,
+          mensagem: msg.mensagem ?? (msg.ok ? 'Feito.' : 'O computador não disse o motivo.'),
+          saida: msg.saida,
+          proposta: msg.proposta,
+        })
+        return
+      }
+      if (msg.type === 'autodev' && msg.estado) autodevEstado = msg.estado as AutodevEstado
+      if (msg.type === 'fenix' && msg.estado) {
+        const vistas = new Map(propostas.map((p) => [p.id, p.vistaEm]))
+        const novas = (msg.estado as { propostas?: PropostaDaFenix[] }).propostas ?? []
+        propostas = novas.map((p) => ({ ...p, vistaEm: vistas.get(p.id) ?? Date.now() }))
+      }
     },
   }
 }

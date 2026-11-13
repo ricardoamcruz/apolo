@@ -146,7 +146,8 @@ export type UiState = {
     intensity: number
     /** Rotation-rate multiplier. 0 .. 5, default 1. */
     spin: number
-    style: 'ring' | 'sphere' | 'wire'
+    /** enxame é o núcleo do A.P.O.L.O. (ADR 0013 revisada); os outros três são o anel herdado. */
+    style: 'enxame' | 'ring' | 'sphere' | 'wire'
     visible: boolean
   }
   orbits: OrbitObject[]
@@ -162,7 +163,7 @@ export type UiState = {
 
 export const UI_DEFAULTS: UiState = {
   accent: null, background: null, palette: {},
-  reactor: { color: null, scale: 1, intensity: 1, spin: 1, style: 'ring', visible: true },
+  reactor: { color: null, scale: 1, intensity: 1, spin: 1, style: 'enxame', visible: true },
   orbits: [],
   chrome: { systems: true, transcript: true, toolBadge: true, suggestions: true, brand: true },
   effect: null,

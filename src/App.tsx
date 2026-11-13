@@ -28,11 +28,14 @@ import {
   fenix,
   bomDia,
   bridgeServers,
+  registrarVoz,
   type FenixResposta,
 } from './lib/bridge'
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
+import { registrarDestinoDaVoz } from './lib/voz/types'
 import { startAnalyser, micLevel, retomarAnalyser } from './lib/audio'
 import { foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/autodev'
+import { lerParametros, textoDaFenix } from './lib/fenix'
 import { agradece, pedeModoMaos, vigiarCancelamento } from './lib/comandos'
 import { INTERVALO_DOS_POPUPS_MS, PREFIXO_DO_BOM_DIA, descreverPopups, popupsDoBomDia } from './lib/bomDia'
 import { criarJanela } from './lib/conversa'
@@ -42,6 +45,9 @@ import { chamadaDisponivel, deuBomDia, ouvirNome } from './lib/chamada'
 import { sistemasAgora } from './lib/estadoDosSistemas'
 import { resumoSistemas } from './lib/sistemas'
 import { handleBrowser } from './lib/navegador'
+
+// Os passos da conexão de voz também vão para o log da ponte.
+registrarDestinoDaVoz(registrarVoz)
 
 /**
  * A conversa, agora em speech-to-speech (docs/adr/0009).
@@ -113,22 +119,6 @@ function desligarModoMaos() {
  * precisa dessa diferença: anunciar "tela limpa" diante de uma tela que já
  * estava vazia soa como uma ordem que se perdeu no caminho.
  */
-/** "nivel=30, dias=2" vira { nivel: '30', dias: '2' }. A Fênix confere cada valor. */
-function lerParametros(texto: string): Record<string, string> {
-  const valores: Record<string, string> = {}
-  for (const par of texto.split(',')) {
-    const [chave, ...resto] = par.split('=')
-    if (chave?.trim() && resto.length) valores[chave.trim()] = resto.join('=').trim()
-  }
-  return valores
-}
-
-/** O que a voz recebe de volta: a mensagem e o fim da saída, onde fica o erro. */
-function textoDaFenix(r: FenixResposta) {
-  const saida = r.saida?.trim()
-  return saida ? `${r.mensagem}\nSaída:\n${saida.slice(-1500)}` : r.mensagem
-}
-
 /** Rotina e script rodando: a cor de script (lilás) até a Fênix responder. */
 async function comFenixTrabalhando(pedir: () => Promise<FenixResposta>) {
   const s = useStore.getState()

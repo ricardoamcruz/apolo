@@ -1,7 +1,7 @@
 /**
- * Os shaders do círculo e das partículas, sem depender de nada.
+ * Os shaders do núcleo (o Enxame e o anel), das partículas, sem depender de nada.
  *
- * O HUD (Core.tsx, Particles.tsx) e o app do iPhone (apps/mobile/src/Cena.tsx)
+ * O HUD (Enxame.tsx, Core.tsx, Particles.tsx) e o app do iPhone (apps/mobile/src/Cena.tsx)
  * desenham a mesma coisa a partir daqui, então uma mudança na geometria do núcleo
  * chega aos dois. Por isso este arquivo não importa nada: o Metro o carrega por
  * fora do projeto mobile.
@@ -306,3 +306,84 @@ export const particlesFragment = /* glsl */ `
     gl_FragColor = vec4(uColor, vAlpha * falloff * uIntensity);
   }
 `
+
+/**
+ * O Enxame, o núcleo do A.P.O.L.O. desde a ADR 0013 revisada (12/11/2026): pontos
+ * numa esfera, em faixas de latitude que giram em sentidos alternados. Vale para a
+ * web (src/scene/Enxame.tsx) e para o app do iPhone (apps/mobile/src/Cena.tsx).
+ *
+ * `position` é um vetor unitário (a esfera de Fibonacci, sem buracos nem polos
+ * amontoados); o raio vem de uRaio, para cada tela decidir a escala.
+ *
+ *   uPhase  giro acumulado: mudar de fase muda a velocidade, sem salto na posição
+ *   uAtivo  0..1, o quanto ele está trabalhando: as faixas se separam e aceleram
+ *   uLevel  a voz: a esfera respira e cada ponto treme no seu ritmo
+ *   uOpen   a partida: os pontos acendem de dentro para fora, como o anel fazia
+ */
+export const enxameVertex = /* glsl */ `
+  uniform float uTime;
+  uniform float uPhase;
+  uniform float uAtivo;
+  uniform float uLevel;
+  uniform float uSize;
+  uniform float uOpen;
+  uniform float uRaio;
+
+  attribute float aSeed;
+
+  varying float vAlpha;
+
+  void main() {
+    vec3 p = position;
+
+    // Oito faixas de latitude, cada uma no sentido contrário da vizinha. Em repouso
+    // quase giram juntas; trabalhando, a diferença entre elas é o "pensando".
+    float faixa = floor((p.y + 1.0) * 4.0);
+    float sentido = mod(faixa, 2.0) * 2.0 - 1.0;
+    float giro = uPhase * (0.55 + 0.45 * sentido * (0.25 + uAtivo * 0.75)) * (0.9 + aSeed * 0.2);
+    float c = cos(giro), s = sin(giro);
+    p = vec3(p.x * c - p.z * s, p.y, p.x * s + p.z * c);
+
+    // Uma inclinação fixa: de frente, os polos ficariam escondidos e a esfera
+    // viraria um disco.
+    float ci = cos(0.38), si = sin(0.38);
+    p = vec3(p.x, p.y * ci - p.z * si, p.y * si + p.z * ci);
+
+    // A voz faz a esfera respirar e cada ponto tremer; trabalhando, ela ferve um pouco.
+    float tremor = sin(uTime * (5.0 + aSeed * 7.0) + aSeed * 40.0) * (0.01 + uLevel * 0.16 + uAtivo * 0.03);
+    float deriva = sin(uTime * 0.7 + aSeed * 18.0) * 0.02;
+    float raio = uRaio * (1.0 + uLevel * 0.14 + tremor + deriva);
+
+    // A partida: acende de dentro para fora. Desligado, só um miolo fica aceso.
+    float acende = clamp((uOpen - aSeed * 0.55) / 0.5, 0.0, 1.0);
+    p *= raio * mix(0.35, 1.0, acende);
+
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    gl_Position = projectionMatrix * mv;
+
+    // A metade de trás mais apagada, e a borda mais acesa: é o que faz uma nuvem de
+    // pontos espaçados por igual ler como esfera, e não como um disco chapado.
+    float z = p.z / max(raio, 0.001);
+    float fundo = clamp(0.5 - z * 0.5, 0.0, 1.0);
+    float borda = pow(1.0 - min(abs(z), 1.0), 3.0);
+    vAlpha = mix(0.95, 0.22, fundo) * (0.5 + borda * 0.9) * (0.55 + uLevel * 0.45) * mix(0.35, 1.0, acende);
+    gl_PointSize = uSize * (1.0 + uLevel * 0.5) * (13.0 / -mv.z);
+  }
+`
+
+/** Pontos na esfera de Fibonacci: espaçados por igual, sem polos amontoados. */
+export function pontosDoEnxame(quantos: number, aleatorio: () => number = Math.random) {
+  const positions = new Float32Array(quantos * 3)
+  const seeds = new Float32Array(quantos)
+  const ouro = Math.PI * (3 - Math.sqrt(5))
+  for (let i = 0; i < quantos; i++) {
+    const y = 1 - ((i + 0.5) / quantos) * 2
+    const r = Math.sqrt(1 - y * y)
+    const a = i * ouro
+    positions[i * 3] = Math.cos(a) * r
+    positions[i * 3 + 1] = y
+    positions[i * 3 + 2] = Math.sin(a) * r
+    seeds[i] = aleatorio()
+  }
+  return { positions, seeds }
+}

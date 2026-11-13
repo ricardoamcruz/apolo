@@ -109,6 +109,8 @@ function Tela() {
         aoFalhar: (mensagem) => concluir.current(mensagem),
         aoCredencial: (id, sessao, erro) => popups.current?.credencial(id, sessao, erro),
         aoMedir: (nome, ms, info) => telemetria.current?.registrar(nome, ms, info),
+        // O estado do autodev e da Fênix, e as respostas: tudo para a voz decidir.
+        aoCore: (quadro) => popups.current?.doCore(quadro),
       }),
     [],
   )
@@ -203,6 +205,14 @@ function Tela() {
     if (mensagem.cancelar) {
       canal.interromper()
       concluirTarefa('O Ricardo cancelou a tarefa.')
+    }
+    if (mensagem.core && !canal.pedirAoCore(mensagem.core)) {
+      popups.current?.doCore({
+        type: mensagem.core.tipo,
+        resposta: mensagem.core.id,
+        ok: false,
+        mensagem: 'O computador não está conectado.',
+      })
     }
     if (mensagem.tarefa) {
       tarefa.current = mensagem.tarefa

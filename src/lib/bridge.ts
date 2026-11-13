@@ -407,6 +407,18 @@ export function ouvirExtensao(extensao: string, ouvir: (dados: unknown) => void)
   return () => void ouvintesDeExtensao.delete(extensao)
 }
 
+/**
+ * Um passo da conexão de voz para o log da ponte. Guarda os últimos enquanto a
+ * ponte não está conectada: a voz liga junto com ela, na partida.
+ */
+const vozPendente: string[] = []
+export function registrarVoz(texto: string) {
+  vozPendente.push(texto.slice(0, 300))
+  if (vozPendente.length > 40) vozPendente.shift()
+  if (socket?.readyState !== WebSocket.OPEN) return
+  for (const t of vozPendente.splice(0)) socket.send(JSON.stringify({ type: 'voz_log', texto: t }))
+}
+
 export function enviarExtensao(extensao: string, dados: unknown) {
   if (socket?.readyState !== WebSocket.OPEN) return false
   socket.send(JSON.stringify({ type: 'extensao', extensao, dados }))
@@ -450,6 +462,7 @@ function connect(): Promise<WebSocket> {
       settle(null)
       onConnection?.(everConnected ? 'reconnected' : 'open')
       everConnected = true
+      if (vozPendente.length) registrarVoz(vozPendente.pop() as string)
     }
     ws.onerror = () => {
       /**

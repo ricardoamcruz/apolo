@@ -25,7 +25,12 @@ export type ControleDePopups = {
   desligarVoz: () => void
   credencial: (id: string, sessao: unknown, erro?: string) => void
   fimDaTarefa: (id: string, texto: string) => void
+  /** O que o core mandou à voz: a resposta de um pedido ou o estado (docs/adr/0030). */
+  doCore: (mensagem: unknown) => void
 }
+
+/** Um pedido da voz ao core: autodesenvolvimento ou Fênix. Veja src/lib/voz/celular.ts. */
+export type PedidoAoCore = { id: string; tipo: 'autodev' | 'fenix'; acao: string } & Record<string, unknown>
 
 /** O que a página manda ao app. Veja src/lib/voz/celular.ts. */
 export type MensagemDaPagina = {
@@ -39,6 +44,7 @@ export type MensagemDaPagina = {
   tarefa?: string
   pedido?: string
   cancelar?: boolean
+  core?: PedidoAoCore
 }
 
 type Props = {
@@ -96,6 +102,7 @@ export const Popups = forwardRef<ControleDePopups, Props>(function Popups(
     desligarVoz: () => chamar('apoloVoz.desligar'),
     credencial: (id, sessao, erro) => chamar('apoloVoz.credencial', id, sessao, erro),
     fimDaTarefa: (id, texto) => chamar('apoloVoz.fimDaTarefa', id, texto),
+    doCore: (mensagem) => chamar('apoloVoz.doCore', mensagem),
   }))
 
   return (

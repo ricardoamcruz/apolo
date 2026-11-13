@@ -202,8 +202,13 @@ async function ociosoCom(tipo, id) {
   })
 }
 
+/**
+ * A versão no ar quando nada está em teste: a main até a primeira aprovação, e
+ * depois a branch que ela criou, que segue no ar (docs/adr/0031).
+ */
+let noAr = 'main'
 function naVersaoSegura() {
-  assert.equal(branchAtual(), 'main')
+  assert.equal(branchAtual(), noAr)
   assert.equal(autodevs(), '')
   assert.equal(existsSync(join(pastaDaFenix, 'transicao.json')), false)
   assert.equal(git('worktree', 'list').split('\n').length, 1)
@@ -221,7 +226,7 @@ const cenarios = {
     assert.match(e.resultado.mensagem, /tipos/)
     naVersaoSegura()
   },
-  async 'aprovar gera fase-x.x/nome e volta à main'() {
+  async 'aprovar a partir da main gera fase-x.x/nome, que segue no ar'() {
     await pedir('alteracao simples')
     await naFase('testando')
     assert.match(branchAtual(), /^autodev\//)
@@ -229,9 +234,11 @@ const cenarios = {
     const e = await ociosoCom('aprovado')
     assert.match(e.resultado.branch, /^fase-\d+(\.\d+)?\/teste-e2e$/)
     assert.equal(git('log', '-1', '--format=%s', e.resultado.branch), 'Altera a tela no teste de ponta a ponta')
+    // Daqui em diante, os pedidos partem dela, e cada aprovação soma um commit.
+    noAr = e.resultado.branch
     naVersaoSegura()
   },
-  async 'descartar volta à main e apaga a alteração'() {
+  async 'descartar volta à versão de antes e apaga a alteração'() {
     await pedir('alteracao simples')
     await naFase('testando')
     await acao('reverter')
@@ -254,7 +261,7 @@ const cenarios = {
     assert.ok((await saude()).ok)
     naVersaoSegura()
   },
-  async 'npm start sem aprovação volta à main'() {
+  async 'npm start sem aprovação volta à versão de antes'() {
     await pedir('alteracao simples')
     await naFase('testando')
     await descer('SIGKILL')
@@ -263,7 +270,7 @@ const cenarios = {
     await ate('voltar à main', async () => branchAtual() === 'main' && autodevs() === '')
     naVersaoSegura()
   },
-  async 'npm run rollback volta direto à main'() {
+  async 'npm run rollback volta direto à versão de antes'() {
     await pedir('alteracao simples')
     await naFase('testando')
     await descer()

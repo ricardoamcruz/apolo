@@ -224,6 +224,23 @@ export function criarServicos({
     return { ok: true, interfaces: clientes }
   }
 
+  /**
+   * A voz que a ponte relata em /health (a interface conta a ela se a conexão
+   * com o provedor ligou). Por enquanto só registra quando muda: é o que falta
+   * para ver por que o C.O.R.E. ficou mudo com tudo de pé.
+   */
+  function registrarVoz(e, voz) {
+    if (!voz || typeof voz.estado !== 'string') return
+    const chave = `${voz.estado}:${voz.falhas ?? 0}`
+    if (e.vozVista === chave) return
+    e.vozVista = chave
+    if (voz.estado === 'falhando') {
+      log(`[fenix] ${e.def.nome}: voz falhando (${voz.falhas} tentativa(s) seguida(s)): ${voz.ultimo ?? ''}`)
+    } else {
+      log(`[fenix] ${e.def.nome}: voz ${voz.estado}`)
+    }
+  }
+
   async function vigiar() {
     while (!encerrando) {
       await dormir(intervaloMs)
@@ -236,12 +253,15 @@ export function criarServicos({
         const r = await saude(e.def.nome)
         if (!e.filho || pausado(e.def.nome)) continue
         if (r.ok) {
+          if (e.falhas) log(`[fenix] ${e.def.nome} voltou a responder depois de ${e.falhas} checagem(ns) sem resposta`)
           e.falhas = 0
           if (e.status !== 'ligado') mudar(e, 'ligado')
+          registrarVoz(e, r.dados?.voz)
           continue
         }
         // Subindo ainda não é travado: o Vite leva um tempo na primeira vez.
         if (e.status === 'subindo' && Date.now() - e.ligadoEm < subidaMs) continue
+        log(`[fenix] ${e.def.nome} não respondeu à saúde (${e.falhas + 1}/${FALHAS_SEGUIDAS}): ${r.motivo}`)
         if (++e.falhas < FALHAS_SEGUIDAS) continue
         log(`[fenix] ${e.def.nome} parou de responder (${r.motivo}); derrubando para subir de novo`)
         e.filho.travou = true
@@ -277,10 +297,13 @@ export function criarServicos({
     const r = vivo && e.def.saude ? await saude(e.def.nome) : { ok: vivo, motivo: 'o processo sumiu' }
     if (!e.adotado) return
     if (r.ok) {
+      if (e.falhas) log(`[fenix] ${e.def.nome} voltou a responder depois de ${e.falhas} checagem(ns) sem resposta`)
       e.falhas = 0
       if (e.status !== 'ligado') mudar(e, 'ligado')
+      registrarVoz(e, r.dados?.voz)
       return
     }
+    if (vivo) log(`[fenix] ${e.def.nome} não respondeu à saúde (${e.falhas + 1}/${FALHAS_SEGUIDAS}): ${r.motivo}`)
     if (vivo && ++e.falhas < FALHAS_SEGUIDAS) return
     const motivo = vivo ? 'parou de responder' : 'saiu'
     log(`[fenix] ${e.def.nome} (adotado, processo ${e.adotado}) ${motivo}; subindo um novo`)

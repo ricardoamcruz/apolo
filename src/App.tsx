@@ -28,9 +28,11 @@ import {
   fenix,
   bomDia,
   bridgeServers,
+  registrarVoz,
   type FenixResposta,
 } from './lib/bridge'
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
+import { registrarDestinoDaVoz } from './lib/voz/types'
 import { startAnalyser, micLevel, retomarAnalyser } from './lib/audio'
 import { foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/autodev'
 import { lerParametros, textoDaFenix } from './lib/fenix'
@@ -43,6 +45,9 @@ import { chamadaDisponivel, deuBomDia, ouvirNome } from './lib/chamada'
 import { sistemasAgora } from './lib/estadoDosSistemas'
 import { resumoSistemas } from './lib/sistemas'
 import { handleBrowser } from './lib/navegador'
+
+// Os passos da conexão de voz também vão para o log da ponte.
+registrarDestinoDaVoz(registrarVoz)
 
 /**
  * A conversa, agora em speech-to-speech (docs/adr/0009).

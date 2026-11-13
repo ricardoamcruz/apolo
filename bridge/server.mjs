@@ -129,6 +129,35 @@ const IGNORADOS = new Set(
     .filter(Boolean),
 )
 
+/**
+ * A voz do PC como a interface relatou: só ela vê a conexão com o provedor.
+ * `falhas` conta as tentativas seguidas que não ligaram; a F.Ê.N.I.X. lê isto
+ * em /health e registra quando muda.
+ */
+const vozDoPc = { estado: 'sem relato', falhas: 0, desde: Date.now(), ultimo: '' }
+// Uma tentativa vai do pedido da sessão à confirmação ou à primeira falha:
+// o tempo esgotado e o fechamento que vem depois dele contam uma vez só.
+let tentativaContada = false
+function registrarEstadoDaVoz(texto) {
+  const antes = vozDoPc.estado
+  if (texto.startsWith('abrindo a conexão') || texto.startsWith('pedindo a sessão')) {
+    tentativaContada = false
+    return
+  }
+  if (texto.startsWith('sessão confirmada')) {
+    vozDoPc.estado = 'ligada'
+    vozDoPc.falhas = 0
+    tentativaContada = true
+  } else if (/^(o Google não confirmou|a ponte não entregou|conexão fechada)/.test(texto)) {
+    if (tentativaContada) return
+    tentativaContada = true
+    vozDoPc.estado = 'falhando'
+    vozDoPc.falhas++
+  } else return
+  vozDoPc.ultimo = texto
+  if (vozDoPc.estado !== antes) vozDoPc.desde = Date.now()
+}
+
 function configuredServers() {
   try {
     const cfg = JSON.parse(
@@ -603,6 +632,7 @@ const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
   }
 
   if (req.method === 'GET' && req.url === '/health') {
+    // `voz`: o que a interface do PC relatou da conexão de voz (registrarEstadoDaVoz).
     res.writeHead(200, { ...cors, 'content-type': 'application/json' })
     return res.end(
       JSON.stringify({
@@ -612,6 +642,7 @@ const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
         modelo: realtimeModel(),
         // A F.Ê.N.I.X. usa isto para saber se a interface voltou depois de uma troca.
         interfaces: interfacesDoPc.size,
+        voz: { ...vozDoPc },
       }),
     )
   }
@@ -619,8 +650,16 @@ const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
   // A chave temporária da sessão de voz. O navegador abre a conexão WebRTC
   // direto com a OpenAI usando ela; a chave permanente nunca sai daqui.
   if (req.method === 'POST' && req.url === '/realtime/sessao') {
+    const inicio = Date.now()
     try {
       const session = await createRealtimeSession()
+      // Sem a chave: só o que ajuda a ver por que a voz não ligou no navegador.
+      const ferramentas = session.setup?.tools?.[0]?.functionDeclarations?.length ?? 0
+      const tamanho = session.setup ? JSON.stringify(session.setup).length : 0
+      console.log(
+        `[apolo] voz: sessão entregue em ${Date.now() - inicio} ms (${session.provider ?? 'openai'}, ` +
+          `${session.model}, configuração ${tamanho} bytes, ${ferramentas} ferramentas)`,
+      )
       res.writeHead(200, { ...cors, 'content-type': 'application/json', 'cache-control': 'no-store' })
       return res.end(JSON.stringify(session))
     } catch (err) {
@@ -1015,6 +1054,14 @@ console.log(
     : `[apolo] voz em tempo real DESLIGADA — falta a chave ${voiceProvider() === 'gemini' ? 'GEMINI_API_KEY' : 'OPENAI_API_KEY'} no .env.local`,
 )
 console.log(`[apolo] agente de tarefas: ${MODEL} · esforço ${EFFORT}`)
+// Só os nomes: mostra se o ambiente em que a ponte subiu tem o que a voz lê.
+console.log(
+  `[apolo] ambiente: ${Object.keys(process.env).length} variáveis; da voz e do A.P.O.L.O.: ` +
+    (Object.keys(process.env)
+      .filter((n) => /^(APOLO_|JARVIS_|GEMINI_|GOOGLE_|OPENAI_)/.test(n))
+      .sort()
+      .join(' ') || 'nenhuma'),
+)
 console.log(
   `[apolo] autodesenvolvimento ${autodev.estado().ligado ? 'LIGADO' : 'desligado — use npm start -- --autodev'}`,
 )
@@ -1498,7 +1545,9 @@ const atender = (socket, { celular = false } = {}) => {
 
     // Os passos da conexão de voz do navegador, que só ele vê (src/lib/voz/types.ts).
     if (msg.type === 'voz_log' && !celular && typeof msg.texto === 'string') {
-      return console.log(`[apolo] voz: ${msg.texto.replace(/[\u0000-\u001f]+/g, ' ').slice(0, 300)}`)
+      const texto = msg.texto.replace(/[\u0000-\u001f]+/g, ' ').slice(0, 300)
+      registrarEstadoDaVoz(texto)
+      return console.log(`[apolo] voz: ${texto}`)
     }
 
     if (msg.type === 'preferencias') {

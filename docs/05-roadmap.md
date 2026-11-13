@@ -21,8 +21,8 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [x] Revogar a senha de app da Microsoft, que não funciona, e apagar `APOLO_OUTLOOK_SENHA_APP` do `.env.local` (12/11/2026: revogada pelo Ricardo e apagada)
 
 ### Etapa 2 — Identidade visual inspirada em Horizon (ADR 0013)
-- [ ] Página de comparação com 2 ou 3 paletas (ciano atual × âmbar sobre azul profundo) e propostas de núcleo 3D original; **a escolha é do Ricardo**
-- [ ] Implementar a paleta e o núcleo escolhidos
+- [x] Página de comparação com 2 ou 3 paletas (ciano atual × âmbar sobre azul profundo) e propostas de núcleo 3D original; **a escolha é do Ricardo** (12/11/2026: ciano, núcleo Enxame, marca Lira e ícones dos módulos; ADR 0013 revisada)
+- [x] Implementar a paleta e o núcleo escolhidos (12/11/2026; os ícones no app do iPhone esperam uma biblioteca de SVG)
 - [ ] Trazer as fontes para o repositório e fechar o CSP de fontes
 
 ### Etapa 3 — Contexto e comunicação

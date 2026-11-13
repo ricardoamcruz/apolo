@@ -12,6 +12,7 @@ import { Fenix } from './Fenix'
 import { Tocador } from './Tocador'
 import { Sistemas } from './Sistemas'
 import { chamadaDisponivel } from '../lib/chamada'
+import { Lira } from './icones'
 
 const statusText: Record<Phase, string> = {
   offline: 'DESCONECTADO',
@@ -200,7 +201,10 @@ export function Hud() {
       <header className="hud-top">
         {ui.chrome.brand && (
           <div className="brand">
-            <span className="brand-mark">A.P.O.L.O.</span>
+            <span className="brand-mark">
+              <Lira className="brand-icone" />
+              A.P.O.L.O.
+            </span>
           </div>
         )}
 

@@ -9,7 +9,8 @@ import {
 } from '@react-three/postprocessing'
 import { BlendFunction } from 'postprocessing'
 import * as THREE from 'three'
-import { Core } from './Core'
+import { Core, ESTILO_ENXAME } from './Core'
+import { Enxame } from './Enxame'
 import { Particles } from './Particles'
 import { Orbits } from './Orbits'
 import { useStore, phaseColor, accentFor, atividadeAtual, faseNaTela, type Phase } from '../store'
@@ -91,7 +92,7 @@ export type Drive = {
     intensity: number
     /** Multiplier on the ring's own rotation rate. */
     spin: number
-    /** 0 ring, 1 sphere, 2 wire — a number because it ends up in a uniform. */
+    /** 0 ring, 1 sphere, 2 wire (o Core), 3 enxame (o padrão) — a number because it ends up in a uniform. */
     style: number
     visible: boolean
   }
@@ -115,7 +116,7 @@ function aim(tint: Tint, css: string): THREE.Color {
   return tint.color
 }
 
-const STYLE_INDEX = { ring: 0, sphere: 1, wire: 2 } as const
+const STYLE_INDEX = { ring: 0, sphere: 1, wire: 2, enxame: ESTILO_ENXAME } as const
 
 function Rig() {
   const drive = useMemo<Drive>(
@@ -133,7 +134,7 @@ function Rig() {
         scale: 1,
         intensity: 1,
         spin: 1,
-        style: STYLE_INDEX.ring,
+        style: STYLE_INDEX.enxame,
         visible: true,
       },
     }),
@@ -170,7 +171,7 @@ function Rig() {
     drive.reactor.scale += (r.scale - drive.reactor.scale) * k
     drive.reactor.intensity += (r.intensity - drive.reactor.intensity) * k
     drive.reactor.spin += (r.spin - drive.reactor.spin) * k
-    drive.reactor.style = STYLE_INDEX[r.style] ?? STYLE_INDEX.ring
+    drive.reactor.style = STYLE_INDEX[r.style] ?? STYLE_INDEX.enxame
     drive.reactor.visible = r.visible
 
     drive.spin += (spinFor[phase] - drive.spin) * Math.min(1, dt * 2)
@@ -210,6 +211,7 @@ function Rig() {
   return (
     <>
       <Core drive={drive} />
+      <Enxame drive={drive} />
       <Particles drive={drive} />
       <Orbits />
     </>

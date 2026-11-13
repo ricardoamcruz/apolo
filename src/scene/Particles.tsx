@@ -2,6 +2,7 @@ import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Drive } from './Scene'
+import { ESTILO_ENXAME } from './Core'
 import { particlesFragment, particlesVertex } from './shaders'
 
 /**
@@ -51,7 +52,8 @@ export function Particles({ drive }: { drive: Drive }) {
     if (!mat.current || !pts.current) return
     const u = mat.current.uniforms
     pts.current.visible = drive.reactor.visible
-    u.uIntensity.value = drive.reactor.intensity
+    // Com o Enxame, o núcleo também é feito de pontos: a poeira recua para não disputar com ele.
+    u.uIntensity.value = drive.reactor.intensity * (drive.reactor.style === ESTILO_ENXAME ? 0.45 : 1)
     // Acumulado, não o relógio: é assim que as órbitas param em espera e retomam
     // de onde estavam, sem um salto.
     u.uTime.value += dt * (1 - drive.standby)

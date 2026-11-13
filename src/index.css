@@ -106,7 +106,9 @@ body::after {
 }
 
 .brand-mark {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
   font-size: 19px;
   font-weight: 600;
   letter-spacing: 0.42em;
@@ -168,6 +170,27 @@ body::after {
   opacity: 0.82;
 }
 .rail-item.dim { opacity: 0.3; }
+
+/* A marca (a Lira) e os ícones dos sistemas: traço em currentColor, na cor do estado. */
+.brand-icone {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+  color: var(--accent);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 60%, transparent));
+}
+
+.rail-icone {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--accent);
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+.rail-sistema.degradado .rail-icone {
+  color: var(--alerta);
+  filter: drop-shadow(0 0 5px var(--alerta));
+}
 
 .tick {
   width: 5px;

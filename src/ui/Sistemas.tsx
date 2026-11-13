@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { accentFor, atividadeAtual, useStore } from '../store'
 import { contrastante, corEmHex } from '../lib/cor'
 import { sistemasAgora } from '../lib/estadoDosSistemas'
+import { IconeDoSistema } from './icones'
 
 /**
  * A aba SISTEMAS. Só existe quando pedida: pela tecla D ou por voz.
@@ -31,7 +32,8 @@ export function Sistemas() {
       {sistemasAgora().map((s) => (
         <div key={s.id} className={s.degradado ? 'rail-sistema degradado' : 'rail-sistema'}>
           <div className="rail-item">
-            <span className="tick" />
+            {/* Cada sistema com o seu ícone; o que não tem um (um conector novo) fica com o losango. */}
+            {IconeDoSistema({ id: s.id, className: 'rail-icone' }) ?? <span className="tick" />}
             {s.nome}
           </div>
           {s.problemas.map((p) => (

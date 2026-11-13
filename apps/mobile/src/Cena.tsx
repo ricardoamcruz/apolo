@@ -2,12 +2,7 @@ import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { AppState, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl'
 import * as THREE from 'three'
-import {
-  coreFragment,
-  coreVertex,
-  particlesFragment,
-  particlesOrbitVertex,
-} from '../../../src/scene/shaders'
+import { enxameVertex, particlesFragment, particlesOrbitVertex, pontosDoEnxame } from '../../../src/scene/shaders'
 import { COR_DE_FUNDO, CORES, type Fase } from './tema'
 
 /** O que a tela muda sem passar pelo React, uma vez por quadro. */
@@ -18,8 +13,7 @@ export type Motor = {
 }
 
 /**
- * Desenha com menos pontos por lado e amplia. O shader do círculo roda por
- * pixel, e em 3x seriam quase 4 milhões deles; ampliar também suaviza o traço, o
+ * Desenha com menos pontos por lado e amplia. Ampliar também suaviza o traço, o
  * que aqui faz as vezes do bloom da versão web.
  */
 const REDUCAO = 2
@@ -27,16 +21,22 @@ const REDUCAO = 2
 const INTERVALO_MS = 30
 
 const COUNT = 1800
-const HALF = 2.7
-const RING_R = 0.74
+/** O núcleo é o Enxame (ADR 0013 revisada), com menos pontos que no PC. */
+const PONTOS_DO_ENXAME = 1500
+const PONTOS_DO_MIOLO = 140
+/** O raio da esfera e do miolo em relação ao do círculo de onde a poeira parte. */
+const RAIO_RELATIVO = 0.9
+const MIOLO_RELATIVO = 0.2
+/** Em espera, o enxame encolhe para dentro do halo da poeira. */
+const ESCALA_EM_ESPERA = 0.82
 /** Fração da largura ocupada pelo círculo. */
 const FIT = 0.62
 /** O quanto o círculo sobe e desce, em unidades da cena: flutua, não treme. */
 const FLUTUACAO = 0.07
 /** A nuvem se alonga na vertical, onde a tela em pé tem espaço. */
 const ALTURA_DA_NUVEM = 1.4
-/** Quanto o círculo inteiro cresce com a voz. O shader sozinho mexe só 3% da borda. */
-const PULSO_DO_CIRCULO = 0.13
+/** Quanto o enxame inteiro cresce com a voz, além do que o shader já faz. */
+const PULSO_DO_CIRCULO = 0.06
 
 const giroPorFase: Record<Fase, number> = {
   offline: 0.08,
@@ -83,27 +83,52 @@ function criarRenderer(gl: ExpoWebGLRenderingContext) {
   return renderer
 }
 
-function criarCirculo() {
-  const material = new THREE.ShaderMaterial({
-    uniforms: {
-      uColor: { value: new THREE.Color(CORES.offline) },
-      uHot: { value: new THREE.Color('#c9fdff') },
-      uLevel: { value: 0 },
-      uPhase: { value: 0 },
-      uOpen: { value: 0 },
-      uZoom: { value: 1.2 },
-      uIntensity: { value: 1 },
-      uStyle: { value: 0 },
-    },
-    vertexShader: coreVertex,
-    fragmentShader: coreFragment,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  })
-  const malha = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 5.4), material)
-  malha.frustumCulled = false
-  return { malha, material }
+/** O Enxame: a mesma esfera de pontos do PC (src/scene/Enxame.tsx), com casca e miolo. */
+function criarEnxame(raio: number) {
+  const camada = (quantos: number, tamanho: number, fator: number) => {
+    const { positions, seeds } = pontosDoEnxame(quantos)
+    const geometria = new THREE.BufferGeometry()
+    geometria.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geometria.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1))
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uPhase: { value: 0 },
+        uAtivo: { value: 0 },
+        uLevel: { value: 0 },
+        uSize: { value: tamanho },
+        uOpen: { value: 0 },
+        uRaio: { value: raio * fator },
+        uColor: { value: new THREE.Color(CORES.offline) },
+        uIntensity: { value: 1 },
+      },
+      vertexShader: enxameVertex,
+      fragmentShader: particlesFragment,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+    const pontos = new THREE.Points(geometria, material)
+    pontos.frustumCulled = false
+    return { pontos, material }
+  }
+  const casca = camada(PONTOS_DO_ENXAME, 2.2, RAIO_RELATIVO)
+  const miolo = camada(PONTOS_DO_MIOLO, 2.8, RAIO_RELATIVO * MIOLO_RELATIVO)
+  const grupo = new THREE.Group()
+  grupo.add(casca.pontos, miolo.pontos)
+  return { grupo, camadas: [casca.material, miolo.material] as const }
+}
+
+/** O quanto ele está trabalhando, para as faixas do enxame se separarem. */
+const ativoPorFase: Record<Fase, number> = {
+  offline: 0,
+  espera: 0,
+  ocioso: 0,
+  ouvindo: 0.1,
+  processando: 0.75,
+  executando: 1,
+  codificando: 1,
+  falando: 0.15,
 }
 
 function criarParticulas(raioDoCirculo: number) {
@@ -175,10 +200,9 @@ export function Cena({ motor }: { motor: RefObject<Motor> }) {
     const menorLado = Math.min(alturaVisivel, alturaVisivel * aspecto)
     const raioDoCirculo = FIT * 0.5 * menorLado
 
-    const circulo = criarCirculo()
+    const enxame = criarEnxame(raioDoCirculo)
     const particulas = criarParticulas(raioDoCirculo)
-    cena.add(circulo.malha, particulas.pontos)
-    circulo.material.uniforms.uZoom.value = (RING_R * HALF) / raioDoCirculo
+    cena.add(enxame.grupo, particulas.pontos)
 
     const alvo = new THREE.Color()
     let quadro = 0
@@ -200,25 +224,33 @@ export function Cena({ motor }: { motor: RefObject<Motor> }) {
       const respiro = (Math.sin(relogio * 0.9) * 0.5 + 0.5) * (fase === 'offline' ? 0.02 : 0.12)
       const nivel = Math.max(motor.current.nivel, respiro)
 
-      const u = circulo.material.uniforms
       const p = particulas.material.uniforms
       alvo.set(CORES[fase])
-      u.uLevel.value += (nivel - u.uLevel.value) * Math.min(1, dt * 8)
+      const repouso = fase === 'espera' || fase === 'offline' ? 1 : 0
+      enxame.camadas.forEach((m, k) => {
+        const u = m.uniforms
+        u.uLevel.value += (nivel - u.uLevel.value) * Math.min(1, dt * 8)
+        u.uAtivo.value += (ativoPorFase[fase] - u.uAtivo.value) * Math.min(1, dt * 2)
+        // O miolo gira ao contrário e mais rápido, como no PC.
+        u.uPhase.value += dt * (0.35 + u.uLevel.value * 0.6) * giroPorFase[fase] * (k ? -2.2 : 1)
+        u.uTime.value = relogio
+        const abertura = fase === 'offline' ? 0.28 : 1.6
+        u.uOpen.value += (abertura - u.uOpen.value) * Math.min(1, dt * 1.6)
+        u.uColor.value.lerp(alvo, Math.min(1, dt * 2.5))
+      })
       p.uLevel.value += (nivel - p.uLevel.value) * Math.min(1, dt * 9)
-      u.uPhase.value += dt * (0.5 + u.uLevel.value * 2.2) * giroPorFase[fase]
       p.uTime.value = relogio
       // Acumulado, como uPhase: mudar de fase muda a velocidade, sem salto na posição.
       p.uSpin.value += dt * (orbitaPorFase[fase] + p.uLevel.value * 0.9)
-      const repouso = fase === 'espera' || fase === 'offline' ? 1 : 0
       p.uStandby.value += (repouso - p.uStandby.value) * Math.min(1, dt * 1.8)
-      circulo.malha.scale.setScalar(1 + u.uLevel.value * PULSO_DO_CIRCULO)
-      const abertura = fase === 'offline' ? 0.7 : 1.6
-      u.uOpen.value += (abertura - u.uOpen.value) * Math.min(1, dt * 1.6)
-      u.uColor.value.lerp(alvo, Math.min(1, dt * 2.5))
+      const nivelDoEnxame = enxame.camadas[0].uniforms.uLevel.value
+      enxame.grupo.scale.setScalar(
+        THREE.MathUtils.lerp(1, ESCALA_EM_ESPERA, p.uStandby.value) * (1 + nivelDoEnxame * PULSO_DO_CIRCULO),
+      )
       p.uColor.value.lerp(alvo, Math.min(1, dt * 3))
 
       const flutuacao = Math.sin(relogio * 0.7) * FLUTUACAO
-      circulo.malha.position.y = flutuacao
+      enxame.grupo.position.y = flutuacao
       particulas.pontos.position.y = flutuacao
 
       camera.position.x = Math.sin(relogio * 0.13) * 0.08

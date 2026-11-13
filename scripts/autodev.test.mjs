@@ -14,7 +14,7 @@ import {
   leituraPermitida,
 } from '../bridge/autodev/politica.mjs'
 import { branchValida, lerEntrega, nomeLivre, pedidoVago } from '../bridge/autodev/entrega.mjs'
-import { criarAutodev } from '../bridge/autodev/index.mjs'
+import { criarAutodev, textoDaRevisao } from '../bridge/autodev/index.mjs'
 import { historicoDeBranches, proximaFase } from '../bridge/branches.mjs'
 import { foraDeHora, ouviuConfirmacao, pareceConfirmacao, registrarFala } from '../src/lib/autodev.ts'
 
@@ -394,9 +394,19 @@ test('arquivo sensível para na branch, sem checagem e sem troca', async () => {
   const e = await g.fim()
   assert.equal(e.resultado.tipo, 'revisao')
   assert.equal(e.resultado.branch, 'fase-2/dependencia')
+  // Quem lê a mensagem sabe primeiro que nada mudou na tela, e por quê.
+  assert.match(e.resultado.mensagem, /^A alteração NÃO foi ao ar\. Ela toca arquivos sensíveis \(package\.json\)/)
+  assert.match(e.resultado.mensagem, /fase-2\/dependencia/)
   assert.equal(checou, false)
   assert.equal(g.pedidos.length, 0)
   assert.equal(autodevs(r), '')
+})
+
+test('o aviso de revisão vem antes do resumo do agente', () => {
+  const t = textoDaRevisao('Motivo.', 'fase-3/x', 'Pronto, removi o ícone.')
+  assert.ok(t.indexOf('NÃO foi ao ar') < t.indexOf('Pronto'))
+  assert.match(t, /fase-3\/x/)
+  assert.equal(textoDaRevisao('Motivo.', 'fase-3/x', ''), 'A alteração NÃO foi ao ar. Motivo. Ficou guardada na branch fase-3/x.')
 })
 
 test('checagem reprovada não troca nada', async () => {

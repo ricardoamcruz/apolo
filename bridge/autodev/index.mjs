@@ -81,6 +81,15 @@ async function ponteSobe(pasta) {
 }
 
 /**
+ * O texto de uma alteração estacionada: primeiro que ela não está no ar e onde
+ * ficou, depois o que o agente fez.
+ */
+export function textoDaRevisao(motivo, branch, resumo) {
+  const inicio = `A alteração NÃO foi ao ar. ${motivo} Ficou guardada na branch ${branch}.`
+  return resumo ? `${inicio}\n\nO que foi feito: ${resumo}` : inicio
+}
+
+/**
  * As checagens antes de trocar a versão.
  *
  * Chamadas direto, sem `npm run`: package.json é sensível, mas é melhor não
@@ -284,20 +293,22 @@ export function criarAutodev({
 
     // Código sensível não roda antes de alguém ler, nem nas checagens. Vai
     // direto para a branch definitiva: não há o que testar aqui.
+    // O aviso vem antes do resumo do agente: o resumo diz "pronto" e, lido
+    // primeiro, faz parecer que a alteração já está na tela.
     const guardar = async (motivo, extra = {}) => {
       const final = await nomeDaBranch(entrega.branch)
       await git(repo, 'branch', final, sha)
-      return ['revisao', `${entrega.resumo} ${motivo}`, { branch: final, ...extra }]
+      return ['revisao', textoDaRevisao(motivo, final, entrega.resumo), { branch: final, ...extra }]
     }
     if (sensiveis.length) {
-      return guardar('A alteração toca arquivos sensíveis e aguarda revisão na branch.', { sensiveis })
+      return guardar(`Ela toca arquivos sensíveis (${sensiveis.join(', ')}) e precisa da revisão do Ricardo.`, { sensiveis })
     }
 
     mudar({ fase: 'verificando', etapa: 'lint, tipos, build e partida' })
     const v = await verificar(copia)
     if (!v.ok) return ['falhou', `As checagens recusaram a alteração. ${v.motivo}`]
 
-    if (!supervisor) return guardar('Sem a Fênix (npm start), ela ficou na branch.')
+    if (!supervisor) return guardar('A F.Ê.N.I.X. não está rodando (npm start) para pô-la no ar.')
 
     await encerrarCopia()
     await git(repo, 'branch', branch, sha)

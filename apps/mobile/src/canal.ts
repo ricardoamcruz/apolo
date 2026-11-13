@@ -130,7 +130,8 @@ export class Canal {
     this.socket = null
     if (socket) {
       socket.onclose = null
-      socket.onerror = null
+      // Fechar um socket que ainda conecta gera um erro; sem tratador, ele escapa.
+      socket.onerror = () => {}
       socket.onmessage = null
       socket.close()
     }
@@ -223,7 +224,7 @@ export class Canal {
     }
     this.pararPulso()
     socket.onclose = null
-    socket.onerror = null
+    socket.onerror = () => {}
     socket.onmessage = null
     socket.close()
     if (this.pendente) {

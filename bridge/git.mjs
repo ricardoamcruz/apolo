@@ -89,6 +89,12 @@ async function prPeloGh({ repo, branch, titulo, corpo }) {
     return { ok: true, url }
   } catch (err) {
     if (err.code === 'ENOENT') return { ok: false, semGh: true }
+    // Uma branch de trabalho ganha commits aos poucos (docs/adr/0031): o PR dela já
+    // existe, e o push acima já o atualizou.
+    const saida = String(err.stderr || err.stdout || '')
+    if (/already exists/i.test(saida)) {
+      return { ok: true, existente: true, url: saida.match(/https:\/\/\S+/)?.[0] ?? '' }
+    }
     return { ok: false, motivo: ultimasLinhas(err.stderr || err.stdout || err.message) }
   }
 }
@@ -318,6 +324,12 @@ export function criarGit({ repo, ocupado = () => null, criarPr = prPeloGh }) {
       (await git(['log', '--format=- %s', `${BASE}..${alvo}`]))
 
     const pr = await criarPr({ repo, branch: alvo, titulo, corpo })
+    if (pr.ok && pr.existente) {
+      return {
+        ok: true,
+        texto: `A ${alvo} foi enviada, e o pull request dela para a ${BASE}, que já existia, agora inclui os commits novos${pr.url ? `: ${pr.url}` : ''}. O merge é revisão do Ricardo.${sobrou}`,
+      }
+    }
     if (pr.ok) {
       return {
         ok: true,

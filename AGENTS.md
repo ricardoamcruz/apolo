@@ -165,10 +165,13 @@ detalhe está em `docs/`.
   `--autoplay-policy=no-user-gesture-required`; fora dela, o tocador pede o clique.
 - **Autodesenvolvimento (ADR 0011 e 0015):** com `npm start -- --autodev`, o
   A.P.O.L.O. altera o próprio código por voz ou chat, com confirmação, numa
-  worktree em `~/.apolo/autodev`, sempre a partir da `main`. Depois das checagens,
-  reinicia no código novo e fica **em teste, sem prazo**: aprovar guarda em
-  `fase-x.x/nome` e volta à `main`; descartar, uma queda ou um `npm start` sem
-  aprovação voltam à `main` e apagam a branch. `autodev/<id>` só existe durante o
+  worktree em `~/.apolo/autodev`, **a partir da versão no ar** (a `main` ou uma
+  branch de fase, ADR 0031). Depois das checagens, reinicia no código novo e fica
+  **em teste, sem prazo**: aprovar vira **um commit da branch de trabalho, que
+  segue no ar** (a própria branch de fase; partindo da `main`, uma `fase-x.y/nome`
+  nova), e o próximo pedido soma outro commit; descartar, uma queda ou um
+  `npm start` sem aprovação voltam à versão de onde ela partiu e apagam a branch
+  de teste. A `main` nunca recebe commit direto: só pull request. `autodev/<id>` só existe durante o
   teste. O VS Code é opcional (`APOLO_AUTODEV_VSCODE=1`) e fecha sozinho. Arquivos
   sensíveis (`bridge/autodev/politica.mjs`) nunca entram em teste sem revisão.
   A conferência roda lint, tipos, build e `npm test`; ao aprovar, ele oferece o PR

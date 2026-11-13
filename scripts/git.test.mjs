@@ -138,6 +138,17 @@ test('pull request empurra a branch e devolve o endereço', async () => {
   )
 })
 
+test('branch que já tem pull request: o push atualiza, e a resposta diz isso (ADR 0031)', async () => {
+  const r = repositorio()
+  origem(r)
+  sujar(r)
+  await montar(r).commit({ message: 'v2', branch: 'apolo/8' })
+  const g = montar(r, { criarPr: async () => ({ ok: true, existente: true, url: 'https://github.com/x/pull/9' }) })
+  const pr = await g.pullRequest({ title: 'Mais um ajuste' })
+  assert.equal(pr.ok, true)
+  assert.match(pr.texto, /já existia, agora inclui os commits novos: https:\/\/github.com\/x\/pull\/9/)
+})
+
 test('sem GitHub CLI, a branch vai e o pull request fica para a mão', async () => {
   const r = repositorio()
   origem(r)

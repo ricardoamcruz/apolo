@@ -5,10 +5,15 @@
  *   proposto → trabalhando → verificando → aplicando → testando → resultado
  *
  * Nada acontece na cópia em execução. O agente trabalha numa worktree separada,
- * a partir da main; a ponte confere o resultado e só então pede à F.Ê.N.I.X.
- * (fenix/, docs/adr/0025) para colocá-lo em teste. O Ricardo aprova ou descarta,
- * e se quebrar ela volta sozinha (docs/adr/0015). A ponte nunca é quem faz a
- * troca: ela é o que está sendo trocado.
+ * a partir da versão que está no ar; a ponte confere o resultado e só então pede
+ * à F.Ê.N.I.X. (fenix/, docs/adr/0025) para colocá-lo em teste. O Ricardo aprova
+ * ou descarta, e se quebrar ela volta sozinha (docs/adr/0015). A ponte nunca é
+ * quem faz a troca: ela é o que está sendo trocado.
+ *
+ * Um commit por alteração aprovada (docs/adr/0031): partindo de uma branch de
+ * fase, o commit entra nela; partindo da main, nasce uma fase-x.y/nome. Nos dois
+ * casos é ela que segue no ar, e o próximo pedido parte dali. A main só recebe
+ * trabalho por pull request.
  */
 
 import { execFile, spawn } from 'node:child_process'
@@ -21,7 +26,7 @@ import { BASE, PASTA_AUTODEV, classificar, gateIntacto } from './politica.mjs'
 import { rodarAgente } from './agente.mjs'
 import { abrirEditor as abrirEditorPadrao, fecharEditor as fecharEditorPadrao } from './editor.mjs'
 import { historicoDeBranches, proximaFase } from '../branches.mjs'
-import { lerEntrega, nomeLivre, pedidoVago } from './entrega.mjs'
+import { branchValida, lerEntrega, nomeLivre, pedidoVago } from './entrega.mjs'
 
 const exec = promisify(execFile)
 
@@ -319,23 +324,32 @@ export function criarAutodev({
     terminar(id, ...fim)
   }
 
-  /** A main local atrás do GitHub faria o trabalho partir de código velho. */
-  async function mainAtrasada() {
+  /** A branch que está no ar: é dela que o trabalho parte. Vazio num commit solto. */
+  const baseAtual = () => git(repo, 'symbolic-ref', '--short', '-q', 'HEAD').catch(() => '')
+
+  /** A base local atrás do GitHub faria o trabalho partir de código velho. */
+  async function atrasada(base) {
     try {
-      await exec('git', ['fetch', '-q', 'origin', BASE], { cwd: repo, timeout: BUSCA_MS })
-      return Number(await git(repo, 'rev-list', '--count', `${BASE}..origin/${BASE}`)) > 0
+      await exec('git', ['fetch', '-q', 'origin', base], { cwd: repo, timeout: BUSCA_MS })
+      return Number(await git(repo, 'rev-list', '--count', `${base}..origin/${base}`)) > 0
     } catch {
-      return false // sem rede ou sem origin: trabalha com o que tem
+      return false // sem rede, sem origin ou branch ainda só local: trabalha com o que tem
     }
   }
 
-  /** O que impede o trabalho de partir da main limpa; vazio se nada impede. */
+  /**
+   * O que impede o trabalho de partir da versão no ar; vazio se nada impede. Vale
+   * a main ou uma branch de fase, limpa. Uma alteração em teste não é base: ela
+   * ainda não foi aprovada.
+   */
   async function impedimento() {
-    const atual = await git(repo, 'symbolic-ref', '--short', '-q', 'HEAD').catch(() => '')
-    if (atual !== BASE) {
-      return `Estou rodando em ${atual || 'um commit solto'}. Volte à ${BASE} e reinicie: todo trabalho parte dela.`
+    const atual = await baseAtual()
+    if (!atual) return 'Estou rodando num commit solto, fora de qualquer branch. Volte a uma branch e reinicie.'
+    if (atual.startsWith('autodev/')) return 'Há uma alteração em teste no ar. Aprove ou descarte antes de pedir outra.'
+    if (atual !== BASE && !branchValida(atual)) {
+      return `Estou rodando em ${atual}, que não é a ${BASE} nem uma branch de fase (fase-x.y/nome).`
     }
-    if (await git(repo, 'status', '--porcelain')) {
+    if (await git(repo, 'status', '--porcelain', '--untracked-files=no')) {
       return 'A cópia em execução tem alterações não commitadas. Faça o commit antes.'
     }
     return ''
@@ -349,14 +363,16 @@ export function criarAutodev({
     }
     // Recusada aqui, a proposta acaba: ficar em 'proposto' deixava o botão
     // Confirmar na tela sem nada que ele pudesse fazer.
+    const base = await baseAtual()
     const motivo = (await impedimento()) ||
-      ((await mainAtrasada()) ? `A ${BASE} local está atrás do GitHub. Atualize e reinicie antes.` : '')
+      ((await atrasada(base)) ? `A ${base} local está atrás do GitHub. Atualize e reinicie antes.` : '')
     if (motivo) {
       terminar(estado.id, 'falhou', motivo)
       return { ok: false, mensagem: motivo }
     }
     controle = new AbortController()
-    mudar({ fase: 'trabalhando', etapa: 'preparando a cópia de trabalho' })
+    // A base fica no estado: é para ela que o commit vai, mesmo depois do reinício do teste.
+    mudar({ fase: 'trabalhando', etapa: 'preparando a cópia de trabalho', base })
     void trabalhar(estado.id, estado.pedido)
     return { ok: true, mensagem: 'Trabalho iniciado. Você pode continuar usando o assistente.' }
   }
@@ -421,11 +437,17 @@ export function criarAutodev({
       }
       if (acao === 'aprovar') {
         if (estado.fase !== 'testando') return { ok: false, mensagem: 'Não há alteração em teste.' }
-        const branch = await nomeDaBranch(estado.entrega.branch)
-        mudar({ fase: 'aplicando', etapa: `guardando em ${branch}`, resultado: undefined })
+        // Partiu de uma branch de fase: o commit entra nela. Partiu da main: nasce
+        // uma branch nova, porque a main só recebe trabalho por pull request.
+        const naBase = estado.base && estado.base !== BASE && branchValida(estado.base)
+        const branch = naBase ? estado.base : await nomeDaBranch(estado.entrega.branch)
+        mudar({ fase: 'aplicando', etapa: `commit em ${branch}`, resultado: undefined })
         vigiarTroca()
         supervisor({ type: 'versao:aprovar', id: estado.id, branch })
-        return { ok: true, mensagem: `Guardando na branch ${branch}.` }
+        return {
+          ok: true,
+          mensagem: naBase ? `Fazendo o commit na ${branch}, que continua no ar.` : `Criando a branch ${branch} com este commit; ela continua no ar.`,
+        }
       }
       if (acao === 'reverter') {
         if (!supervisor) return { ok: false, mensagem: 'Reverter exige a Fênix (npm start).' }

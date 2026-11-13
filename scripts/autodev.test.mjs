@@ -304,14 +304,44 @@ test('a voz não consegue transformar "confirmo" em pedido', async () => {
   assert.equal(rodou, false)
 })
 
-test('só trabalha a partir da main, sem alterações pendentes', async () => {
+test('trabalha a partir da versão no ar: a main ou uma branch de fase, limpas (ADR 0031)', async () => {
+  for (const [preparar, motivo] of [
+    [(r) => r.git('switch', '-q', '--detach'), /commit solto/],
+    [(r) => r.git('switch', '-qc', 'autodev/9'), /alteração em teste/],
+    [(r) => r.git('switch', '-qc', 'experimento'), /nem uma branch de fase/],
+    [(r) => writeFileSync(join(r.repo, 'app.txt'), 'pendente\n'), /não commitadas/],
+  ]) {
+    const r = repositorio()
+    preparar(r)
+    const g = gerente(r, { agente: edita('novo.txt') })
+    const resposta = await g.a.acao('propor', { pedido: 'criar' })
+    assert.equal(resposta.ok, false)
+    assert.match(resposta.mensagem, motivo)
+    assert.equal(g.a.estado().fase, 'ocioso')
+  }
   const r = repositorio()
   r.git('switch', '-qc', 'fase-2.2/outra')
-  const g = gerente(r, { agente: edita('novo.txt') })
-  const resposta = await g.a.acao('propor', { pedido: 'criar' })
-  assert.equal(resposta.ok, false)
-  assert.match(resposta.mensagem, /main/)
-  assert.equal(g.a.estado().fase, 'ocioso')
+  assert.equal((await gerente(r, { agente: edita('novo.txt') }).a.acao('propor', { pedido: 'criar' })).ok, true)
+})
+
+test('a partir de uma branch de fase, aprovar manda o commit para ela mesma', async () => {
+  const r = repositorio()
+  r.git('switch', '-qc', 'fase-2.9/trabalho')
+  const agente = async ({ pasta }) => {
+    writeFileSync(join(pasta, 'novo.txt'), 'novo\n')
+    return { ok: true, texto: 'Ajustei.\nBRANCH: ajuste\nCOMMIT: Ajusta o ícone' }
+  }
+  const g = gerente(r, { agente })
+  await g.a.acao('propor', { pedido: 'trocar o ícone do cabeçalho' })
+  await g.a.acao('confirmar')
+  assert.equal((await g.fim()).fase, 'aplicando')
+  const { id, sha } = g.pedidos[0]
+  // O trabalho partiu da branch no ar, e não da main.
+  assert.equal(r.git('rev-parse', `${sha}~1`), r.git('rev-parse', 'fase-2.9/trabalho'))
+  g.a.resultado({ id, tipo: 'em_teste', mensagem: 'No ar.' })
+  const aprovar = await g.a.acao('aprovar')
+  assert.match(aprovar.mensagem, /commit na fase-2\.9\/trabalho, que continua no ar/)
+  assert.deepEqual(g.pedidos[1], { type: 'versao:aprovar', id, branch: 'fase-2.9/trabalho' })
 })
 
 test('confirmação recusada encerra a proposta em vez de travar o botão', async () => {
@@ -319,12 +349,12 @@ test('confirmação recusada encerra a proposta em vez de travar o botão', asyn
   let rodou = false
   const g = gerente(r, { agente: async () => ((rodou = true), { ok: true, texto: '' }) })
   assert.equal((await g.a.acao('propor', { pedido: 'criar' })).ok, true)
-  r.git('switch', '-qc', 'fase-2.2/outra')
+  r.git('switch', '-q', '--detach')
   const resposta = await g.a.acao('confirmar')
   assert.equal(resposta.ok, false)
   assert.equal(g.a.estado().fase, 'ocioso')
   assert.equal(g.a.estado().resultado.tipo, 'falhou')
-  assert.match(g.a.estado().resultado.mensagem, /main/)
+  assert.match(g.a.estado().resultado.mensagem, /commit solto/)
   assert.equal(rodou, false)
 })
 

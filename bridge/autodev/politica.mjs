@@ -21,7 +21,11 @@ import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
-/** A versão segura: todo trabalho parte dela e todo rollback volta para ela. */
+/**
+ * A versão segura: nunca recebe commit direto, só pull request, e é para onde a
+ * Fênix atualiza. O trabalho parte da versão no ar, que pode ser ela ou uma
+ * branch de fase (docs/adr/0031).
+ */
 export const BASE = 'main'
 
 /** Fora do repositório de propósito: o Vite, o tsc e o oxlint varrem a raiz. */

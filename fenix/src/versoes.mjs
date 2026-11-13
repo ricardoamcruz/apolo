@@ -11,8 +11,10 @@
  * `transicao.json` fica em disco. Uma queda a qualquer momento, até o Mac
  * desligando, volta para a versão segura — na hora ou na próxima partida.
  *
- *   aprovada   → vira a branch fase-x.x/nome e o projeto volta à versão segura
- *   descartada → a branch some e o projeto volta à versão segura
+ *   aprovada   → vira um commit da branch de trabalho, que continua no ar
+ *                (docs/adr/0031): a branch de onde ela partiu, ou uma fase-x.y/nome
+ *                nova quando ela partiu da versão segura, que nunca recebe commit direto
+ *   descartada → a branch some e o projeto volta à versão de onde ela partiu
  */
 
 import { execFile } from 'node:child_process'
@@ -433,28 +435,57 @@ export function criarVersoes({
       }
     },
 
-    /** O Ricardo gostou: vira a branch definitiva e o A.P.O.L.O. volta à main. */
+    /**
+     * O Ricardo gostou: a alteração vira um commit da branch de trabalho, e é ela
+     * que fica no ar (docs/adr/0031). O próximo pedido parte dali e soma outro commit.
+     *
+     *   `branch` igual à de onde a alteração partiu → a branch avança até o commit
+     *   `branch` nova (a alteração partiu da versão segura) → a de teste é renomeada
+     *
+     * Os arquivos não mudam: o que está no ar já é o commit aprovado. Por isso não há
+     * reinício, e nada do que ele está usando cai.
+     */
     async aprovar({ id, branch }) {
       if (ocupado || !emTeste) return notificar({ id, tipo: 'recusado', mensagem: 'Não há alteração em teste.' })
       if (!branchValida(branch)) return notificar({ id, tipo: 'recusado', mensagem: `Branch inválida: ${branch}.` })
+      if (branch === versaoSegura) {
+        return notificar({ id, tipo: 'recusado', mensagem: `A ${versaoSegura} não recebe commit direto: só por pull request.` })
+      }
       const transicao = emTeste
       ocupado = true
       try {
-        const copia = await conferirCopia(transicao.de.sha)
+        const copia = await conferirCopia(transicao.para.sha)
         if (copia) return notificar({ id, tipo: 'recusado', mensagem: copia })
-        // Renomear não mexe nos arquivos. Depois disto, a alteração já está salva
-        // e uma troca interrompida só precisa voltar, sem apagar nada.
-        await git('branch', '-m', transicao.para.ref, branch)
-        emTeste = null
+        const integrar = branch === transicao.de.ref
+        if (integrar && !(await sim(git('merge-base', '--is-ancestor', branch, transicao.para.sha)))) {
+          return notificar({ id, tipo: 'recusado', mensagem: `A ${branch} andou enquanto a alteração estava em teste; nada foi trocado.` })
+        }
+        if (!integrar && (await existeLocal(branch))) {
+          return notificar({ id, tipo: 'recusado', mensagem: `Já existe uma branch ${branch}; nada foi trocado.` })
+        }
+        // Gravado antes de mexer: uma queda no meio volta sem apagar o que foi aprovado.
         const aprovada = { ...transicao, aprovada: true, para: { ...transicao.para, ref: branch } }
         writeFileSync(arqTransicao, JSON.stringify(aprovada, null, 2))
-        anotar(`[fenix] ${transicao.para.ref} aprovada como ${branch}`)
-
-        await voltar(aprovada, 'alteração aprovada')
+        if (integrar) {
+          await git('branch', '--force', branch, transicao.para.sha)
+          await trocarPara({ ref: branch, sha: transicao.para.sha })
+          await apagarBranch(transicao.para.ref)
+        } else {
+          await git('branch', '-m', transicao.para.ref, branch)
+          const agora = await versaoAtual()
+          if (agora.ref !== branch || agora.sha !== transicao.para.sha) {
+            throw new Error(`pedi ${branch} (${curto(transicao.para.sha)}), mas a cópia ficou em ${agora.ref} (${curto(agora.sha)})`)
+          }
+        }
+        emTeste = null
+        rmSync(arqTransicao, { force: true })
+        anotar(`[fenix] ${transicao.para.ref} aprovada: commit ${curto(transicao.para.sha)} em ${branch}, que segue no ar`)
         notificar({
           id,
           tipo: 'aprovado',
-          mensagem: 'Guardei a alteração na branch e voltei à versão segura.',
+          mensagem: integrar
+            ? `A alteração virou um commit da ${branch}, que segue no ar.`
+            : `A alteração virou o primeiro commit da ${branch}, que segue no ar.`,
           branch,
         })
       } catch (err) {

@@ -50,7 +50,8 @@ detalhe está em `docs/`.
 - **Identidade visual (ADR 0013, revisada em 12/11/2026):** paleta ciano (a de
   sempre), núcleo **Enxame** (esfera de pontos em faixas que giram em sentidos
   alternados, `src/scene/Enxame.tsx`, o mesmo `enxameVertex` no app do iPhone),
-  marca **Lira** (HUD e favicon) e um ícone por sistema na aba SISTEMAS
+  marca **Lira** (só o favicon desde 13/11/2026: o cabeçalho ficou só com o nome,
+  e o desenho segue em `src/ui/icones.tsx` para uso futuro) e um ícone por sistema na aba SISTEMAS
   (`src/ui/icones.tsx`; ícone novo entra lá). Cor e tipografia são tokens no
   `:root` de `src/index.css` (`--interface`, `--bg`, `--font-ui`, `--font-mono`) —
   CSS novo usa os tokens, não valores escritos à mão. A cor por fase fica em

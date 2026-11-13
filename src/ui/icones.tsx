@@ -9,6 +9,9 @@ import type { ReactNode } from 'react'
  * estado como o resto do HUD. Desenhados para ler a 16 px. O favicon
  * (public/favicon.svg) repete a Lira com a cor escrita, porque o navegador não
  * aplica CSS a ele.
+ *
+ * Desde 13/11/2026 a Lira não aparece no cabeçalho (só o nome), a pedido do
+ * Ricardo: ela segue aqui e no favicon, pronta para outro lugar da interface.
  */
 
 const tracos = (corpo: ReactNode, titulo: string, className?: string) => (

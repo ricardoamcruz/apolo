@@ -171,7 +171,8 @@ body::after {
 }
 .rail-item.dim { opacity: 0.3; }
 
-/* A marca (a Lira) e os ícones dos sistemas: traço em currentColor, na cor do estado. */
+/* A marca (a Lira) e os ícones dos sistemas: traço em currentColor, na cor do estado.
+   A Lira está fora do cabeçalho desde 13/11/2026; o estilo fica para quando ela voltar. */
 .brand-icone {
   width: 1.15em;
   height: 1.15em;

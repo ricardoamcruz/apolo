@@ -44,3 +44,9 @@ test('cada sistema da aba SISTEMAS tem um ícone, e a marca é a Lira', () => {
   const favicon = readFileSync('public/favicon.svg', 'utf8')
   assert.match(favicon, /M4\.5 3\.5C4\.5 7 8 8 8 11\.5V17/)
 })
+
+test('a Lira fica fora do cabeçalho, mas continua desenhada (revisão de 13/11/2026)', () => {
+  const hud = readFileSync('src/ui/Hud.tsx', 'utf8')
+  assert.doesNotMatch(hud, /<Lira\b/)
+  assert.match(hud, /<span className="brand-mark">A\.P\.O\.L\.O\.<\/span>/)
+})

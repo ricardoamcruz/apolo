@@ -107,3 +107,13 @@ de estado medidos):
 Pendente: os ícones no app do iPhone, que ainda não tem uma biblioteca de SVG
 (`react-native-svg` exige um prebuild e um pod install), e trazer as fontes para
 o repositório (item 2.3).
+
+## Revisão de 13/11/2026: a Lira sai do cabeçalho
+
+Com a marca ao lado do nome, o canto superior esquerdo ficava com dois sinais
+dizendo a mesma coisa — e o critério desta ADR é justamente "informa algo que o
+resto não informa?". O cabeçalho fica só com **A.P.O.L.O.**; a Lira continua
+sendo a marca no favicon e segue desenhada em `src/ui/icones.tsx`, com o estilo
+`.brand-icone` preservado, para voltar em outro ponto da interface quando houver
+um lugar em que ela informe algo. O Enxame, a paleta e os ícones dos sistemas não
+mudam.

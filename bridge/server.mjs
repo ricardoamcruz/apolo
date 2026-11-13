@@ -1496,6 +1496,11 @@ const atender = (socket, { celular = false } = {}) => {
         .catch((err) => send({ type: 'voz_sessao', id: msg.id, erro: err.message }))
     }
 
+    // Os passos da conexão de voz do navegador, que só ele vê (src/lib/voz/types.ts).
+    if (msg.type === 'voz_log' && !celular && typeof msg.texto === 'string') {
+      return console.log(`[apolo] voz: ${msg.texto.replace(/[\u0000-\u001f]+/g, ' ').slice(0, 300)}`)
+    }
+
     if (msg.type === 'preferencias') {
       broadcast({ type: 'preferencias', valores: preferencias.gravar(msg.valores) })
     }

@@ -1,7 +1,7 @@
 import { BRIDGE_HTTP_URL } from '../config'
 import { connectGemini } from './voz/gemini'
 import { connectOpenAi } from './voz/openai'
-import { diag, type RealtimeHandlers, type RealtimeSession, type SessionGrant } from './voz/types'
+import { diag, logVoz, type RealtimeHandlers, type RealtimeSession, type SessionGrant } from './voz/types'
 
 /**
  * Voz em tempo real — speech-to-speech (docs/adr/0009 e 0010).
@@ -39,14 +39,18 @@ export async function connectRealtime(h: RealtimeHandlers): Promise<RealtimeSess
   diag.state = 'conectando'
   diag.lastError = ''
   let g: SessionGrant
+  const inicio = Date.now()
+  logVoz('pedindo a sessão de voz à ponte')
   try {
     g = await grant()
   } catch (err) {
     diag.state = 'falhou'
     diag.lastError = err instanceof Error ? err.message : String(err)
+    logVoz(`a ponte não entregou a sessão: ${diag.lastError}`)
     throw err
   }
   diag.provider = g.provider
   diag.model = g.model
+  logVoz(`a ponte entregou a sessão em ${Date.now() - inicio} ms (${g.provider})`)
   return g.provider === 'gemini' ? connectGemini(g, grant, h) : connectOpenAi(g, h)
 }

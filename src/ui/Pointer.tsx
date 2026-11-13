@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { BONES, INDEX_TIP, THUMB_TIP, TIPS, WRIST, diag, hands } from '../lib/hands'
+import { densidadeDaTela } from '../lib/densidade'
 
 /**
  * Your hands, drawn on the glass.
@@ -53,7 +54,9 @@ export function Pointer() {
     const fit = () => {
       const nw = window.innerWidth
       const nh = window.innerHeight
-      const ndpr = Math.min(window.devicePixelRatio || 1, 2)
+      // A mesma densidade do reator, por baixo: duas camadas de vidro com
+      // resoluções diferentes ficam com a mão borrada sobre um círculo nítido.
+      const ndpr = densidadeDaTela()
       if (!nw || !nh) return false
       if (nw === w && nh === h && ndpr === dpr) return true
       w = nw

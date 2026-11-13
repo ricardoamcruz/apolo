@@ -57,7 +57,11 @@ detalhe está em `docs/`.
   CSS novo usa os tokens, não valores escritos à mão. A cor por fase fica em
   `phaseColor`/`accentFor()` (`src/store.ts`), porque a cena 3D e o HUD precisam da
   mesma resposta. O anel antigo segue como estilo (`ring`, `sphere`, `wire`) que o
-  agente pode pedir. Faltam as fontes locais (item 2.3) e os ícones no app.
+  agente pode pedir. Todo canvas da web desenha na densidade real da tela
+  (`densidadeDaTela()`, em `src/lib/densidade.ts`, teto 3; ADR 0032), para o
+  navegador não ampliar o quadro num iPhone: canvas novo lê dali, nunca
+  `window.devicePixelRatio` direto nem um teto à mão. Faltam as fontes locais
+  (item 2.3) e os ícones no app.
 - **App mobile (ADR 0019):** `apps/mobile` (Expo SDK 58, RN 0.88, bundle
   `com.ricardocruz.apolo`, Personal Team `9F2MVYQ9SF`). Ele ouve e responde por
   voz, como o PC, sem conversa escrita, pelo H.E.R.M.E.S. (`hermes/`, porta 8788 com

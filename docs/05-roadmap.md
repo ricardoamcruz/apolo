@@ -24,6 +24,7 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [x] Página de comparação com 2 ou 3 paletas (ciano atual × âmbar sobre azul profundo) e propostas de núcleo 3D original; **a escolha é do Ricardo** (12/11/2026: ciano, núcleo Enxame, marca Lira e ícones dos módulos; ADR 0013 revisada)
 - [x] Implementar a paleta e o núcleo escolhidos (12/11/2026; os ícones no app do iPhone esperam uma biblioteca de SVG)
 - [ ] Trazer as fontes para o repositório e fechar o CSP de fontes
+- [x] Reator na densidade real da tela, sem ampliação do navegador (13/11/2026, ADR 0032): o canvas lê `window.devicePixelRatio` por `src/lib/densidade.ts`, com teto 3. Falta ver no iPhone
 
 ### Etapa 3 — Contexto e comunicação
 - [ ] **Contexto compartilhado (RF-18):** decidir entre branch local e arquivo de contexto (ADR nova); é o único item do backlog que não começou

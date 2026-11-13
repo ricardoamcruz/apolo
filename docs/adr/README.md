@@ -30,6 +30,10 @@
 | 0026 | A.U.R.O.R.A., o bom dia com rock e o resumo do dia | proposta |
 | 0027 | Notificações push pelo H.E.R.M.E.S. | proposta |
 | 0028 | O pacto entre A.P.O.L.O. e F.Ê.N.I.X.: cada um revive o outro | proposta |
+| 0029 | Asas próprias: troca de versão conferida e serviços que não caem com a Fênix | proposta |
+| 0030 | O app do iPhone com a autonomia do PC no core | proposta |
+| 0031 | Autodesenvolvimento a partir da versão no ar, um commit por alteração | proposta |
+| 0032 | O reator desenhado na densidade real da tela | proposta |
 
 ## Em aberto
 

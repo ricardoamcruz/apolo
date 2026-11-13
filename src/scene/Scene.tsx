@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import {
   EffectComposer,
@@ -14,6 +14,7 @@ import { Enxame } from './Enxame'
 import { Particles } from './Particles'
 import { Orbits } from './Orbits'
 import { useStore, phaseColor, accentFor, atividadeAtual, faseNaTela, type Phase } from '../store'
+import { aoMudarDensidade, densidadeDaTela } from '../lib/densidade'
 
 /** Velocidade da transição para a espera: cerca de dois segundos. */
 const STANDBY_RATE = 1.6
@@ -218,13 +219,32 @@ function Rig() {
   )
 }
 
+/**
+ * A densidade da tela, como estado, porque ela muda em vida: zoom do navegador
+ * ou a janela arrastada para um monitor de outra densidade. O `dpr` do r3f é
+ * reativo — mudar este número refaz o buffer no tamanho novo.
+ */
+function useDensidade() {
+  const [densidade, setDensidade] = useState(densidadeDaTela)
+  useEffect(() => aoMudarDensidade(setDensidade), [])
+  return densidade
+}
+
 export function Scene() {
+  const densidade = useDensidade()
   return (
     <Canvas
       className="scene"
       camera={{ position: [0, 0, 6.2], fov: 45 }}
       gl={{ antialias: true, alpha: true }}
-      dpr={[1, 2]}
+      /*
+        O teto é a densidade da própria tela, não o 2 que estava aqui: num
+        iPhone, de densidade 3, o quadro do reator saía com dois terços dos
+        pixels e chegava à tela ampliado pelo navegador, borrando os pontos de
+        luz do enxame. O mínimo segue 1 para o r3f poder baixar a resolução se a
+        cena começar a engasgar (veja src/lib/densidade.ts).
+      */
+      dpr={[1, densidade]}
     >
       <Rig />
       {/*

@@ -43,3 +43,17 @@ reconhecedor do Chrome ouve.
 
 A decisão sobre o nome no celular depende de a transcrição chegar antes do áudio da
 resposta, como o cliente do Gemini já faz. Precisa ser validada no aparelho.
+
+## Revisão (15/11/2026): a fala sem resposta segura a janela
+Às vezes ele entrava em espera no meio da conversa e só respondia quando o
+Ricardo apertava Espaço. No Gemini, a fala só se encerra quando o modelo
+responde; até lá a fase segue "ouvindo", e a janela só via "fala recente" nos
+2 s depois do último trecho transcrito. Uma frase que terminava pouco antes do
+prazo fechava o microfone; sem áudio, o Gemini nunca recebia o silêncio do fim da
+fala e nunca respondia. No celular, a resposta saía muda, em espera.
+
+Agora a janela tem um quarto estado, `decidindo`: alguém falou e o modelo ainda
+não respondeu nem chamou `ignorar_fala`. Nele, ela espera a decisão até
+`ESPERA_DA_DECISAO_MS` (20 s) depois do prazo, contados de quando ele ficou livre.
+O teto mantém a regra da TV: frase atrás de frase, ela ainda o leva à espera.
+

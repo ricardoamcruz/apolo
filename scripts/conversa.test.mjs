@@ -67,3 +67,39 @@ test('pausada, não fecha', async () => {
   await esperar(50)
   assert.equal(fechou, 0)
 })
+
+test('uma fala ainda sem resposta segura a conversa até o modelo decidir', async () => {
+  let fechou = 0
+  let ocupado = 'decidindo'
+  const janela = criarJanela(() => fechou++, () => ocupado, { ...tempos, esperaDaDecisaoMs: 200 })
+  janela.abrir()
+  // Passa da janela e de várias prorrogações: o modelo ainda não respondeu.
+  await esperar(120)
+  assert.equal(fechou, 0)
+  // Ele ignorou a fala: a conversa fecha na próxima conferência.
+  ocupado = 'nao'
+  await esperar(40)
+  assert.equal(fechou, 1)
+})
+
+test('esperar a decisão tem teto: a TV, frase atrás de frase, não o mantém acordado', async () => {
+  let fechou = 0
+  const janela = criarJanela(() => fechou++, () => 'decidindo', { ...tempos, esperaDaDecisaoMs: 60 })
+  janela.abrir()
+  await esperar(70)
+  assert.equal(fechou, 0)
+  await esperar(50)
+  assert.equal(fechou, 1)
+})
+
+test('o teto da decisão conta a partir de quando ele ficou livre, não da abertura', async () => {
+  let fechou = 0
+  let ocupado = 'sim'
+  const janela = criarJanela(() => fechou++, () => ocupado, { ...tempos, esperaDaDecisaoMs: 60 })
+  janela.abrir()
+  // Muito tempo ocupado (os popups do bom dia, por exemplo) não gasta o teto.
+  await esperar(150)
+  ocupado = 'decidindo'
+  await esperar(40)
+  assert.equal(fechou, 0)
+})

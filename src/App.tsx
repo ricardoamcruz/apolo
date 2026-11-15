@@ -154,6 +154,8 @@ export default function App() {
   const booting = useRef(false)
   /** Quando a última fala foi ouvida, de quem for. */
   const ultimaFala = useRef(0)
+  /** Alguém falou e o modelo ainda não respondeu nem ignorou: a conversa não fecha. */
+  const falaPendente = useRef(false)
   /** Há uma fala dele em andamento na transcrição (para anexar os trechos). */
   const assistantOpen = useRef(false)
   /** A tarefa em andamento foi cancelada pela fala. */
@@ -185,7 +187,10 @@ export default function App() {
         // Lendo os popups do bom dia, o silêncio dele não é fim de conversa. Fecha com
         // um "obrigado", com outro assunto ou, esquecido ali, depois de uns minutos.
         if (bomDiaNaTela.current && Date.now() - bomDiaDesde.current < LEITURA_DO_BOM_DIA_MS) return 'sim'
-        if (p === 'thinking' || Date.now() - ultimaFala.current < FALA_RECENTE_MS) return 'talvez'
+        // No Gemini a fala só se encerra quando o modelo responde: até lá, a fase segue
+        // "ouvindo", e fechar o microfone agora engoliria a resposta.
+        if (p === 'thinking' || falaPendente.current) return 'decidindo'
+        if (Date.now() - ultimaFala.current < FALA_RECENTE_MS) return 'talvez'
         return 'nao'
       },
     ),
@@ -501,6 +506,7 @@ export default function App() {
     if (name === 'ignorar_fala') {
       // A fala não era para ele: volta a ouvir, e o prazo da conversa segue correndo,
       // então a TV ou uma conversa ao lado acabam em espera sozinhas.
+      falaPendente.current = false
       if (s.phase === 'thinking') s.setPhase('listening')
       janela.current.garantir()
       return { output: 'Ignorado.', silent: true, descartar: true }
@@ -521,6 +527,7 @@ export default function App() {
         ultimaFala.current = Date.now()
         const s = store.getState()
         if (s.phase === 'dormant' || s.phase === 'offline' || s.phase === 'boot') return
+        falaPendente.current = true
         s.setError(null)
         assistantOpen.current = false
         sfx.duck(true)
@@ -528,6 +535,7 @@ export default function App() {
         if (s.phase !== 'tooling') s.setPhase('listening')
       },
       onSpeechStop: () => {
+        falaPendente.current = false
         const s = store.getState()
         if (s.phase === 'listening') s.setPhase('thinking')
       },
@@ -557,6 +565,7 @@ export default function App() {
         store.getState().appendToLastTurn(delta)
       },
       onSpeakingStart: () => {
+        falaPendente.current = false
         clearIdle()
         const s = store.getState()
         sfx.duck(true)
@@ -586,6 +595,7 @@ export default function App() {
       },
       onClosed: () => {
         session.current = null
+        falaPendente.current = false
         const s = store.getState()
         if (s.phase !== 'offline' && s.phase !== 'boot') {
           clearIdle()

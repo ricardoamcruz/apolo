@@ -80,6 +80,8 @@ export function criarVozDoCelular(
   /** Momentos de fala medidos aqui, porque o Google só avisa depois de processar. */
   let inicioDaFala = 0
   let ultimaFala = 0
+  /** Alguém falou e o modelo ainda não respondeu nem ignorou: a conversa não fecha. */
+  let falaPendente = false
   let transcreveu = false
   const credenciais = new Map<string, { resolve: (g: Grant) => void; reject: (e: Error) => void }>()
   const tarefas = new Map<string, (texto: string) => void>()
@@ -114,6 +116,8 @@ export function criarVozDoCelular(
     () => dormir(),
     () => {
       if (falando || tarefas.size || pedidosAoCore.size) return 'sim'
+      // A fala só se encerra quando o modelo responde: em espera, a resposta sairia muda.
+      if (falaPendente) return 'decidindo'
       return Date.now() - ultimoSom < FALA_RECENTE_MS ? 'talvez' : 'nao'
     },
   )
@@ -300,6 +304,7 @@ export function criarVozDoCelular(
       return { output: 'Em espera.', silent: true }
     }
     if (nome === 'ignorar_fala') {
+      falaPendente = false
       fase('ouvindo')
       janela.garantir()
       return { output: 'Ignorado.', silent: true, descartar: true }
@@ -326,9 +331,12 @@ export function criarVozDoCelular(
       const primeira = await pedirCredencial()
       sessao = await connectGemini(primeira, pedirCredencial, {
         onSpeechStart: () => {
-          if (!emEspera) fase('ouvindo')
+          if (emEspera) return
+          falaPendente = true
+          fase('ouvindo')
         },
         onSpeechStop: () => {
+          falaPendente = false
           if (!emEspera) fase('pensando')
         },
         onUserPartial: (texto) => {
@@ -355,6 +363,7 @@ export function criarVozDoCelular(
         onAssistantDelta: () => {},
         onSpeakingStart: () => {
           falando = true
+          falaPendente = false
           if (ultimaFala) medir('voz_resposta', Date.now() - ultimaFala)
           ultimaFala = 0
           fase('falando')

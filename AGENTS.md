@@ -33,8 +33,10 @@ detalhe está em `docs/`.
   limpar a tela por voz (RF-16), está feito desde 03/11/2026.
 - **Conversa contínua (ADR 0024):** o nome abre uma janela de 20 s
   (`src/lib/conversa.ts`), e só uma resposta ou tarefa a reabre. Ouvir alguém não
-  reabre: não volte a zerar o prazo em `onSpeechStart`. No celular, em espera, a
-  sessão fica muda (`silenciar`) até a frase trazer o nome.
+  reabre: não volte a zerar o prazo em `onSpeechStart`. Uma fala ainda sem resposta
+  (`decidindo`) segura a janela por até 20 s: fechar o microfone antes engole a
+  resposta do Gemini. No celular, em espera, a sessão fica muda (`silenciar`) até
+  a frase trazer o nome.
 - **Comandos por voz (ADR 0023, RF-20):** cada tecla da interface tem uma linha em
   `bridge/comandos.mjs`, que vira a lista que a voz explica; tecla nova entra lá, e
   `scripts/comandos.test.mjs` cobra. Teclas e voz usam a mesma função para popups

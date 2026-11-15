@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, type RefObject } from 'react'
-import { AppState, StyleSheet, View, useWindowDimensions } from 'react-native'
+import { useEffect, useRef, type RefObject } from 'react'
+import { AppState, StyleSheet, View } from 'react-native'
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl'
 import * as THREE from 'three'
 import { enxameVertex, particlesFragment, particlesOrbitVertex, pontosDoEnxame } from '../../../src/scene/shaders'
@@ -13,10 +13,12 @@ export type Motor = {
 }
 
 /**
- * Desenha com menos pontos por lado e amplia. Ampliar também suaviza o traço, o
- * que aqui faz as vezes do bloom da versão web.
+ * O quadro é desenhado na densidade da tela, sem ampliação, para os pontos saírem
+ * nítidos como na web (ADR 0032). Os tamanhos de `uSize` foram acertados quando o
+ * quadro tinha metade dos pixels por lado; o dobro mantém cada ponto do mesmo
+ * tamanho na tela, em qualquer densidade.
  */
-const REDUCAO = 2
+const ESCALA_DOS_PONTOS = 2
 /** 30 quadros por segundo: o círculo é fundo de tela, não vale a bateria de 60. */
 const INTERVALO_MS = 30
 
@@ -96,7 +98,7 @@ function criarEnxame(raio: number) {
         uPhase: { value: 0 },
         uAtivo: { value: 0 },
         uLevel: { value: 0 },
-        uSize: { value: tamanho },
+        uSize: { value: tamanho * ESCALA_DOS_PONTOS },
         uOpen: { value: 0 },
         uRaio: { value: raio * fator },
         uColor: { value: new THREE.Color(CORES.offline) },
@@ -152,7 +154,7 @@ function criarParticulas(raioDoCirculo: number) {
     uniforms: {
       uTime: { value: 0 },
       uLevel: { value: 0 },
-      uSize: { value: 2.4 },
+      uSize: { value: 2.4 * ESCALA_DOS_PONTOS },
       uStandby: { value: 0 },
       uRing: { value: raioDoCirculo },
       uSpin: { value: 0 },
@@ -172,22 +174,8 @@ function criarParticulas(raioDoCirculo: number) {
 }
 
 export function Cena({ motor }: { motor: RefObject<Motor> }) {
-  const { width, height } = useWindowDimensions()
   const parar = useRef<() => void>(() => {})
   useEffect(() => () => parar.current(), [])
-
-  const estilo = useMemo(() => {
-    const largura = Math.ceil(width / REDUCAO)
-    const altura = Math.ceil(height / REDUCAO)
-    return {
-      position: 'absolute' as const,
-      width: largura,
-      height: altura,
-      left: (width - largura) / 2,
-      top: (height - altura) / 2,
-      transform: [{ scale: REDUCAO }],
-    }
-  }, [width, height])
 
   const aoCriarContexto = (gl: ExpoWebGLRenderingContext) => {
     const renderer = criarRenderer(gl)
@@ -290,7 +278,7 @@ export function Cena({ motor }: { motor: RefObject<Motor> }) {
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <GLView style={estilo} onContextCreate={aoCriarContexto} />
+      <GLView style={StyleSheet.absoluteFill} onContextCreate={aoCriarContexto} />
     </View>
   )
 }

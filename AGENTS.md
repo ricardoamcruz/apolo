@@ -77,7 +77,8 @@ detalhe está em `docs/`.
   com o app na tela: ao ir para segundo plano ela desliga, e não há
   `UIBackgroundModes` (revisão da ADR 0020). CarPlay nativo exige conta paga e
   aprovação da Apple; o espelhamento não existe. No celular, as partículas usam
-  `particlesOrbitVertex`, e o shader do PC fica como está.
+  `particlesOrbitVertex`, e o shader do PC fica como está. O círculo do app é
+  desenhado na densidade da tela, sem reduzir e ampliar o `GLView` (ADR 0032).
 - **Cores e HTTPS (ADR 0021):** a cor por atividade vem de `src/lib/estados.ts`, para
   web e app (ouvindo verde, processando amarelo, script lilás, código vermelho, pausa
   azul claro); não escreva cor de estado à mão. Toda conexão é HTTPS: a página fica em

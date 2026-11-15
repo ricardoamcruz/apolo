@@ -47,6 +47,7 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [ ] **Popup aberta que ele não reconhece (13/11/2026):** o Apolo abriu uma popup e, depois, não conseguiu identificar que ela estava aberta
 - [ ] **Não registra bug no backlog (13/11/2026):** pedido por voz para relatar um bug no backlog, o Apolo não conseguiu incluir
 - [x] **Partículas borradas no iPhone (14/11/2026):** no app, as partículas em órbita e o Enxame saíam menos nítidos que na web, porque o círculo era desenhado com metade dos pixels e ampliado. Agora sai na densidade da tela, com os pontos do mesmo tamanho (ADR 0032)
+- [ ] **Avisos do lint (14/11/2026):** o `npm run lint` passa com 3 avisos que precisam sair: caracteres de controle na expressão regular de `bridge/server.mjs` (`voz_log`, `no-control-regex`), a constante `SISTEMAS_COM_ICONE` exportada junto dos componentes em `src/ui/icones.tsx` (`only-export-components`) e o `err` sem uso no `catch` de `bridge/chrome.mjs` (`no-unused-vars`)
 
 ## Próxima versão — backlog (registrado em 03/11/2026)
 Os 6 pontos que o Ricardo definiu para a próxima versão. Eles têm prioridade

@@ -156,6 +156,8 @@ export function Hud() {
   const phase = useStore(faseNaTela)
   /** A dica de rodapé diz a verdade: em espera, como acordar. */
   const emEspera = useStore((s) => s.phase === 'dormant')
+  /** Espaço só interrompe enquanto ele fala: fora disso, a dica engana. */
+  const falando = useStore((s) => s.phase === 'speaking')
   const caption = useStore((s) => s.caption)
   const turns = useStore((s) => s.turns)
   const exibirChat = useStore((s) => s.exibicao.exibirChat)
@@ -321,7 +323,15 @@ export function Hud() {
             </>
           ) : (
             <>
-              fale à vontade · <kbd>Espaço</kbd> interrompe · <kbd>Esc</kbd> espera
+              fale à vontade
+              {falando && (
+                <>
+                  {' · '}
+                  <kbd>Espaço</kbd> interrompe
+                </>
+              )}
+              {' · '}
+              <kbd>Esc</kbd> espera
             </>
           )}
           {' · '}

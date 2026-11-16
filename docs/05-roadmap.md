@@ -44,6 +44,7 @@ vira uma branch nova a partir da `main` (ADR 0016).
 
 ### Etapa 6 — Bugs para corrigir
 - [x] **Entra em espera no meio da conversa (13/11/2026):** às vezes o Ricardo falava com o Apolo, ele não respondia e entrava em espera; ao apertar espaço, voltava e respondia. No Gemini a fala só se encerra quando o modelo responde, e a janela fechava o microfone nesse intervalo: sem o silêncio do fim da fala, o Gemini nunca respondia. Agora uma fala sem resposta segura a janela por até 20 s (`decidindo`, revisão da ADR 0024), na web e no celular
+- [x] **Dica de interromper fora de hora (15/11/2026):** o rodapé dizia "Espaço interrompe" mesmo com ele calado, depois de interrompido. Agora a dica só aparece enquanto ele fala (`src/ui/Hud.tsx`)
 - [ ] **Popup aberta que ele não reconhece (13/11/2026):** o Apolo abriu uma popup e, depois, não conseguiu identificar que ela estava aberta
 - [ ] **Não registra bug no backlog (13/11/2026):** pedido por voz para relatar um bug no backlog, o Apolo não conseguiu incluir
 - [x] **Partículas borradas no iPhone (14/11/2026):** no app, as partículas em órbita e o Enxame saíam menos nítidos que na web, porque o círculo era desenhado com metade dos pixels e ampliado. Agora sai na densidade da tela, com os pontos do mesmo tamanho (ADR 0032)

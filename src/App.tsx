@@ -39,7 +39,7 @@ import { lerParametros, textoDaFenix } from './lib/fenix'
 import { agradece, pedeModoMaos, vigiarCancelamento } from './lib/comandos'
 import { INTERVALO_DOS_POPUPS_MS, PREFIXO_DO_BOM_DIA, descreverPopups, popupsDoBomDia } from './lib/bomDia'
 import { criarJanela } from './lib/conversa'
-import { comandarPopup, type AcaoDePopup } from './lib/comandosDePopup'
+import { comandarPopup, telaAgora, type AcaoDePopup } from './lib/comandosDePopup'
 import { abrirNoYoutube } from './lib/musica'
 import { chamadaDisponivel, deuBomDia, ouvirNome } from './lib/chamada'
 import { sistemasAgora } from './lib/estadoDosSistemas'
@@ -269,7 +269,8 @@ export default function App() {
           },
         })
         if (cancelada.current) return { output: 'O Ricardo cancelou a tarefa.' }
-        return { output: text || 'Tarefa concluída, sem nada a relatar.' }
+        // O que o agente abriu fica na tela: a voz precisa saber, para reconhecer depois.
+        return { output: `${text || 'Tarefa concluída, sem nada a relatar.'}\n\n${telaAgora()}` }
       } catch (err) {
         sfx.play('error')
         return {

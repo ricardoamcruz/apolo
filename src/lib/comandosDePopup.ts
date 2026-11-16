@@ -1,5 +1,5 @@
 import { useStore } from '../store'
-import { ordenarPopups, vizinhoDoPopup } from './ordemDosPopups'
+import { acharPopup, descreverTela, ordenarPopups, vizinhoDoPopup } from './ordemDosPopups'
 
 export type AcaoDePopup =
   | 'abrir'
@@ -9,6 +9,7 @@ export type AcaoDePopup =
   | 'tela_cheia'
   | 'sair_tela_cheia'
   | 'fechar'
+  | 'listar'
 
 const abertosAgora = () => {
   const s = useStore.getState()
@@ -26,9 +27,22 @@ function alternar(passo: number) {
   return proximo
 }
 
+/** O que está na tela agora, nas palavras que a voz entende. */
+export function telaAgora(): string {
+  const s = useStore.getState()
+  return descreverTela(s.blades, s.focusedBlade, s.panels)
+}
+
 /** As teclas e a voz passam por aqui. Devolve o que a voz diz ao Ricardo. */
 export function comandarPopup(acao: AcaoDePopup, titulo?: string): string {
-  const { s, frente } = abertosAgora()
+  const { s, abertos } = abertosAgora()
+  if (acao === 'listar') return telaAgora()
+  // Com título, age sobre aquele popup; sem, sobre o da frente.
+  const achado = titulo ? acharPopup(abertos, titulo) : undefined
+  if (titulo && !achado && (acao === 'fechar' || acao === 'tela_cheia')) {
+    return `Nenhum popup aberto tem "${titulo}" no título. ${telaAgora()}`
+  }
+  const frente = achado ?? abertosAgora().frente
   if (acao === 'abrir') {
     const n = s.restoreBlades(titulo)
     if (!n) return 'Não há popup minimizado com esse nome.'
@@ -43,7 +57,7 @@ export function comandarPopup(acao: AcaoDePopup, titulo?: string): string {
     s.expandBlade(null)
     return 'Saiu da tela cheia.'
   }
-  if (!frente) return 'Não há popup aberto.'
+  if (!frente) return `Não há popup aberto. ${telaAgora()}`
   if (acao === 'tela_cheia') {
     s.expandBlade(frente.id)
     return `Em tela cheia: ${frente.title}.`

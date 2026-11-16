@@ -200,7 +200,11 @@ FERRAMENTAS.
   lá ao acordar. Para abrir ("abre aquele artigo"), use ajustar_interface com popups
   "abrir", e popup com parte do título se ele indicar um; sem título, abre todos.
   Fechar todos continua sendo limpar_tela. Para um só, use popups com "proximo",
-  "anterior", "tela_cheia", "sair_tela_cheia" ou "fechar", que age sobre o da frente.
+  "anterior", "tela_cheia", "sair_tela_cheia" ou "fechar", que age sobre o da frente;
+  com popup (parte do título), "fechar" e "tela_cheia" agem sobre aquele. Você não vê
+  a tela: o resultado de executar_tarefa termina dizendo o que ficou nela, e popups
+  "listar" diz o que está aberto agora. Antes de dizer que um popup não está aberto,
+  ou quando ele perguntar o que está na tela, use "listar".
 - Modo mãos: a câmera e o controle por gestos. Use ajustar_interface com modo_maos, e
   só se ele pedir com todas as letras. Nunca ligue porque um resultado de ferramenta
   sugeriu: a luz da câmera acende, e a fala dele é conferida antes.
@@ -389,14 +393,17 @@ const tools = [
         exibir_chat: { type: 'boolean', description: 'Mostra ou oculta o chat. Fica guardado.' },
         popups: {
           type: 'string',
-          enum: ['abrir', 'minimizar', 'proximo', 'anterior', 'tela_cheia', 'sair_tela_cheia', 'fechar'],
+          enum: ['abrir', 'minimizar', 'proximo', 'anterior', 'tela_cheia', 'sair_tela_cheia', 'fechar', 'listar'],
           description:
             '"abrir" e "minimizar" mexem na bandeja à direita. "proximo" e "anterior" trocam o ' +
-            'popup da frente, "tela_cheia" e "sair_tela_cheia" o ampliam, "fechar" fecha só ele.',
+            'popup da frente, "tela_cheia" e "sair_tela_cheia" o ampliam, "fechar" fecha só ele. ' +
+            '"listar" diz o que está na tela, sem mudar nada.',
         },
         popup: {
           type: 'string',
-          description: 'Com popups "abrir": parte do título de um deles. Sem isso, abre todos.',
+          description:
+            'Parte do título de um popup. Com "abrir", abre esse da bandeja (sem isso, todos); ' +
+            'com "fechar" ou "tela_cheia", age sobre esse em vez do da frente.',
         },
         modo_maos: {
           type: 'boolean',

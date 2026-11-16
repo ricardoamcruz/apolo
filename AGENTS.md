@@ -40,8 +40,10 @@ detalhe está em `docs/`.
 - **Comandos por voz (ADR 0023, RF-20):** cada tecla da interface tem uma linha em
   `bridge/comandos.mjs`, que vira a lista que a voz explica; tecla nova entra lá, e
   `scripts/comandos.test.mjs` cobra. Teclas e voz usam a mesma função para popups
-  (`src/lib/comandosDePopup.ts`). Cancelar sai da transcrição (`src/lib/comandos.ts`),
-  e ligar a câmera confere a fala do Ricardo: nunca dependa só do modelo para isso.
+  (`src/lib/comandosDePopup.ts`). A voz não vê a tela: o que está aberto chega a ela
+  por `telaAgora()`, no fim de `executar_tarefa` e em popups "listar". Cancelar sai
+  da transcrição (`src/lib/comandos.ts`), e ligar a câmera confere a fala do
+  Ricardo: nunca dependa só do modelo para isso.
 - **Sub-módulo git (ADR 0014):** `bridge/git.mjs` dá ao A.P.O.L.O. as ferramentas
   `git_*` sobre o próprio repositório — ler o estado, commitar numa branch e
   abrir pull request para a `main`. Commitar e propor merge exigem

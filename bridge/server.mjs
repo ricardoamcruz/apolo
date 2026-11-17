@@ -1562,7 +1562,8 @@ const atender = (socket, { celular = false } = {}) => {
 
     // Os passos da conexão de voz do navegador, que só ele vê (src/lib/voz/types.ts).
     if (msg.type === 'voz_log' && !celular && typeof msg.texto === 'string') {
-      const texto = msg.texto.replace(/[\u0000-\u001f]+/g, ' ').slice(0, 300)
+      // Sem caracteres de controle (C0, DEL e C1): uma quebra de linha forjada não cria linha falsa no log.
+      const texto = msg.texto.replace(/\p{Cc}+/gu, ' ').slice(0, 300)
       registrarEstadoDaVoz(texto)
       return console.log(`[apolo] voz: ${texto}`)
     }

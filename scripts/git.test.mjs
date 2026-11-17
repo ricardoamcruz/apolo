@@ -224,3 +224,27 @@ test('o pull request vai para o origin, nomeado pela URL do GitHub', () => {
   assert.equal(repositorioGithub('https://gitlab.com/ricardoamcruz/apolo.git'), null)
   assert.equal(repositorioGithub(''), null)
 })
+
+test('git_log: o último commit com os arquivos, sem terminal livre (17/11/2026)', async () => {
+  const r = repositorio()
+  r.git('switch', '-qc', 'fase-2.10/x')
+  sujar(r)
+  r.git('commit', '-qam', 'Segundo commit')
+  const g = montar(r)
+  const um = await g.log({ quantos: 1 })
+  assert.equal(um.ok, true)
+  assert.match(um.texto, /^Último commit em fase-2\.10\/x:/)
+  assert.match(um.texto, /Teste\n {2}Segundo commit\n+app\.txt/)
+  assert.doesNotMatch(um.texto, /\bv1\b/)
+
+  const varios = await g.log({ quantos: 99 })
+  assert.match(varios.texto, /^Últimos 2 commits em fase-2\.10\/x:/, 'diz quantos vieram, não quantos pediu')
+  assert.doesNotMatch(varios.texto, /app\.txt/, 'com muitos pedidos, sem a lista de arquivos')
+  assert.match((await g.log({ branch: 'main' })).texto, /^Último commit em main:\n.*\n {2}v1/)
+})
+
+test('git_log: branch que não existe ou que parece opção é recusada', async () => {
+  const g = montar(repositorio())
+  assert.match((await g.log({ branch: 'nao-existe' })).texto, /Não existe/)
+  assert.match((await g.log({ branch: '--output=/tmp/x' })).texto, /inválido/)
+})

@@ -45,7 +45,8 @@ detalhe está em `docs/`.
   da transcrição (`src/lib/comandos.ts`), e ligar a câmera confere a fala do
   Ricardo: nunca dependa só do modelo para isso.
 - **Sub-módulo git (ADR 0014):** `bridge/git.mjs` dá ao A.P.O.L.O. as ferramentas
-  `git_*` sobre o próprio repositório — ler o estado, commitar numa branch e
+  `git_*` sobre o próprio repositório — ler o estado e o histórico (`git_log`, que é
+  o "git log" pedido por voz: não há terminal livre), commitar numa branch e
   abrir pull request para a `main`. Commitar e propor merge exigem
   `npm start -- --writes`; merge, push na `main` e `--force` não existem.
 - O código ainda é o fork do JARVIS (`bridge/`, `src/`), já renomeado para

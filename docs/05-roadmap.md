@@ -50,6 +50,7 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [x] **Não registra bug no backlog (13/11/2026):** pedido por voz para relatar um bug no backlog, o Apolo não conseguiu incluir, porque não havia como: `desenvolvimento` só listava ou fazia itens. Agora `registrar` (com `titulo` e `detalhe`) põe o bug no fim da etapa de bugs e faz um commit só do roadmap na branch no ar; na `main` ou com teste do autodev no ar, fica em `~/.apolo/bugs-pendentes.md` e entra no próximo registro numa branch de fase (17/11/2026; `registrarBug`, em `bridge/desenvolvimento.mjs`), na web e no celular
 - [x] **Partículas borradas no iPhone (14/11/2026):** no app, as partículas em órbita e o Enxame saíam menos nítidos que na web, porque o círculo era desenhado com metade dos pixels e ampliado. Agora sai na densidade da tela, com os pontos do mesmo tamanho (ADR 0032)
 - [ ] **Avisos do lint (14/11/2026):** o `npm run lint` passa com 3 avisos que precisam sair: caracteres de controle na expressão regular de `bridge/server.mjs` (`voz_log`, `no-control-regex`), a constante `SISTEMAS_COM_ICONE` exportada junto dos componentes em `src/ui/icones.tsx` (`only-export-components`) e o `err` sem uso no `catch` de `bridge/chrome.mjs` (`no-unused-vars`)
+- [ ] **Bug nos testes (17/11/2026):** Bug identificado nos testes e registrado para análise.
 
 ## Próxima versão — backlog (registrado em 03/11/2026)
 Os 6 pontos que o Ricardo definiu para a próxima versão. Eles têm prioridade

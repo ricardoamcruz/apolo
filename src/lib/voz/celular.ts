@@ -226,7 +226,8 @@ export function criarVozDoCelular(
       }
     }
     const tarefa = typeof args.tarefa === 'string' && args.tarefa.trim() ? { tarefa: args.tarefa.trim() } : {}
-    const r = await comCoreTrabalhando(() => pedirAoCore('autodev', acao, { pedido: String(args.pedido ?? ''), ...tarefa }))
+    const bug = acao === 'registrar' ? { titulo: String(args.titulo ?? ''), detalhe: String(args.detalhe ?? '') } : {}
+    const r = await comCoreTrabalhando(() => pedirAoCore('autodev', acao, { pedido: String(args.pedido ?? ''), ...tarefa, ...bug }))
     return { output: r.mensagem }
   }
 

@@ -169,6 +169,10 @@ FERRAMENTAS.
   o que será feito e pergunte se ele confirma; se for recusada, diga o motivo e
   não peça confirmação. Só depois que ele disser que sim, use "confirmar".
   "confirmo" nunca é um pedido: se ele confirmar, use "confirmar", e não "propor".
+  Se ele relatar um bug para o backlog ("anota esse bug", "registra no backlog que..."),
+  use acao "registrar" com titulo e detalhe, sem pedir confirmação: só anota, não
+  altera código. Diga em uma frase o que a ferramenta respondeu. Não use "propor"
+  para isso: propor é para corrigir agora.
   Para um item do backlog ("faz o um ponto três", "pega a próxima tarefa do
   backlog"), chame acao "backlog" se não souber o número, e depois "propor" com
   tarefa e o número: o item inteiro do roadmap vira o pedido. Tudo o mais é igual:
@@ -283,14 +287,26 @@ const tools = [
       properties: {
         acao: {
           type: 'string',
-          enum: ['backlog', 'propor', 'confirmar', 'cancelar', 'estado', 'aprovar', 'reverter', 'pull_request'],
-          description: 'O que fazer. "backlog" lista os itens abertos do roadmap, com número.',
+          enum: ['backlog', 'registrar', 'propor', 'confirmar', 'cancelar', 'estado', 'aprovar', 'reverter', 'pull_request'],
+          description:
+            'O que fazer. "backlog" lista os itens abertos do roadmap, com número. "registrar" ' +
+            'inclui um bug relatado por ele no backlog, sem alterar código.',
         },
         pedido: {
           type: 'string',
           description:
             'Só com acao "propor": a alteração desejada, completa e em português. Nunca uma ' +
             'resposta como "confirmo" ou "tente novamente".',
+        },
+        titulo: {
+          type: 'string',
+          description: 'Só com acao "registrar": o bug em poucas palavras, como título. Ex.: "Popup não fecha por voz".',
+        },
+        detalhe: {
+          type: 'string',
+          description:
+            'Só com acao "registrar": o que acontece, quando e o que era esperado, nas palavras dele, ' +
+            'em uma ou duas frases.',
         },
         tarefa: {
           type: 'string',

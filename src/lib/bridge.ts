@@ -162,7 +162,10 @@ const respostas = new Map<string, (r: AutodevResposta) => void>()
  * Uma ação do autodesenvolvimento: backlog, propor (com o pedido ou o número de uma
  * tarefa do backlog), confirmar, cancelar, aprovar, reverter, estado.
  */
-export async function autodev(acao: string, extra?: { pedido?: string; tarefa?: string }): Promise<AutodevResposta> {
+export async function autodev(
+  acao: string,
+  extra?: { pedido?: string; tarefa?: string; titulo?: string; detalhe?: string },
+): Promise<AutodevResposta> {
   const ws = await connect()
   const id = `d${++askSeq}`
   return new Promise((resolve) => {

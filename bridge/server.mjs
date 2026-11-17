@@ -59,7 +59,7 @@ import { criarClienteFenix } from './fenix.mjs'
 import { criarRenascimento, lerReceita } from './renascer.mjs'
 import { criarClienteAurora } from './aurora.mjs'
 import { criarSondas } from './sondas.mjs'
-import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog } from './desenvolvimento.mjs'
+import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog, registrarBug } from './desenvolvimento.mjs'
 import { criarTelemetria } from './telemetria.mjs'
 import { garantirCertificado } from './tls.mjs'
 import { criarCentral } from './extensoes.mjs'
@@ -966,8 +966,14 @@ const lerBacklog = () => readFile(join(REPO, 'docs/05-roadmap.md'), 'utf8').then
  * abertos; "propor" com `tarefa` ("1.3") pega o item inteiro do roadmap como
  * pedido, do jeito que o Ricardo pede no chat (docs/adr/0028).
  */
-async function acaoDoAutodev({ acao, pedido, tarefa }) {
+async function acaoDoAutodev({ acao, pedido, tarefa, titulo, detalhe }) {
   if (acao === 'backlog') return { ok: true, mensagem: textoDoBacklog(await lerBacklog()) }
+  // Registrar um bug é commit no repositório: só com o autodesenvolvimento ligado.
+  if (acao === 'registrar') {
+    const estado = autodev.estado()
+    if (!estado.ligado) return autodev.acao(acao)
+    return registrarBug({ repo: REPO, titulo, detalhe, emTeste: !['ocioso', 'proposto'].includes(estado.fase) })
+  }
   if (acao === 'propor' && typeof tarefa === 'string' && tarefa.trim()) {
     const item = (await lerBacklog()).find((i) => i.id === tarefa.trim())
     if (!item) return { ok: false, mensagem: `Não há item ${tarefa.trim()} aberto no backlog. ${textoDoBacklog(await lerBacklog())}` }

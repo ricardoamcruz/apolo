@@ -187,7 +187,10 @@ detalhe está em `docs/`.
   para a `main`, que só sai com o sim falado e `--writes` (revisão da ADR 0015).
   `desenvolvimento` com acao `backlog` lista "Pendências em etapas" numeradas
   (`etapa.posição`, contando os feitos); `propor` com `tarefa: "1.3"` faz o item
-  inteiro como pedido (`pedidoDaTarefa`, em `bridge/desenvolvimento.mjs`).
+  inteiro como pedido (`pedidoDaTarefa`, em `bridge/desenvolvimento.mjs`). `registrar`
+  (com `titulo` e `detalhe`) põe um bug relatado por voz na etapa de bugs, com commit
+  só do roadmap na branch no ar; na `main`, ou com teste no ar, ele espera em
+  `~/.apolo/bugs-pendentes.md` (`registrarBug`).
   Motivos de rollback ficam em `~/.apolo/fenix/eventos.log`.
 - Escopo atual: **apenas o core e os pontos de extensão**. Módulos de domínio
   (e-mail, agenda, finanças, automação residencial) vêm depois.

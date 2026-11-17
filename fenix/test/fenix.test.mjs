@@ -26,6 +26,11 @@ const esperar = async (cond, ms = 4000) => {
   }
 }
 const mudo = { write() {} }
+/**
+ * Encerra o que o teste subiu mesmo se ele falhar no meio: um serviço de mentira
+ * que fica subindo e caindo segura o processo, e o npm test nunca termina.
+ */
+const limparDepois = (t, alvo) => t.after(() => alvo.encerrar().catch(() => {}))
 
 /** Um serviço de mentira: um script Node numa pasta temporária. */
 function servico(pasta, nome, codigo) {
@@ -152,7 +157,7 @@ test('comando livre expira e pode ser cancelado', async () => {
 
 // ── guardiã ─────────────────────────────────────────────────────────────────
 
-test('um serviço que cai volta sozinho, com espera, e o opcional que sai com 0 fica quieto', async () => {
+test('um serviço que cai volta sozinho, com espera, e o opcional que sai com 0 fica quieto', async (t) => {
   const pasta = temp()
   writeFileSync(join(pasta, 'quedas.txt'), '')
   const instavel = servico(
@@ -164,6 +169,7 @@ test('um serviço que cai volta sozinho, com espera, e o opcional que sai com 0 
   )
   const nada = { ...servico(pasta, 'nada', 'process.exit(0)'), opcional: true }
   const s = criarServicos({ repo: pasta, servicos: [instavel, nada], log() {}, saida: mudo, esperasMs: [20, 40], intervaloMs: 50 })
+  limparDepois(t, s)
   s.ligarTodos()
   await esperar(() => readFileSync(join(pasta, 'quedas.txt'), 'utf8').length >= 3)
   const estado = Object.fromEntries(s.estado().map((e) => [e.nome, e]))
@@ -173,7 +179,7 @@ test('um serviço que cai volta sozinho, com espera, e o opcional que sai com 0 
   await s.encerrar()
 })
 
-test('um serviço que trava é derrubado e sobe de novo', async () => {
+test('um serviço que trava é derrubado e sobe de novo', async (t) => {
   const pasta = temp()
   writeFileSync(join(pasta, 'partidas.txt'), '')
   const travado = {
@@ -183,9 +189,11 @@ test('um serviço que trava é derrubado e sobe de novo', async () => {
       `import { createServer } from 'node:http'
        import { appendFileSync } from 'node:fs'
        appendFileSync('partidas.txt', 'x')
-       const s = createServer((q, r) => { if (!globalThis.travou) r.end('ok') })
-       s.listen(0, () => { appendFileSync('porta.txt', String(s.address().port) + '\\n') })
-       setTimeout(() => (globalThis.travou = true), 60)`,
+       // Responde uma vez e trava: a Fênix o vê de pé e depois parado, seja qual
+       // for a velocidade da máquina. Travar por relógio falhava com ela carregada.
+       let respondeu = false
+       const s = createServer((q, r) => { if (!respondeu) { respondeu = true; r.end('ok') } })
+       s.listen(0, () => { appendFileSync('porta.txt', String(s.address().port) + '\\n') })`,
     ),
   }
   // A porta muda a cada partida: a saúde lê a última anotada.
@@ -197,7 +205,9 @@ test('um serviço que trava é derrubado e sobe de novo', async () => {
       /* ainda não subiu */
     }
   }
-  const s = criarServicos({ repo: pasta, servicos: [travado], log() {}, saida: mudo, esperasMs: [10], intervaloMs: 20, subidaMs: 400 })
+  // Subida longa: só pesa se o Node demorar a iniciar; no caminho normal, o teste leva ~1 s.
+  const s = criarServicos({ repo: pasta, servicos: [travado], log() {}, saida: mudo, esperasMs: [10], intervaloMs: 20, subidaMs: 5000 })
+  limparDepois(t, s)
   // Endereço dinâmico: a lista é lida de novo a cada checagem.
   travado.saude = { urls: [], ca: null, clientes: null, prazoMs: 100 }
   Object.defineProperty(travado.saude, 'urls', {
@@ -207,14 +217,15 @@ test('um serviço que trava é derrubado e sobe de novo', async () => {
     },
   })
   s.ligarTodos()
-  await esperar(() => readFileSync(join(pasta, 'partidas.txt'), 'utf8').length >= 2, 8000)
+  await esperar(() => readFileSync(join(pasta, 'partidas.txt'), 'utf8').length >= 2, 20_000)
   await s.encerrar()
 })
 
-test('desligar é planejado: não conta como queda nem reinicia', async () => {
+test('desligar é planejado: não conta como queda nem reinicia', async (t) => {
   const pasta = temp()
   const longo = servico(pasta, 'longo', 'setInterval(() => {}, 1000)')
   const s = criarServicos({ repo: pasta, servicos: [longo], log() {}, saida: mudo, esperasMs: [10] })
+  limparDepois(t, s)
   s.ligar('longo')
   await dormir(50)
   await s.desligar('longo')
@@ -224,11 +235,12 @@ test('desligar é planejado: não conta como queda nem reinicia', async () => {
   await s.encerrar()
 })
 
-test('quando a troca de versão assume a queda, a guardiã não reinicia', async () => {
+test('quando a troca de versão assume a queda, a guardiã não reinicia', async (t) => {
   const pasta = temp()
   const cai = { ...servico(pasta, 'cai', 'setTimeout(() => process.exit(2), 20)'), versionado: true }
   const quedas = []
   const s = criarServicos({ repo: pasta, servicos: [cai], log() {}, saida: mudo, esperasMs: [10] })
+  limparDepois(t, s)
   s.definir({ aoCair: (nome, motivo) => (quedas.push([nome, motivo]), true) })
   s.ligar('cai')
   await esperar(() => quedas.length === 1)
@@ -285,7 +297,7 @@ test('tokenConfere exige Bearer e o valor exato', () => {
 
 // ── a Fênix inteira ─────────────────────────────────────────────────────────
 
-test('a Fênix sobe os serviços, roda rotinas pelo canal e passa o endereço aos filhos', async () => {
+test('a Fênix sobe os serviços, roda rotinas pelo canal e passa o endereço aos filhos', async (t) => {
   const pasta = temp()
   writeFileSync(
     join(pasta, 'app.mjs'),
@@ -312,6 +324,7 @@ test('a Fênix sobe os serviços, roda rotinas pelo canal e passa o endereço ao
   )
   const config = lerConfig(join(pasta, 'fenix.config.json'), {})
   const fenix = criarFenix(config, { flags: ['--liga'], token: TOKEN, log() {}, saida: mudo })
+  limparDepois(t, fenix)
   const porta = await fenix.iniciar()
   await esperar(() => readdirSync(pasta).includes('visto.json'))
   const visto = JSON.parse(readFileSync(join(pasta, 'visto.json'), 'utf8'))
@@ -362,7 +375,7 @@ test('os tempos do config valem só como números positivos e só os que existem
   assert.deepEqual(lerConfig(join(pasta, 'fenix.config.json'), {}).tempos, { servicos: {}, versoes: {}, rotinas: {} })
 })
 
-test('quem a Fênix sobe recebe o pid dela e a receita para revivê-la (docs/adr/0028)', async () => {
+test('quem a Fênix sobe recebe o pid dela e a receita para revivê-la (docs/adr/0028)', async (t) => {
   const pasta = temp()
   writeFileSync(
     join(pasta, 'app.mjs'),
@@ -382,6 +395,7 @@ test('quem a Fênix sobe recebe o pid dela e a receita para revivê-la (docs/adr
   const config = lerConfig(join(pasta, 'fenix.config.json'), {})
   const renascer = { comando: ['node', 'fenix.mjs', '--config', 'x.json', '--liga'], cwd: pasta }
   const fenix = criarFenix(config, { flags: ['--liga'], token: TOKEN, log() {}, saida: mudo, renascer })
+  limparDepois(t, fenix)
   await fenix.iniciar()
   await esperar(() => readdirSync(pasta).includes('visto.json'))
   const visto = JSON.parse(readFileSync(join(pasta, 'visto.json'), 'utf8'))
@@ -397,7 +411,7 @@ test('quem a Fênix sobe recebe o pid dela e a receita para revivê-la (docs/adr
   assert.equal(receitaDoRenascimento(config, { ...renascer, tokenDoAmbiente: true }).limpar.includes('FENIX_TOKEN'), false)
 })
 
-test('renascida, a Fênix registra e avisa que o A.P.O.L.O. a trouxe de volta', async () => {
+test('renascida, a Fênix registra e avisa que o A.P.O.L.O. a trouxe de volta', async (t) => {
   const pasta = temp()
   writeFileSync(join(pasta, 'app.mjs'), 'setInterval(() => {}, 1000)')
   writeFileSync(
@@ -411,6 +425,7 @@ test('renascida, a Fênix registra e avisa que o A.P.O.L.O. a trouxe de volta', 
     saida: mudo,
     renascida: true,
   })
+  limparDepois(t, fenix)
   await fenix.iniciar()
   await fenix.encerrar()
   assert.ok(logs.some((l) => /renasci/.test(l)))
@@ -442,7 +457,7 @@ test('a Fênix não importa nada de fora da própria pasta, a não ser o Node e 
 
 // ── avisos ──────────────────────────────────────────────────────────────────
 
-test('a Fênix avisa a central quando um serviço cai, e o botão Descartar chega até ela', async () => {
+test('a Fênix avisa a central quando um serviço cai, e o botão Descartar chega até ela', async (t) => {
   const { WebSocketServer } = await import('ws')
   const { createServer } = await import('node:http')
   const http = createServer()
@@ -467,6 +482,7 @@ test('a Fênix avisa a central quando um serviço cai, e o botão Descartar cheg
     }),
   )
   const fenix = criarFenix(lerConfig(join(pasta, 'fenix.config.json'), {}), { token: TOKEN, log() {}, saida: mudo })
+  limparDepois(t, fenix)
   await fenix.iniciar()
   await esperar(() => recebidas.some((m) => m.type === 'notificar' && /cai caiu/.test(m.titulo)), 6000)
   const aviso = recebidas.find((m) => /cai caiu/.test(m.titulo))

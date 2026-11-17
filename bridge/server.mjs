@@ -186,7 +186,14 @@ const canais = { fenix: null, hermes: null, aurora: null }
 /** A saúde medida pela própria ponte. Criada mais abaixo, depois do certificado. */
 let sondas = null
 /** De pé pela sonda vale mais que qualquer relato; sem relato da Fênix, vale a sonda. */
-const doServico = (nome) => (sondas?.estado(nome) === 'connected' ? 'connected' : (canais[nome] ?? sondas?.estado(nome) ?? null))
+const doServico = (nome) => {
+  const medido = sondas?.estado(nome)
+  // De pé com uma parte quebrada também é medida direta: vale mais que o "ligado" da Fênix.
+  if (medido === 'connected' || medido === 'degraded') return medido
+  return canais[nome] ?? medido ?? null
+}
+/** O motivo, quando a própria ponte mediu um problema. */
+const motivoDoServico = (nome) => (sondas?.estado(nome) === doServico(nome) ? sondas?.motivo(nome) : null) ?? undefined
 /** Quantos celulares estão conectados agora pelo H.E.R.M.E.S. */
 let celularesConectados = 0
 const STATUS_DO_SERVICO = { ligado: 'connected', subindo: 'pending', caiu: 'failed' }
@@ -195,9 +202,9 @@ const comCanais = (servers) => {
   const extras = []
   if (canais.fenix) extras.push({ name: 'fenix', status: canais.fenix })
   const hermes = doServico('hermes') ?? (celularesConectados ? 'connected' : null)
-  if (hermes) extras.push({ name: 'celular', status: hermes })
+  if (hermes) extras.push({ name: 'celular', status: hermes, motivo: motivoDoServico('hermes') })
   const doAurora = doServico('aurora')
-  if (doAurora) extras.push({ name: 'aurora', status: doAurora })
+  if (doAurora) extras.push({ name: 'aurora', status: doAurora, motivo: motivoDoServico('aurora') })
   return [...servers, ...extras]
 }
 /** Cada interface reenvia a própria lista quando um canal muda. */

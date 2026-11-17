@@ -96,3 +96,16 @@ test('cinza não tem oposto: o alerta cai no âmbar, e cor ilegível também', (
   assert.equal(contrastante('#808080'), contrastante('#ffffff'))
   assert.equal(contrastante('cor-estranha'), contrastante('#808080'))
 })
+
+test('conector degradado mostra o motivo medido, e a voz o fala', () => {
+  const ok = { ponte: true, voz: true }
+  const [core, aurora] = montarSistemas(
+    [{ nome: 'aurora', estado: 'degraded', motivo: 'música do bom dia: a autorização do YouTube expirou' }],
+    ok,
+  )
+  assert.equal(core.degradado, false)
+  assert.equal(aurora.degradado, true)
+  assert.deepEqual(aurora.problemas, ['música do bom dia: a autorização do YouTube expirou'])
+  assert.match(resumoSistemas([core, aurora]), /YouTube expirou/)
+  assert.deepEqual(montarSistemas([{ nome: 'aurora', estado: 'degraded' }], ok)[1].problemas, ['degradado'])
+})

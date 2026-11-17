@@ -46,7 +46,7 @@ type Frame = {
   mode?: string
   seconds?: number
   when?: string
-  servers?: Array<string | { name?: string; status?: string }>
+  servers?: Array<string | { name?: string; status?: string; motivo?: string }>
   estado?: AutodevEstado
   valores?: Exibicao
   resposta?: string
@@ -189,7 +189,14 @@ export type MusicaDoBomDia = {
   /** A playlist de onde ela veio, para continuar no YouTube Music. */
   playlist?: string
 }
-export type BomDiaResposta = DadosDoBomDia & { ok: boolean; texto?: string; musica?: MusicaDoBomDia | null; mensagem?: string }
+export type BomDiaResposta = DadosDoBomDia & {
+  ok: boolean
+  texto?: string
+  musica?: MusicaDoBomDia | null
+  /** Por que a música não veio, quando não veio. */
+  avisoDaMusica?: string | null
+  mensagem?: string
+}
 const respostasDaAurora = new Map<string, (r: BomDiaResposta) => void>()
 
 /** Pede o bom dia à A.U.R.O.R.A., pela ponte. */
@@ -323,7 +330,7 @@ function dispatch(ws: WebSocket) {
       // then again with live status once the agent initialises. Keep listening
       // so the later, more accurate list wins.
       servers = (msg.servers ?? [])
-        .map((s) => (typeof s === 'string' ? { nome: s } : { nome: s.name ?? '', estado: s.status }))
+        .map((s) => (typeof s === 'string' ? { nome: s } : { nome: s.name ?? '', estado: s.status, motivo: s.motivo }))
         .filter((s) => s.nome)
       onServers?.(servers)
       firstReady.resolve()

@@ -144,7 +144,10 @@ detalhe está em `docs/`.
   sobrevivem à morte da Fênix (`src/saidas.mjs` de cada um) e são **adotados** quando
   ela volta (`"independente": true` no `fenix.config.json`). O contrato entre eles é
   `GET /saude` e os WSS com token: a ponte mede a saúde dos dois sozinha
-  (`bridge/sondas.mjs`). Não ponha estado de um deles só no relato da Fênix.
+  (`bridge/sondas.mjs`). De pé com uma parte quebrada, o serviço responde
+  `degradado: "<motivo>"` no `/saude` (a A.U.R.O.R.A. confere de verdade o acesso ao
+  YouTube a cada 10 min), e a aba SISTEMAS e a voz mostram o motivo. Não ponha estado
+  de um deles só no relato da Fênix.
 - **Notificações (ADR 0027, RF-66):** o H.E.R.M.E.S. é a central: serviços pedem por
   WSS em `/notificacoes` (porta local 8792, `APOLO_NOTIFICAR_TOKEN`) e ele entrega na
   central do macOS (`osascript`, com argumentos, nunca interpolados) e no iPhone pelo

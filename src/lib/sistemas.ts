@@ -7,7 +7,7 @@
  * conectores; no futuro, skills, sub-sistemas, extensões e APIs.
  */
 
-export type Servidor = { nome: string; estado?: string }
+export type Servidor = { nome: string; estado?: string; motivo?: string }
 export type TipoDeSistema = 'core' | 'conector' | 'skill' | 'extensao' | 'api'
 export type Sistema = {
   id: string
@@ -27,7 +27,7 @@ export type Sistema = {
  */
 const PLUGAVEIS: Record<string, string> = { fenix: 'F.Ê.N.I.X.', celular: 'H.E.R.M.E.S.', aurora: 'A.U.R.O.R.A.' }
 
-const FALHAS: Record<string, string> = { failed: 'falhou', 'needs-auth': 'precisa de autorização' }
+const FALHAS: Record<string, string> = { failed: 'falhou', 'needs-auth': 'precisa de autorização', degraded: 'degradado' }
 
 /** @param voz null enquanto a voz ainda não deveria estar no ar */
 export function montarSistemas(
@@ -38,8 +38,9 @@ export function montarSistemas(
   if (!ponte) problemas.push('ponte desconectada')
   if (voz === false) problemas.push('voz desconectada')
   const plugaveis: Sistema[] = []
-  for (const { nome, estado } of servidores) {
-    const falha = FALHAS[estado ?? '']
+  for (const { nome, estado, motivo } of servidores) {
+    // O motivo medido diz mais que o rótulo: "a autorização do YouTube expirou", não "degradado".
+    const falha = FALHAS[estado ?? ''] && (motivo || FALHAS[estado ?? ''])
     if (nome in PLUGAVEIS) {
       plugaveis.push({
         id: nome,

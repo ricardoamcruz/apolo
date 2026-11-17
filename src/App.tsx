@@ -29,6 +29,7 @@ import {
   bomDia,
   bridgeServers,
   registrarVoz,
+  type BomDiaResposta,
   type FenixResposta,
 } from './lib/bridge'
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
@@ -141,6 +142,21 @@ function clearScreenAndReport(what: 'all' | 'panels' | 'transcript'): string | n
   if (popups) saiu.push(popups === 1 ? 'um popup fechado' : `${popups} popups fechados`)
   if (linhas) saiu.push('histórico apagado')
   return saiu.length ? saiu.join(' e ') : null
+}
+
+/**
+ * O que a voz sabe da música. Sem ela, o motivo vai junto: calado, ele não saberia
+ * explicar depois por que o bom dia veio sem rock.
+ */
+function sobreAMusica(r: BomDiaResposta): string {
+  if (r.musica) return 'A música já está tocando baixinho por baixo: não a anuncie, a não ser que ele pergunte. '
+  if (r.avisoDaMusica) {
+    return (
+      `A música não tocou hoje: ${r.avisoDaMusica}. No fim do resumo, diga isso em uma frase simples, ` +
+      'com o que resolve, sem ler comandos letra por letra. Se ele perguntar, explique esse motivo. '
+    )
+  }
+  return ''
 }
 
 /** Quanto tempo a conversa fica aberta, em silêncio, com os popups do bom dia na tela. */
@@ -333,8 +349,8 @@ export default function App() {
         output:
           `${r.texto}\n${descreverPopups(popups)}\n\nDê bom dia ao Ricardo e resuma isso em até 30 segundos, ` +
           'como um assistente que conhece a rotina dele: compromissos primeiro, um destaque por tema ' +
-          'de notícia, o GitHub numa frase. Os detalhes já estão nos popups: não leia listas. A ' +
-          'música já está tocando baixinho por baixo: não a anuncie, a não ser que ele pergunte. ' +
+          'de notícia, o GitHub numa frase. Os detalhes já estão nos popups: não leia listas. ' +
+          sobreAMusica(r) +
           'Se ele agradecer, despeça-se em poucas palavras: a tela fecha os popups e entra em espera ' +
           'sozinha. Se ele mudar de assunto, chame ajustar_interface com popups "minimizar" antes ' +
           'de responder; se ele perguntar de uma notícia ou de um compromisso, os popups ficam. ' +

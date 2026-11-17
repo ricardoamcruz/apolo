@@ -3,6 +3,10 @@
 Marque `[x]` ao concluir e atualize o status em `01-requisitos.md`.
 
 ## Pendências em etapas (organizadas em 08/11/2026)
+**Fase 2 encerrada em 17/11/2026** pelo Ricardo, com a `fase-2.10/lapidacao`: a Etapa 6
+de bugs ficou zerada. O que segue aberto abaixo continua valendo, e a próxima branch é
+`fase-3/<nome>` (ADR 0016).
+
 O que ficou aberto depois da `fase-2.7/alvorada`, na ordem sugerida. Cada etapa
 vira uma branch nova a partir da `main` (ADR 0016).
 

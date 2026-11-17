@@ -25,6 +25,9 @@ detalhe está em `docs/`.
 
 - **Fase 0 — Fundação: concluída** (02/11/2026), exceto o Android, adiado.
   Próxima: **Fase 1 — Core**. Ver `docs/05-roadmap.md`.
+- **Fase 2 encerrada (17/11/2026, decisão do Ricardo):** a última branch dela foi
+  `fase-2.10/lapidacao`. A próxima branch é `fase-3/<nome-criativo>`, e depois
+  `fase-3.1/...` (ADR 0016).
 - **Pendências em etapas:** o que está aberto fica em "Pendências em etapas", no
   topo de `docs/05-roadmap.md` (08/11/2026): validar, Horizon, contexto e
   comunicação, o que está bloqueado e a Fase 1. Comece por lá.

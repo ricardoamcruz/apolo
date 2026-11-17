@@ -1,0 +1,7 @@
+:root { --bg: #01060c; --texto: #cfeff4; --interface: #00e5ff; }
+body { margin: 0; background: var(--bg); color: var(--texto); font: 16px/1.6 system-ui, sans-serif; }
+main { max-width: 720px; margin: 0 auto; padding: 48px 16px; }
+h1 { color: var(--interface); letter-spacing: 0.08em; font-weight: 600; }
+h2 { color: var(--interface); font-size: 1.1rem; margin-top: 2rem; }
+a { color: var(--interface); }
+.dim { opacity: 0.7; font-size: 0.9rem; }

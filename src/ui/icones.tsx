@@ -98,5 +98,3 @@ export function IconeDoSistema({ id, className }: { id: string; className?: stri
   return d ? tracos(d.corpo, d.titulo, className) : null
 }
 
-/** Os ids que têm ícone, para os testes cobrarem um por sistema plugável. */
-export const SISTEMAS_COM_ICONE = Object.keys(DESENHOS)

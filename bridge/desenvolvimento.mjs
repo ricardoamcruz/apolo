@@ -5,7 +5,8 @@
  * repositório: a A.U.R.O.R.A. pode estar em outra máquina e só vê o GitHub.
  */
 import { execFile } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -100,4 +101,87 @@ export function pedidoDaTarefa(item) {
     'alcance (validar por voz, o iPhone, uma conta ou uma decisão do Ricardo), faça o que der e diga ' +
     'no resumo o que ficou para ele.'
   )
+}
+
+/* ------------------------------------------------------- registrar um bug */
+
+const ROADMAP = 'docs/05-roadmap.md'
+const BASE = 'main'
+/** A etapa de bugs, achada pelo nome: o número dela pode mudar. */
+const ETAPA_DE_BUGS = /^### Etapa \d+ — Bugs[^\n]*$/m
+
+const umaLinha = (texto, max) =>
+  String(texto ?? '')
+    .replace(/[*`\r]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max)
+
+const hoje = (agora) =>
+  new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' }).format(agora)
+
+/** A linha do backlog, no formato dos bugs que já estão lá. */
+export function linhaDoBug({ titulo, detalhe }, agora = new Date()) {
+  const t = umaLinha(titulo, 80).replace(/[.:]$/, '')
+  if (!t) throw new Error('Falta o título do bug.')
+  const d = umaLinha(detalhe, 600)
+  return `- [ ] **${t} (${hoje(agora)}):**${d ? ` ${d}` : ''}`
+}
+
+/** Põe as linhas no fim da lista da etapa de bugs. */
+export function incluirNoBacklog(texto, linhas) {
+  const t = String(texto)
+  const cabecalho = ETAPA_DE_BUGS.exec(t)
+  if (!cabecalho) throw new Error('Não achei a etapa de bugs em docs/05-roadmap.md.')
+  const inicio = cabecalho.index + cabecalho[0].length
+  const proxima = t.slice(inicio).search(/^#{2,3} /m)
+  const fim = proxima < 0 ? t.length : inicio + proxima
+  const bloco = t.slice(inicio, fim).replace(/\s+$/, '')
+  return `${t.slice(0, inicio)}${bloco}\n${linhas.join('\n')}\n${proxima < 0 ? '' : '\n'}${t.slice(fim)}`
+}
+
+/**
+ * Registra um bug no backlog: a linha na etapa de bugs e um commit só do roadmap,
+ * na branch no ar. Na `main` não há commit (nada vai direto para ela), e durante um
+ * teste do autodev a cópia está na branch de teste: nos dois casos o bug fica em
+ * `bugs-pendentes.md` e entra no próximo registro feito numa branch de fase.
+ *
+ * @returns {{ ok: boolean, mensagem: string }}. Nunca rejeita.
+ */
+export async function registrarBug({ repo, titulo, detalhe, emTeste = false, pasta = join(homedir(), '.apolo'), agora = new Date() }) {
+  const git = async (...args) => (await exec('git', args, { cwd: repo, timeout: 15_000 })).stdout.trim()
+  const pendentes = join(pasta, 'bugs-pendentes.md')
+  let linha
+  try {
+    linha = linhaDoBug({ titulo, detalhe }, agora)
+  } catch (err) {
+    return { ok: false, mensagem: err.message }
+  }
+  try {
+    const branch = await git('symbolic-ref', '--short', '-q', 'HEAD').catch(() => '')
+    if (!branch || branch === BASE || emTeste) {
+      await mkdir(pasta, { recursive: true })
+      const antes = await readFile(pendentes, 'utf8').catch(() => '')
+      await writeFile(pendentes, `${antes}${linha}\n`)
+      const onde = emTeste ? 'há uma alteração em teste no ar' : `estou na ${branch || 'um commit solto'}, onde não faço commit`
+      return {
+        ok: true,
+        mensagem: `Anotei o bug, mas ${onde}: ele entra no backlog no próximo registro feito numa branch de fase.`,
+      }
+    }
+    if (await git('status', '--porcelain', '--', ROADMAP)) {
+      return { ok: false, mensagem: 'O roadmap tem alterações não commitadas; não registrei para não levá-las junto.' }
+    }
+    // Os que ficaram anotados na main entram agora, antes deste.
+    const anotados = (await readFile(pendentes, 'utf8').catch(() => '')).split('\n').filter((l) => l.startsWith('- [ ] '))
+    const caminho = join(repo, ROADMAP)
+    await writeFile(caminho, incluirNoBacklog(await readFile(caminho, 'utf8'), [...anotados, linha]))
+    const resumo = umaLinha(titulo, 60)
+    await git('commit', '-q', '-m', `Backlog: ${resumo}`, '--', ROADMAP)
+    if (anotados.length) await rm(pendentes, { force: true })
+    const extra = anotados.length ? ` Entraram também ${anotados.length} que estavam anotados.` : ''
+    return { ok: true, mensagem: `Registrei no backlog, na etapa de bugs, com commit na ${branch}.${extra}` }
+  } catch (err) {
+    return { ok: false, mensagem: `Não consegui registrar: ${String(err.message).split('\n')[0]}` }
+  }
 }

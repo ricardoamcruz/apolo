@@ -25,6 +25,9 @@ detalhe está em `docs/`.
 
 - **Fase 0 — Fundação: concluída** (02/11/2026), exceto o Android, adiado.
   Próxima: **Fase 1 — Core**. Ver `docs/05-roadmap.md`.
+- **Fase 2 encerrada (17/11/2026, decisão do Ricardo):** a última branch dela foi
+  `fase-2.10/lapidacao`. A próxima branch é `fase-3/<nome-criativo>`, e depois
+  `fase-3.1/...` (ADR 0016).
 - **Pendências em etapas:** o que está aberto fica em "Pendências em etapas", no
   topo de `docs/05-roadmap.md` (08/11/2026): validar, Horizon, contexto e
   comunicação, o que está bloqueado e a Fase 1. Comece por lá.
@@ -33,15 +36,20 @@ detalhe está em `docs/`.
   limpar a tela por voz (RF-16), está feito desde 03/11/2026.
 - **Conversa contínua (ADR 0024):** o nome abre uma janela de 20 s
   (`src/lib/conversa.ts`), e só uma resposta ou tarefa a reabre. Ouvir alguém não
-  reabre: não volte a zerar o prazo em `onSpeechStart`. No celular, em espera, a
-  sessão fica muda (`silenciar`) até a frase trazer o nome.
+  reabre: não volte a zerar o prazo em `onSpeechStart`. Uma fala ainda sem resposta
+  (`decidindo`) segura a janela por até 20 s: fechar o microfone antes engole a
+  resposta do Gemini. No celular, em espera, a sessão fica muda (`silenciar`) até
+  a frase trazer o nome.
 - **Comandos por voz (ADR 0023, RF-20):** cada tecla da interface tem uma linha em
   `bridge/comandos.mjs`, que vira a lista que a voz explica; tecla nova entra lá, e
   `scripts/comandos.test.mjs` cobra. Teclas e voz usam a mesma função para popups
-  (`src/lib/comandosDePopup.ts`). Cancelar sai da transcrição (`src/lib/comandos.ts`),
-  e ligar a câmera confere a fala do Ricardo: nunca dependa só do modelo para isso.
+  (`src/lib/comandosDePopup.ts`). A voz não vê a tela: o que está aberto chega a ela
+  por `telaAgora()`, no fim de `executar_tarefa` e em popups "listar". Cancelar sai
+  da transcrição (`src/lib/comandos.ts`), e ligar a câmera confere a fala do
+  Ricardo: nunca dependa só do modelo para isso.
 - **Sub-módulo git (ADR 0014):** `bridge/git.mjs` dá ao A.P.O.L.O. as ferramentas
-  `git_*` sobre o próprio repositório — ler o estado, commitar numa branch e
+  `git_*` sobre o próprio repositório — ler o estado e o histórico (`git_log`, que é
+  o "git log" pedido por voz: não há terminal livre), commitar numa branch e
   abrir pull request para a `main`. Commitar e propor merge exigem
   `npm start -- --writes`; merge, push na `main` e `--force` não existem.
 - O código ainda é o fork do JARVIS (`bridge/`, `src/`), já renomeado para
@@ -77,7 +85,8 @@ detalhe está em `docs/`.
   com o app na tela: ao ir para segundo plano ela desliga, e não há
   `UIBackgroundModes` (revisão da ADR 0020). CarPlay nativo exige conta paga e
   aprovação da Apple; o espelhamento não existe. No celular, as partículas usam
-  `particlesOrbitVertex`, e o shader do PC fica como está.
+  `particlesOrbitVertex`, e o shader do PC fica como está. O círculo do app é
+  desenhado na densidade da tela, sem reduzir e ampliar o `GLView` (ADR 0032).
 - **Cores e HTTPS (ADR 0021):** a cor por atividade vem de `src/lib/estados.ts`, para
   web e app (ouvindo verde, processando amarelo, script lilás, código vermelho, pausa
   azul claro); não escreva cor de estado à mão. Toda conexão é HTTPS: a página fica em
@@ -139,7 +148,10 @@ detalhe está em `docs/`.
   sobrevivem à morte da Fênix (`src/saidas.mjs` de cada um) e são **adotados** quando
   ela volta (`"independente": true` no `fenix.config.json`). O contrato entre eles é
   `GET /saude` e os WSS com token: a ponte mede a saúde dos dois sozinha
-  (`bridge/sondas.mjs`). Não ponha estado de um deles só no relato da Fênix.
+  (`bridge/sondas.mjs`). De pé com uma parte quebrada, o serviço responde
+  `degradado: "<motivo>"` no `/saude` (a A.U.R.O.R.A. confere de verdade o acesso ao
+  YouTube a cada 10 min), e a aba SISTEMAS e a voz mostram o motivo. Não ponha estado
+  de um deles só no relato da Fênix.
 - **Notificações (ADR 0027, RF-66):** o H.E.R.M.E.S. é a central: serviços pedem por
   WSS em `/notificacoes` (porta local 8792, `APOLO_NOTIFICAR_TOKEN`) e ele entrega na
   central do macOS (`osascript`, com argumentos, nunca interpolados) e no iPhone pelo
@@ -179,7 +191,10 @@ detalhe está em `docs/`.
   para a `main`, que só sai com o sim falado e `--writes` (revisão da ADR 0015).
   `desenvolvimento` com acao `backlog` lista "Pendências em etapas" numeradas
   (`etapa.posição`, contando os feitos); `propor` com `tarefa: "1.3"` faz o item
-  inteiro como pedido (`pedidoDaTarefa`, em `bridge/desenvolvimento.mjs`).
+  inteiro como pedido (`pedidoDaTarefa`, em `bridge/desenvolvimento.mjs`). `registrar`
+  (com `titulo` e `detalhe`) põe um bug relatado por voz na etapa de bugs, com commit
+  só do roadmap na branch no ar; na `main`, ou com teste no ar, ele espera em
+  `~/.apolo/bugs-pendentes.md` (`registrarBug`).
   Motivos de rollback ficam em `~/.apolo/fenix/eventos.log`.
 - Escopo atual: **apenas o core e os pontos de extensão**. Módulos de domínio
   (e-mail, agenda, finanças, automação residencial) vêm depois.

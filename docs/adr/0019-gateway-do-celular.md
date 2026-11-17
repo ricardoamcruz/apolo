@@ -48,8 +48,8 @@ URL de qualquer pessoa, protegido só pelo token. Abrir porta no roteador é pio
    nunca o agente: o canal continua exigindo o token.
 8. **Mesma cena da web.** three.js sobre `expo-gl`, com os shaders em
    `src/scene/shaders.ts`, sem cópia. Bloom fica de fora: o custo no celular não
-   compensa, e a ampliação da imagem faz parte desse papel. O círculo flutua no
-   centro da tela.
+   compensa. O círculo flutua no centro da tela. A ampliação da imagem, que fazia
+   as vezes do bloom, saiu na ADR 0032: ela borrava os pontos.
 
 ## Consequências
 - O Mac precisa estar ligado, acordado e com o A.P.O.L.O. rodando, e o Tailscale

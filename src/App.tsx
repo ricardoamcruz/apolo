@@ -29,6 +29,7 @@ import {
   bomDia,
   bridgeServers,
   registrarVoz,
+  type BomDiaResposta,
   type FenixResposta,
 } from './lib/bridge'
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
@@ -39,7 +40,7 @@ import { lerParametros, textoDaFenix } from './lib/fenix'
 import { agradece, pedeModoMaos, vigiarCancelamento } from './lib/comandos'
 import { INTERVALO_DOS_POPUPS_MS, PREFIXO_DO_BOM_DIA, descreverPopups, popupsDoBomDia } from './lib/bomDia'
 import { criarJanela } from './lib/conversa'
-import { comandarPopup, type AcaoDePopup } from './lib/comandosDePopup'
+import { comandarPopup, telaAgora, type AcaoDePopup } from './lib/comandosDePopup'
 import { abrirNoYoutube } from './lib/musica'
 import { chamadaDisponivel, deuBomDia, ouvirNome } from './lib/chamada'
 import { sistemasAgora } from './lib/estadoDosSistemas'
@@ -143,6 +144,21 @@ function clearScreenAndReport(what: 'all' | 'panels' | 'transcript'): string | n
   return saiu.length ? saiu.join(' e ') : null
 }
 
+/**
+ * O que a voz sabe da música. Sem ela, o motivo vai junto: calado, ele não saberia
+ * explicar depois por que o bom dia veio sem rock.
+ */
+function sobreAMusica(r: BomDiaResposta): string {
+  if (r.musica) return 'A música já está tocando baixinho por baixo: não a anuncie, a não ser que ele pergunte. '
+  if (r.avisoDaMusica) {
+    return (
+      `A música não tocou hoje: ${r.avisoDaMusica}. No fim do resumo, diga isso em uma frase simples, ` +
+      'com o que resolve, sem ler comandos letra por letra. Se ele perguntar, explique esse motivo. '
+    )
+  }
+  return ''
+}
+
 /** Quanto tempo a conversa fica aberta, em silêncio, com os popups do bom dia na tela. */
 const LEITURA_DO_BOM_DIA_MS = 3 * 60_000
 
@@ -154,6 +170,8 @@ export default function App() {
   const booting = useRef(false)
   /** Quando a última fala foi ouvida, de quem for. */
   const ultimaFala = useRef(0)
+  /** Alguém falou e o modelo ainda não respondeu nem ignorou: a conversa não fecha. */
+  const falaPendente = useRef(false)
   /** Há uma fala dele em andamento na transcrição (para anexar os trechos). */
   const assistantOpen = useRef(false)
   /** A tarefa em andamento foi cancelada pela fala. */
@@ -185,7 +203,10 @@ export default function App() {
         // Lendo os popups do bom dia, o silêncio dele não é fim de conversa. Fecha com
         // um "obrigado", com outro assunto ou, esquecido ali, depois de uns minutos.
         if (bomDiaNaTela.current && Date.now() - bomDiaDesde.current < LEITURA_DO_BOM_DIA_MS) return 'sim'
-        if (p === 'thinking' || Date.now() - ultimaFala.current < FALA_RECENTE_MS) return 'talvez'
+        // No Gemini a fala só se encerra quando o modelo responde: até lá, a fase segue
+        // "ouvindo", e fechar o microfone agora engoliria a resposta.
+        if (p === 'thinking' || falaPendente.current) return 'decidindo'
+        if (Date.now() - ultimaFala.current < FALA_RECENTE_MS) return 'talvez'
         return 'nao'
       },
     ),
@@ -264,7 +285,8 @@ export default function App() {
           },
         })
         if (cancelada.current) return { output: 'O Ricardo cancelou a tarefa.' }
-        return { output: text || 'Tarefa concluída, sem nada a relatar.' }
+        // O que o agente abriu fica na tela: a voz precisa saber, para reconhecer depois.
+        return { output: `${text || 'Tarefa concluída, sem nada a relatar.'}\n\n${telaAgora()}` }
       } catch (err) {
         sfx.play('error')
         return {
@@ -308,6 +330,7 @@ export default function App() {
       const { mensagem } = await autodev(acao, {
         pedido: String(args.pedido ?? ''),
         ...(typeof args.tarefa === 'string' && args.tarefa.trim() ? { tarefa: args.tarefa.trim() } : {}),
+        ...(acao === 'registrar' && { titulo: String(args.titulo ?? ''), detalhe: String(args.detalhe ?? '') }),
       })
       return { output: mensagem }
     }
@@ -327,8 +350,8 @@ export default function App() {
         output:
           `${r.texto}\n${descreverPopups(popups)}\n\nDê bom dia ao Ricardo e resuma isso em até 30 segundos, ` +
           'como um assistente que conhece a rotina dele: compromissos primeiro, um destaque por tema ' +
-          'de notícia, o GitHub numa frase. Os detalhes já estão nos popups: não leia listas. A ' +
-          'música já está tocando baixinho por baixo: não a anuncie, a não ser que ele pergunte. ' +
+          'de notícia, o GitHub numa frase. Os detalhes já estão nos popups: não leia listas. ' +
+          sobreAMusica(r) +
           'Se ele agradecer, despeça-se em poucas palavras: a tela fecha os popups e entra em espera ' +
           'sozinha. Se ele mudar de assunto, chame ajustar_interface com popups "minimizar" antes ' +
           'de responder; se ele perguntar de uma notícia ou de um compromisso, os popups ficam. ' +
@@ -501,6 +524,7 @@ export default function App() {
     if (name === 'ignorar_fala') {
       // A fala não era para ele: volta a ouvir, e o prazo da conversa segue correndo,
       // então a TV ou uma conversa ao lado acabam em espera sozinhas.
+      falaPendente.current = false
       if (s.phase === 'thinking') s.setPhase('listening')
       janela.current.garantir()
       return { output: 'Ignorado.', silent: true, descartar: true }
@@ -521,6 +545,7 @@ export default function App() {
         ultimaFala.current = Date.now()
         const s = store.getState()
         if (s.phase === 'dormant' || s.phase === 'offline' || s.phase === 'boot') return
+        falaPendente.current = true
         s.setError(null)
         assistantOpen.current = false
         sfx.duck(true)
@@ -528,6 +553,7 @@ export default function App() {
         if (s.phase !== 'tooling') s.setPhase('listening')
       },
       onSpeechStop: () => {
+        falaPendente.current = false
         const s = store.getState()
         if (s.phase === 'listening') s.setPhase('thinking')
       },
@@ -557,6 +583,7 @@ export default function App() {
         store.getState().appendToLastTurn(delta)
       },
       onSpeakingStart: () => {
+        falaPendente.current = false
         clearIdle()
         const s = store.getState()
         sfx.duck(true)
@@ -586,6 +613,7 @@ export default function App() {
       },
       onClosed: () => {
         session.current = null
+        falaPendente.current = false
         const s = store.getState()
         if (s.phase !== 'offline' && s.phase !== 'boot') {
           clearIdle()

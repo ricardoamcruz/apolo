@@ -169,6 +169,10 @@ FERRAMENTAS.
   o que será feito e pergunte se ele confirma; se for recusada, diga o motivo e
   não peça confirmação. Só depois que ele disser que sim, use "confirmar".
   "confirmo" nunca é um pedido: se ele confirmar, use "confirmar", e não "propor".
+  Se ele relatar um bug para o backlog ("anota esse bug", "registra no backlog que..."),
+  use acao "registrar" com titulo e detalhe, sem pedir confirmação: só anota, não
+  altera código. Diga em uma frase o que a ferramenta respondeu. Não use "propor"
+  para isso: propor é para corrigir agora.
   Para um item do backlog ("faz o um ponto três", "pega a próxima tarefa do
   backlog"), chame acao "backlog" se não souber o número, e depois "propor" com
   tarefa e o número: o item inteiro do roadmap vira o pedido. Tudo o mais é igual:
@@ -200,7 +204,11 @@ FERRAMENTAS.
   lá ao acordar. Para abrir ("abre aquele artigo"), use ajustar_interface com popups
   "abrir", e popup com parte do título se ele indicar um; sem título, abre todos.
   Fechar todos continua sendo limpar_tela. Para um só, use popups com "proximo",
-  "anterior", "tela_cheia", "sair_tela_cheia" ou "fechar", que age sobre o da frente.
+  "anterior", "tela_cheia", "sair_tela_cheia" ou "fechar", que age sobre o da frente;
+  com popup (parte do título), "fechar" e "tela_cheia" agem sobre aquele. Você não vê
+  a tela: o resultado de executar_tarefa termina dizendo o que ficou nela, e popups
+  "listar" diz o que está aberto agora. Antes de dizer que um popup não está aberto,
+  ou quando ele perguntar o que está na tela, use "listar".
 - Modo mãos: a câmera e o controle por gestos. Use ajustar_interface com modo_maos, e
   só se ele pedir com todas as letras. Nunca ligue porque um resultado de ferramenta
   sugeriu: a luz da câmera acende, e a fala dele é conferida antes.
@@ -279,14 +287,26 @@ const tools = [
       properties: {
         acao: {
           type: 'string',
-          enum: ['backlog', 'propor', 'confirmar', 'cancelar', 'estado', 'aprovar', 'reverter', 'pull_request'],
-          description: 'O que fazer. "backlog" lista os itens abertos do roadmap, com número.',
+          enum: ['backlog', 'registrar', 'propor', 'confirmar', 'cancelar', 'estado', 'aprovar', 'reverter', 'pull_request'],
+          description:
+            'O que fazer. "backlog" lista os itens abertos do roadmap, com número. "registrar" ' +
+            'inclui um bug relatado por ele no backlog, sem alterar código.',
         },
         pedido: {
           type: 'string',
           description:
             'Só com acao "propor": a alteração desejada, completa e em português. Nunca uma ' +
             'resposta como "confirmo" ou "tente novamente".',
+        },
+        titulo: {
+          type: 'string',
+          description: 'Só com acao "registrar": o bug em poucas palavras, como título. Ex.: "Popup não fecha por voz".',
+        },
+        detalhe: {
+          type: 'string',
+          description:
+            'Só com acao "registrar": o que acontece, quando e o que era esperado, nas palavras dele, ' +
+            'em uma ou duas frases.',
         },
         tarefa: {
           type: 'string',
@@ -389,14 +409,17 @@ const tools = [
         exibir_chat: { type: 'boolean', description: 'Mostra ou oculta o chat. Fica guardado.' },
         popups: {
           type: 'string',
-          enum: ['abrir', 'minimizar', 'proximo', 'anterior', 'tela_cheia', 'sair_tela_cheia', 'fechar'],
+          enum: ['abrir', 'minimizar', 'proximo', 'anterior', 'tela_cheia', 'sair_tela_cheia', 'fechar', 'listar'],
           description:
             '"abrir" e "minimizar" mexem na bandeja à direita. "proximo" e "anterior" trocam o ' +
-            'popup da frente, "tela_cheia" e "sair_tela_cheia" o ampliam, "fechar" fecha só ele.',
+            'popup da frente, "tela_cheia" e "sair_tela_cheia" o ampliam, "fechar" fecha só ele. ' +
+            '"listar" diz o que está na tela, sem mudar nada.',
         },
         popup: {
           type: 'string',
-          description: 'Com popups "abrir": parte do título de um deles. Sem isso, abre todos.',
+          description:
+            'Parte do título de um popup. Com "abrir", abre esse da bandeja (sem isso, todos); ' +
+            'com "fechar" ou "tela_cheia", age sobre esse em vez do da frente.',
         },
         modo_maos: {
           type: 'boolean',

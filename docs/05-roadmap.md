@@ -3,6 +3,10 @@
 Marque `[x]` ao concluir e atualize o status em `01-requisitos.md`.
 
 ## Pendências em etapas (organizadas em 08/11/2026)
+**Fase 2 encerrada em 17/11/2026** pelo Ricardo, com a `fase-2.10/lapidacao`: a Etapa 6
+de bugs ficou zerada. O que segue aberto abaixo continua valendo, e a próxima branch é
+`fase-3/<nome>` (ADR 0016).
+
 O que ficou aberto depois da `fase-2.7/alvorada`, na ordem sugerida. Cada etapa
 vira uma branch nova a partir da `main` (ADR 0016).
 
@@ -43,9 +47,15 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [ ] Ver a seção "Fase 1 — Core" abaixo: `core/` em TypeScript, `Provider`, host de módulos (com a fachada MCP da A.U.R.O.R.A.)
 
 ### Etapa 6 — Bugs para corrigir
-- [ ] **Entra em espera no meio da conversa (13/11/2026):** às vezes o Ricardo fala com o Apolo, ele não responde e entra em espera; ao apertar espaço, ele volta e responde o que foi dito. Suspeitas: a janela de conversa (`criarJanela`, 20 s sem nada dirigido a ele) fecha o microfone enquanto ele ainda está ouvindo ou pensando; o filtro da espera natural (6.a) julga a fala como conversa ao lado; ou a resposta chega com o microfone já fechado e só sai quando ele acorda. Os logs da voz (`[apolo] voz: …` no Terminal) ajudam a ver o momento em que ele entrou em espera
-- [ ] **Popup aberta que ele não reconhece (13/11/2026):** o Apolo abriu uma popup e, depois, não conseguiu identificar que ela estava aberta
-- [ ] **Não registra bug no backlog (13/11/2026):** pedido por voz para relatar um bug no backlog, o Apolo não conseguiu incluir
+- [x] **Entra em espera no meio da conversa (13/11/2026):** às vezes o Ricardo falava com o Apolo, ele não respondia e entrava em espera; ao apertar espaço, voltava e respondia. No Gemini a fala só se encerra quando o modelo responde, e a janela fechava o microfone nesse intervalo: sem o silêncio do fim da fala, o Gemini nunca respondia. Agora uma fala sem resposta segura a janela por até 20 s (`decidindo`, revisão da ADR 0024), na web e no celular
+- [x] **Dica de interromper fora de hora (15/11/2026):** o rodapé dizia "Espaço interrompe" mesmo com ele calado, depois de interrompido. Agora a dica só aparece enquanto ele fala (`src/ui/Hud.tsx`)
+- [x] **Popup aberta que ele não reconhece (13/11/2026):** o Apolo abria uma popup e, depois, não identificava que ela estava aberta, porque o modelo de voz não vê a tela e nada lhe dizia o que o agente tinha aberto. Agora o resultado de `executar_tarefa` termina com o que ficou na tela, `ajustar_interface` com popups "listar" diz o que está aberto, e "fechar" e "tela_cheia" aceitam parte do título (`descreverTela` e `acharPopup`, em `src/lib/ordemDosPopups.ts`), na web e no celular
+- [x] **Bom dia sem música, e ninguém dizia por quê (17/11/2026):** o Google derrubou a autorização do YouTube (app OAuth em modo "Teste" vence a cada 7 dias), e o bom dia saiu sem rock. O diagnóstico dizia que a A.U.R.O.R.A. estava bem, porque só conferia se o arquivo do token existia, e a voz não recebia o motivo. Agora a A.U.R.O.R.A. confere o acesso de verdade a cada 10 min e responde `degradado` no `/saude`, a aba SISTEMAS e o diagnóstico por voz mostram o motivo, e o bom dia sem música diz por quê. O app foi publicado em produção, com as páginas exigidas pelo Google em `gh-pages` (https://ricardoamcruz.github.io/apolo/)
+- [x] **Não registra bug no backlog (13/11/2026):** pedido por voz para relatar um bug no backlog, o Apolo não conseguiu incluir, porque não havia como: `desenvolvimento` só listava ou fazia itens. Agora `registrar` (com `titulo` e `detalhe`) põe o bug no fim da etapa de bugs e faz um commit só do roadmap na branch no ar; na `main` ou com teste do autodev no ar, fica em `~/.apolo/bugs-pendentes.md` e entra no próximo registro numa branch de fase (17/11/2026; `registrarBug`, em `bridge/desenvolvimento.mjs`), na web e no celular
+- [x] **Partículas borradas no iPhone (14/11/2026):** no app, as partículas em órbita e o Enxame saíam menos nítidos que na web, porque o círculo era desenhado com metade dos pixels e ampliado. Agora sai na densidade da tela, com os pontos do mesmo tamanho (ADR 0032)
+- [x] **"Não tenho permissão para executar comandos" no git log (17/11/2026):** pedido para rodar `git log -1`, o Apolo tentou o terminal livre, que é bloqueado de propósito, porque nenhuma ferramenta `git_*` mostrava o histórico. Agora `git_log` (só leitura; hash, data, autor, título e, com até 3 commits, os arquivos) faz isso, e as instruções do agente dizem que pedido de comando git é para as ferramentas `git_*`
+- [x] **Teste da Fênix trava a suíte com a máquina carregada (17/11/2026):** "um serviço que trava é derrubado e sobe de novo" (`fenix/test/fenix.test.mjs`) travava o serviço de mentira 60 ms depois de iniciar e falhou uma vez na suíte completa; ao falhar, não chegava ao `encerrar()` e o serviço ficava subindo e caindo, e o `npm test` ficou 18 min parado. Agora o serviço trava depois de responder uma vez (por comportamento, não por relógio), a subida tem 5 s de folga, e os 8 testes que sobem processos encerram tudo por `t.after`, mesmo falhando. A falha não se reproduziu com carga artificial de CPU (veio da disputa de processos na suíte); a limpeza garantida é o que impede outro travamento
+- [x] **Avisos do lint (14/11/2026):** o `npm run lint` passava com 3 avisos. Corrigidos em 17/11/2026: o filtro do `voz_log` em `bridge/server.mjs` usa `\p{Cc}` em vez da faixa escrita à mão (e passou a tirar também DEL e C1 do log), o `catch` de `bridge/chrome.mjs` não declara o `err` que não usa, e `SISTEMAS_COM_ICONE`, que ninguém usava, saiu de `src/ui/icones.tsx`. O lint sai limpo
 
 ## Próxima versão — backlog (registrado em 03/11/2026)
 Os 6 pontos que o Ricardo definiu para a próxima versão. Eles têm prioridade

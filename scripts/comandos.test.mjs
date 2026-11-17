@@ -5,7 +5,7 @@ import { test } from 'node:test'
 import { COMANDOS, textoDosComandos } from '../bridge/comandos.mjs'
 import { geminiSetup } from '../bridge/realtime.mjs'
 import { agradece, pedeCancelamento, pedeModoMaos, vigiarCancelamento } from '../src/lib/comandos.ts'
-import { ordenarPopups, vizinhoDoPopup } from '../src/lib/ordemDosPopups.ts'
+import { acharPopup, descreverTela, ordenarPopups, vizinhoDoPopup } from '../src/lib/ordemDosPopups.ts'
 
 const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms))
 
@@ -107,4 +107,39 @@ test('"obrigado" sozinho encerra; agradecer e continuar o assunto, não', () => 
     assert.equal(agradece(f), true, f)
   for (const f of ['obrigado, e a agenda de amanhã?', 'abre a segunda notícia', 'não precisa agradecer', 'obrigado por nada'])
     assert.equal(agradece(f), false, f)
+})
+
+test('a voz sabe o que está na tela: abertos, o da frente, a bandeja e os painéis', () => {
+  const popups = [
+    { id: 'a', title: 'Clima em Lisboa' },
+    { id: 'b', title: 'Notícias de tecnologia' },
+    { id: 'c', title: 'Agenda', minimized: true },
+  ]
+  const texto = descreverTela(popups, 'a', [{ title: 'Placar' }])
+  assert.match(texto, /Popups abertos: "Clima em Lisboa", "Notícias de tecnologia"; o da frente é "Clima em Lisboa"/)
+  assert.match(texto, /Minimizados na bandeja: "Agenda"/)
+  assert.match(texto, /Painéis: "Placar"/)
+  assert.equal(descreverTela([], null), 'Não há nenhum popup na tela.')
+  assert.equal(descreverTela([{ id: 'x', title: 'Mapa' }], null), 'Na tela agora. Popup aberto: "Mapa".')
+})
+
+test('um popup é achado por parte do título, sem acento nem maiúscula', () => {
+  const abertos = [
+    { id: 'a', title: 'Notícias antigas' },
+    { id: 'b', title: 'Previsão do Tempo' },
+    { id: 'c', title: 'Notícias de hoje' },
+  ]
+  assert.equal(acharPopup(abertos, 'previsao')?.id, 'b')
+  // Dois batem: vale o mais novo, o que acabou de abrir.
+  assert.equal(acharPopup(abertos, 'NOTICIAS')?.id, 'c')
+  assert.equal(acharPopup(abertos, 'mapa'), undefined)
+  assert.equal(acharPopup(abertos, '  '), undefined)
+})
+
+test('a voz pode perguntar o que está na tela sem mudar nada', () => {
+  for (const celular of [false, true]) {
+    const declaracoes = geminiSetup({ celular }).tools[0].functionDeclarations
+    const ajuste = declaracoes.find((f) => f.name === 'ajustar_interface')
+    assert.ok(ajuste.parameters.properties.popups.enum.includes('listar'), celular ? 'celular' : 'PC')
+  }
 })

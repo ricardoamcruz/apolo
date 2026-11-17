@@ -93,6 +93,11 @@ export function criarYoutube({ clienteId, segredo, pasta, fetcher = fetch, agora
       { client_id: clienteId, client_secret: segredo, refresh_token: salvo.refresh_token, grant_type: 'refresh_token' },
       fetcher,
     )
+    // invalid_grant: a autorização venceu ou foi revogada. Num app OAuth em modo
+    // "Teste", o Google a derruba a cada 7 dias.
+    if (r.corpo.error === 'invalid_grant') {
+      throw new Error('a autorização do YouTube expirou ou foi revogada; rode npm run aurora:autorizar')
+    }
     if (r.status !== 200) throw new Error(`o Google não renovou o acesso: ${r.corpo.error ?? r.status}`)
     acesso = { valor: r.corpo.access_token, expira: agora() + (r.corpo.expires_in ?? 3600) * 1000 }
     return acesso.valor
@@ -168,5 +173,19 @@ export function criarYoutube({ clienteId, segredo, pasta, fetcher = fetch, agora
     return { ...faixa, inicio: 45 + Math.floor(aleatorio() * 30) }
   }
 
-  return { configurado, autorizado, autorizar, faixas, sortear }
+  /**
+   * O acesso funciona de verdade? Ter o arquivo do token não basta: o Google pode
+   * tê-lo invalidado. Devolve o motivo, ou null se está tudo certo. Nunca rejeita.
+   */
+  async function conferir() {
+    if (!configurado()) return 'faltam APOLO_GOOGLE_CLIENT_ID e APOLO_GOOGLE_CLIENT_SECRET no .env.local'
+    try {
+      await token()
+      return null
+    } catch (err) {
+      return err.message
+    }
+  }
+
+  return { configurado, autorizado, autorizar, conferir, faixas, sortear }
 }

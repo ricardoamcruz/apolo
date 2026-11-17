@@ -1,6 +1,6 @@
 /** Testes da A.U.R.O.R.A., sem rede: o Google, o Outlook e o gh são de mentira. */
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -198,4 +198,21 @@ test('a A.U.R.O.R.A. não importa nada de fora da própria pasta', () => {
       assert.ok(alvo.startsWith('node:') || alvo.startsWith('./') || /^\.\.\/src\//.test(alvo), `${arquivo} importa ${alvo}`)
     }
   }
+})
+
+test('YouTube: token que o Google invalidou é detectado, com o que fazer, mesmo com o arquivo no disco', async () => {
+  const pasta = mkdtempSync(join(tmpdir(), 'aurora-'))
+  writeFileSync(join(pasta, 'youtube.json'), JSON.stringify({ refresh_token: 'vencido' }))
+  const fetcher = async () => ({ ok: false, status: 400, json: async () => ({ error: 'invalid_grant' }) })
+  const yt = criarYoutube({ clienteId: 'c', segredo: 's', pasta, fetcher })
+  assert.equal(yt.autorizado(), true, 'o arquivo existe: não é prova de acesso')
+  assert.match(await yt.conferir(), /expirou.*aurora:autorizar/)
+  assert.equal(await criarYoutube({ clienteId: '', segredo: '', pasta }).conferir() !== null, true)
+})
+
+test('YouTube: conferir com acesso bom não acusa nada', async () => {
+  const pasta = mkdtempSync(join(tmpdir(), 'aurora-'))
+  writeFileSync(join(pasta, 'youtube.json'), JSON.stringify({ refresh_token: 'rt' }))
+  const fetcher = async () => ({ ok: true, status: 200, json: async () => ({ access_token: 'at', expires_in: 3600 }) })
+  assert.equal(await criarYoutube({ clienteId: 'c', segredo: 's', pasta, fetcher }).conferir(), null)
 })

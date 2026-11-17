@@ -6,6 +6,10 @@
  * a aba SISTEMAS continua sabendo quem está de pé, e o bom dia continua chegando.
  * O que a Fênix conta (subindo, caiu) só completa o quadro quando ela está aqui.
  *
+ * Um serviço de pé com uma parte quebrada responde `degradado: "<motivo>"` (a
+ * A.U.R.O.R.A. sem acesso ao YouTube, por exemplo): ele continua no ar, e a aba
+ * SISTEMAS mostra o motivo em vez de um verde enganoso.
+ *
  * Daqui só sai um GET, sem token, para endereços do .env.local.
  */
 import { request } from 'node:https'
@@ -46,7 +50,7 @@ export function sondar(url, { ca, prazoMs = 3000 } = {}) {
  * @param alvos    `[{ nome, url }]`: só os serviços configurados neste .env.local
  * @param aoMudar  chamado quando algum estado muda
  * @returns null sem alvos; senão `{ estado(nome), motivo(nome), checar(), parar() }`,
- *          com estado 'connected', 'failed' ou null (ainda não medido)
+ *          com estado 'connected', 'degraded', 'failed' ou null (ainda não medido)
  */
 export function criarSondas({ alvos, ca, intervaloMs = 15_000, prazoMs = 3000, aoMudar = () => {}, sondarUrl = sondar }) {
   const lista = alvos.filter((a) => a?.nome && a?.url)
@@ -60,10 +64,12 @@ export function criarSondas({ alvos, ca, intervaloMs = 15_000, prazoMs = 3000, a
       lista.map(async ({ nome, url }) => {
         const r = await sondarUrl(url, { ca, prazoMs })
         const e = estados.get(nome)
-        const status = r.ok ? 'connected' : 'failed'
-        if (e.status !== status) mudou = true
+        const degradado = r.ok && typeof r.dados?.degradado === 'string' && r.dados.degradado.trim()
+        const status = !r.ok ? 'failed' : degradado ? 'degraded' : 'connected'
+        const motivo = !r.ok ? r.motivo : degradado ? r.dados.degradado.trim().slice(0, 200) : null
+        if (e.status !== status || e.motivo !== motivo) mudou = true
         e.status = status
-        e.motivo = r.ok ? null : r.motivo
+        e.motivo = motivo
       }),
     )
     if (mudou && !parado) aoMudar()

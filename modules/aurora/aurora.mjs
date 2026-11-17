@@ -42,7 +42,20 @@ const pasta = valor('PASTA') ?? join(homedir(), '.apolo', 'aurora')
 /** O padrão do projeto (docs/adr/0021), só quando o arquivo existe. */
 const seExistir = (arquivo) => (existsSync(arquivo) ? arquivo : undefined)
 const youtube = criarYoutube({ clienteId: valor('GOOGLE_CLIENT_ID'), segredo: valor('GOOGLE_CLIENT_SECRET'), pasta })
-const montar = () => bomDia({ config, youtube, agendaIcs: valor('AGENDA_ICS') })
+/**
+ * O que está quebrado na música, para o `/saude`: o processo de pé não quer dizer
+ * que o bom dia tem rock. Conferido de tempos em tempos e a cada bom dia.
+ */
+let problemaDaMusica = null
+const CONFERENCIA_MS = 10 * 60_000
+const conferirMusica = async () => {
+  problemaDaMusica = await youtube.conferir()
+}
+const montar = async () => {
+  const r = await bomDia({ config, youtube, agendaIcs: valor('AGENDA_ICS') })
+  problemaDaMusica = r.avisoDaMusica ?? null
+  return r
+}
 
 const subcomando = process.argv[2] ?? 'servir'
 
@@ -93,7 +106,15 @@ const responder = async (req, res) => {
     res.end(JSON.stringify(corpo))
   }
   if (req.method !== 'GET') return json(404, {})
-  if (req.url === '/saude') return json(200, { ok: true, servico: 'aurora', youtube: youtube.autorizado() })
+  if (req.url === '/saude') {
+    // `degradado`: de pé, mas com uma parte quebrada (docs/adr/0029).
+    return json(200, {
+      ok: true,
+      servico: 'aurora',
+      youtube: youtube.autorizado() && !problemaDaMusica,
+      ...(problemaDaMusica && { degradado: `música do bom dia: ${problemaDaMusica}` }),
+    })
+  }
   if (!autorizado(req.headers.authorization)) return json(401, { ok: false })
   if (req.url !== '/bom-dia') return json(404, {})
   try {
@@ -126,6 +147,8 @@ servidor.on('error', (err) => {
 servidor.listen(porta, valor('HOST') ?? '127.0.0.1', () => {
   console.log(`[aurora] A.U.R.O.R.A. servindo o bom dia na porta ${porta}${tls ? '' : ' (sem TLS)'}`)
   if (!youtube.autorizado()) console.log('[aurora] YouTube ainda não autorizado: rode npm run aurora:autorizar')
+  void conferirMusica().then(() => problemaDaMusica && console.log(`[aurora] música do bom dia: ${problemaDaMusica}`))
+  setInterval(() => void conferirMusica(), CONFERENCIA_MS).unref()
 })
 const sair = () => servidor.close(() => process.exit(0))
 process.on('SIGINT', sair)

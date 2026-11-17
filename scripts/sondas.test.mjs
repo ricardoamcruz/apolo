@@ -58,3 +58,22 @@ test('criarSondas: só os configurados, estado por serviço e aviso quando muda'
   assert.equal(avisos, antes + 1)
   s.parar()
 })
+
+test('de pé com uma parte quebrada: degradado, com o motivo do próprio serviço', async () => {
+  let avisos = 0
+  let resposta = { ok: true, dados: { ok: true, degradado: 'música do bom dia: a autorização do YouTube expirou' } }
+  const s = criarSondas({
+    alvos: [{ nome: 'aurora', url: 'https://a/saude' }],
+    sondarUrl: async () => resposta,
+    aoMudar: () => avisos++,
+  })
+  await s.checar()
+  assert.equal(s.estado('aurora'), 'degraded')
+  assert.match(s.motivo('aurora'), /YouTube expirou/)
+  resposta = { ok: true, dados: { ok: true } }
+  await s.checar()
+  assert.equal(s.estado('aurora'), 'connected')
+  assert.equal(s.motivo('aurora'), null)
+  assert.ok(avisos >= 2, 'avisa ao degradar e ao voltar')
+  s.parar()
+})

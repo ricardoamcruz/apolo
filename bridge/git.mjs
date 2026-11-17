@@ -179,6 +179,35 @@ export function criarGit({ repo, ocupado = () => null, criarPr = prPeloGh }) {
     return { ok: true, texto: linhas.join('\n') }
   }
 
+  /**
+   * Os últimos commits: o `git log` que o Ricardo pede por voz. Só leitura; com
+   * poucos commits, mostra também os arquivos de cada um.
+   */
+  async function log({ quantos = 5, branch } = {}) {
+    const n = Math.min(20, Math.max(1, Math.trunc(Number(quantos) || 5)))
+    // Um nome de ref, nunca uma opção: "--output=..." não pode chegar ao git.
+    if (branch !== undefined && (!/^[\w./-]+$/.test(branch) || branch.startsWith('-'))) {
+      return { ok: false, texto: `Nome de branch inválido: ${branch}.` }
+    }
+    const ref = branch ?? 'HEAD'
+    if ((await talvez(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])) === null) {
+      return { ok: false, texto: `Não existe a branch ${ref}.` }
+    }
+    const saida = await git([
+      'log',
+      `-${n}`,
+      '--date=format:%d/%m/%Y %H:%M',
+      '--format=%h · %ad · %an%n  %s',
+      ...(n <= 3 ? ['--name-only'] : []),
+      ref,
+      '--',
+    ])
+    const onde = branch ?? (await branchAtual())
+    // Quantos vieram de fato: pedir 20 numa branch com 3 não pode dizer "20".
+    const vieram = (saida.match(/^[0-9a-f]{7,} · /gm) ?? []).length
+    return { ok: true, texto: cortar(`${vieram === 1 ? 'Último commit' : `Últimos ${vieram} commits`} em ${onde}:\n${saida}`) }
+  }
+
   async function diff({ branch } = {}) {
     if (branch !== undefined && branch !== null && branch !== '') {
       if (!branchValida(branch)) return { ok: false, texto: `Nome de branch inválido: ${branch}.` }
@@ -350,7 +379,7 @@ export function criarGit({ repo, ocupado = () => null, criarPr = prPeloGh }) {
     }
   }
 
-  return { status, diff, commit, pullRequest }
+  return { status, log, diff, commit, pullRequest }
 }
 
 /** O `gh` existe nesta máquina? Só isso — a conta é problema do próprio `gh`. */
@@ -371,6 +400,15 @@ open a pull request at all (an \`origin\` remote plus the GitHub CLI).
 
 Call it before committing or opening a pull request, and whenever the user asks
 what is pending in the code. It changes nothing.`
+
+const LOG_DESCRIPTION = `Show the latest commits of A.P.O.L.O.'s own repository — what \`git log\` would.
+
+Each commit with its short hash, date, author and subject; with three or fewer,
+also the files each one touched. Defaults to the last 5 on the branch the running
+copy is on.
+
+Read-only. Use it whenever the user asks for the last commit, the recent history,
+or literally to "run git log": there is no free terminal, and this is that command.`
 
 const DIFF_DESCRIPTION = `Show what changed in A.P.O.L.O.'s own repository.
 
@@ -426,6 +464,15 @@ export function gitServer({ repo, allowWrites, ocupado, criarPr }) {
 
   const tools = [
     tool('git_status', STATUS_DESCRIPTION, {}, proteger(() => g.status())),
+    tool(
+      'git_log',
+      LOG_DESCRIPTION,
+      {
+        quantos: z.number().int().optional().catch(undefined).describe('How many commits, 1 to 20. Default 5.'),
+        branch: z.string().optional().catch(undefined).describe('Another branch. Omit for the one in use.'),
+      },
+      proteger((args) => g.log({ quantos: args.quantos, branch: args.branch })),
+    ),
     tool(
       'git_diff',
       DIFF_DESCRIPTION,

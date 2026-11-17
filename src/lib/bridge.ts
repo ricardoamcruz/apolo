@@ -46,7 +46,7 @@ type Frame = {
   mode?: string
   seconds?: number
   when?: string
-  servers?: Array<string | { name?: string; status?: string }>
+  servers?: Array<string | { name?: string; status?: string; motivo?: string }>
   estado?: AutodevEstado
   valores?: Exibicao
   resposta?: string
@@ -162,7 +162,10 @@ const respostas = new Map<string, (r: AutodevResposta) => void>()
  * Uma ação do autodesenvolvimento: backlog, propor (com o pedido ou o número de uma
  * tarefa do backlog), confirmar, cancelar, aprovar, reverter, estado.
  */
-export async function autodev(acao: string, extra?: { pedido?: string; tarefa?: string }): Promise<AutodevResposta> {
+export async function autodev(
+  acao: string,
+  extra?: { pedido?: string; tarefa?: string; titulo?: string; detalhe?: string },
+): Promise<AutodevResposta> {
   const ws = await connect()
   const id = `d${++askSeq}`
   return new Promise((resolve) => {
@@ -189,7 +192,14 @@ export type MusicaDoBomDia = {
   /** A playlist de onde ela veio, para continuar no YouTube Music. */
   playlist?: string
 }
-export type BomDiaResposta = DadosDoBomDia & { ok: boolean; texto?: string; musica?: MusicaDoBomDia | null; mensagem?: string }
+export type BomDiaResposta = DadosDoBomDia & {
+  ok: boolean
+  texto?: string
+  musica?: MusicaDoBomDia | null
+  /** Por que a música não veio, quando não veio. */
+  avisoDaMusica?: string | null
+  mensagem?: string
+}
 const respostasDaAurora = new Map<string, (r: BomDiaResposta) => void>()
 
 /** Pede o bom dia à A.U.R.O.R.A., pela ponte. */
@@ -323,7 +333,7 @@ function dispatch(ws: WebSocket) {
       // then again with live status once the agent initialises. Keep listening
       // so the later, more accurate list wins.
       servers = (msg.servers ?? [])
-        .map((s) => (typeof s === 'string' ? { nome: s } : { nome: s.name ?? '', estado: s.status }))
+        .map((s) => (typeof s === 'string' ? { nome: s } : { nome: s.name ?? '', estado: s.status, motivo: s.motivo }))
         .filter((s) => s.nome)
       onServers?.(servers)
       firstReady.resolve()

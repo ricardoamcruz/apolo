@@ -59,7 +59,7 @@ import { criarClienteFenix } from './fenix.mjs'
 import { criarRenascimento, lerReceita } from './renascer.mjs'
 import { criarClienteAurora } from './aurora.mjs'
 import { criarSondas } from './sondas.mjs'
-import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog } from './desenvolvimento.mjs'
+import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog, registrarBug } from './desenvolvimento.mjs'
 import { criarTelemetria } from './telemetria.mjs'
 import { garantirCertificado } from './tls.mjs'
 import { criarCentral } from './extensoes.mjs'
@@ -186,7 +186,14 @@ const canais = { fenix: null, hermes: null, aurora: null }
 /** A saúde medida pela própria ponte. Criada mais abaixo, depois do certificado. */
 let sondas = null
 /** De pé pela sonda vale mais que qualquer relato; sem relato da Fênix, vale a sonda. */
-const doServico = (nome) => (sondas?.estado(nome) === 'connected' ? 'connected' : (canais[nome] ?? sondas?.estado(nome) ?? null))
+const doServico = (nome) => {
+  const medido = sondas?.estado(nome)
+  // De pé com uma parte quebrada também é medida direta: vale mais que o "ligado" da Fênix.
+  if (medido === 'connected' || medido === 'degraded') return medido
+  return canais[nome] ?? medido ?? null
+}
+/** O motivo, quando a própria ponte mediu um problema. */
+const motivoDoServico = (nome) => (sondas?.estado(nome) === doServico(nome) ? sondas?.motivo(nome) : null) ?? undefined
 /** Quantos celulares estão conectados agora pelo H.E.R.M.E.S. */
 let celularesConectados = 0
 const STATUS_DO_SERVICO = { ligado: 'connected', subindo: 'pending', caiu: 'failed' }
@@ -195,9 +202,9 @@ const comCanais = (servers) => {
   const extras = []
   if (canais.fenix) extras.push({ name: 'fenix', status: canais.fenix })
   const hermes = doServico('hermes') ?? (celularesConectados ? 'connected' : null)
-  if (hermes) extras.push({ name: 'celular', status: hermes })
+  if (hermes) extras.push({ name: 'celular', status: hermes, motivo: motivoDoServico('hermes') })
   const doAurora = doServico('aurora')
-  if (doAurora) extras.push({ name: 'aurora', status: doAurora })
+  if (doAurora) extras.push({ name: 'aurora', status: doAurora, motivo: motivoDoServico('aurora') })
   return [...servers, ...extras]
 }
 /** Cada interface reenvia a própria lista quando um canal muda. */
@@ -349,6 +356,10 @@ O seu próprio código — as ferramentas \`git_*\`:
 - \`git_status\` diz em que branch a cópia em execução está, o que ainda não foi
   commitado e quais branches esperam revisão. Use antes de falar do estado do
   código, e nunca adivinhe isso.
+- \`git_log\` mostra os últimos commits (hash, data, autor e título).
+- Pedido para "rodar" um comando git (git log, git status, git diff) é pedido para
+  estas ferramentas: não existe terminal livre, e é para isso que elas existem.
+  Só diga que não pode se nenhuma delas fizer o que ele pediu.
 - \`git_diff\` mostra o que mudou. Leia antes de escrever mensagem de commit ou
   descrição de pull request: descreva o que está lá, não o que você supõe.
 - \`git_commit\` guarda o trabalho pendente numa branch. Diga numa frase o que
@@ -959,8 +970,14 @@ const lerBacklog = () => readFile(join(REPO, 'docs/05-roadmap.md'), 'utf8').then
  * abertos; "propor" com `tarefa` ("1.3") pega o item inteiro do roadmap como
  * pedido, do jeito que o Ricardo pede no chat (docs/adr/0028).
  */
-async function acaoDoAutodev({ acao, pedido, tarefa }) {
+async function acaoDoAutodev({ acao, pedido, tarefa, titulo, detalhe }) {
   if (acao === 'backlog') return { ok: true, mensagem: textoDoBacklog(await lerBacklog()) }
+  // Registrar um bug é commit no repositório: só com o autodesenvolvimento ligado.
+  if (acao === 'registrar') {
+    const estado = autodev.estado()
+    if (!estado.ligado) return autodev.acao(acao)
+    return registrarBug({ repo: REPO, titulo, detalhe, emTeste: !['ocioso', 'proposto'].includes(estado.fase) })
+  }
   if (acao === 'propor' && typeof tarefa === 'string' && tarefa.trim()) {
     const item = (await lerBacklog()).find((i) => i.id === tarefa.trim())
     if (!item) return { ok: false, mensagem: `Não há item ${tarefa.trim()} aberto no backlog. ${textoDoBacklog(await lerBacklog())}` }
@@ -1545,7 +1562,8 @@ const atender = (socket, { celular = false } = {}) => {
 
     // Os passos da conexão de voz do navegador, que só ele vê (src/lib/voz/types.ts).
     if (msg.type === 'voz_log' && !celular && typeof msg.texto === 'string') {
-      const texto = msg.texto.replace(/[\u0000-\u001f]+/g, ' ').slice(0, 300)
+      // Sem caracteres de controle (C0, DEL e C1): uma quebra de linha forjada não cria linha falsa no log.
+      const texto = msg.texto.replace(/\p{Cc}+/gu, ' ').slice(0, 300)
       registrarEstadoDaVoz(texto)
       return console.log(`[apolo] voz: ${texto}`)
     }

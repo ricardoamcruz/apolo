@@ -61,6 +61,7 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [x] **A.T.L.A.S. desalinhado na aba SISTEMAS (17/11/2026):** o nome do A.T.L.A.S. aparece à esquerda dos outros, porque não há ícone para ele em `src/ui/icones.tsx` e o marcador de reserva (`.tick`) é mais estreito que um ícone. Esperado: alinhado como os outros. Como as extensões são plugáveis, o ícone deveria vir da própria extensão (por exemplo, um `icone.svg` declarado no manifesto), e a reserva ter a mesma largura de um ícone. Corrigido no mesmo dia: o manifesto declara `icone` (um `.svg` da pasta), a aba o desenha como máscara na cor do estado, e o losango de reserva ocupa a largura de um ícone (ADR 0033); o A.T.L.A.S. ganhou um globo de traço
 - [ ] **Falha ao identificar música tocando para YouTube Music (18/11/2026):** O sistema informou que nenhuma música estava tocando quando foi solicitado abrir a faixa em reprodução no YouTube Music.
 - [ ] **Atraso na resposta ao limpar a tela (18/11/2026):** O sistema apresentou atraso ao processar o comando para limpar a tela e fechar os popups.
+- [ ] **Falha ao acordar da espera e interrupcao do microfone (18/11/2026):** O assistente as vezes nao responde ao ser chamado da espera ou desativa o microfone no meio de explicacoes longas.
 
 ## Próxima versão — backlog (registrado em 03/11/2026)
 Os 6 pontos que o Ricardo definiu para a próxima versão. Eles têm prioridade

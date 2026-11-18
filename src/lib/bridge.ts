@@ -288,16 +288,19 @@ let firstReady = deferred()
 
 let everConnected = false
 
-/** Backoff for the automatic re-dial. It gives up after the last delay rather
- *  than retrying forever — a bridge that has been down for half a minute is
- *  usually one you stopped on purpose, and the next ask() re-dials anyway. */
-const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 8000]
+/**
+ * A espera entre as tentativas de religar à ponte. Nunca desiste (bug crítico de
+ * 18/11/2026): antes parava depois de ~24 s, achando que uma ponte fora por meio
+ * minuto tinha sido parada de propósito e que o próximo ask() religaria. Mas a voz
+ * não chama ask(): uma ponte que reiniciou devagar deixava a página órfã, e ele
+ * ficava mudo. Depois da lista, tenta a cada 8 s para sempre.
+ */
+const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000]
 let attempt = 0
 let reconnectTimer = 0
 
 function scheduleReconnect() {
-  if (attempt >= RECONNECT_DELAYS.length) return
-  const delay = RECONNECT_DELAYS[attempt]
+  const delay = RECONNECT_DELAYS[Math.min(attempt, RECONNECT_DELAYS.length - 1)]
   attempt += 1
   clearTimeout(reconnectTimer)
   reconnectTimer = window.setTimeout(() => {
@@ -305,6 +308,24 @@ function scheduleReconnect() {
     // isto a página desistia na primeira tentativa, antes de a ponte voltar.
     void connect().catch(scheduleReconnect)
   }, delay)
+}
+
+/**
+ * Voltou à frente, ou a rede voltou: tenta já, sem esperar a vez. Um Chrome em
+ * segundo plano atrasa os temporizadores, e um Mac que dormiu volta com as conexões
+ * mortas.
+ */
+function religarJa() {
+  if (socket?.readyState === WebSocket.OPEN || connecting || !everConnected) return
+  attempt = 0
+  clearTimeout(reconnectTimer)
+  void connect().catch(scheduleReconnect)
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', religarJa)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') religarJa()
+  })
 }
 
 /**

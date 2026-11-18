@@ -65,12 +65,14 @@ export async function ativar(apolo) {
   const estilo = document.createElement('style')
   estilo.textContent = CSS
   camada.append(estilo)
-  const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-  renderer.setClearColor(0x000000, 0)
-  const tela = renderer.domElement
-  tela.className = 'atlas-tela'
+  // A placa de vídeo só é ocupada com o mapa na tela: o contexto WebGL nasce ao abrir e
+  // é devolvido ao fechar (bug crítico de 18/11/2026). Os gestos ficam neste palco, que
+  // não muda; o canvas entra e sai dele.
+  const tela = div('atlas-tela')
   camada.append(tela)
+  /** @type {import('three').WebGLRenderer | null} */
+  let renderer = null
+  const razaoDePixels = () => Math.min(window.devicePixelRatio || 1, 2)
   const rotulos = div('atlas-rotulos')
   const leitura = div('atlas-leitura')
   camada.append(rotulos, leitura)
@@ -963,10 +965,10 @@ export async function ativar(apolo) {
   function redimensionar() {
     const w = Math.max(1, camada.clientWidth)
     const h = Math.max(1, camada.clientHeight)
-    renderer.setSize(w, h, false)
+    renderer?.setSize(w, h, false)
     camera.aspect = w / h
     camera.updateProjectionMatrix()
-    const px = (h * renderer.getPixelRatio()) / (2 * Math.tan(rad(FOV / 2)))
+    const px = (h * razaoDePixels()) / (2 * Math.tan(rad(FOV / 2)))
     for (const m of materiais) m.uniforms.uSize.value = m.userData.tamanho * px
     pxPorUnidade = px
     for (const b of blocos.values()) if (b.material) b.material.uniforms.uSize.value = b.material.uniforms.uTamanho.value * px
@@ -989,15 +991,43 @@ export async function ativar(apolo) {
   const normal = new THREE.Vector3()
   const paraCamera = new THREE.Vector3()
 
+  /** Cria o contexto WebGL e sobe os pontos para a placa de vídeo. */
+  function ligarPlaca() {
+    renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' })
+    renderer.setPixelRatio(razaoDePixels())
+    renderer.setClearColor(0x000000, 0)
+    renderer.domElement.className = 'atlas-placa'
+    tela.append(renderer.domElement)
+    redimensionar()
+    renderer.compile(scene, camera)
+  }
+  /**
+   * Devolve a placa de vídeo: tira tudo dela (a memória de CPU fica, para a próxima
+   * abertura não montar de novo), perde o contexto de propósito e tira o canvas.
+   * Os blocos da cidade saem junto; voltam do cache do navegador.
+   */
+  function soltarPlaca() {
+    if (!renderer) return
+    renderer.setAnimationLoop(null)
+    limparBlocos()
+    scene.traverse((o) => {
+      o.geometry?.dispose()
+      for (const m of [o.material].flat()) m?.dispose()
+    })
+    renderer.dispose()
+    renderer.forceContextLoss()
+    renderer.domElement.remove()
+    renderer = null
+  }
   function iniciar() {
+    if (!renderer) ligarPlaca()
     rodando = true
     ultimoQuadro = performance.now()
     renderer.setAnimationLoop(quadro)
   }
   function parar() {
     rodando = false
-    renderer.setAnimationLoop(null)
-    renderer.clear()
+    soltarPlaca()
   }
 
   /* ------------------------------------------- os nomes dos lugares
@@ -1287,11 +1317,7 @@ export async function ativar(apolo) {
     renderer.render(scene, camera)
   }
 
-  // Sobe os pontos para a placa de vídeo agora, invisível, para a primeira abertura não engasgar.
   for (const m of materiais) m.uniforms.uAlfa.value = 0
-  renderer.compile(scene, camera)
-  renderer.render(scene, camera)
-  renderer.clear()
 
   return () => {
     parar()
@@ -1312,7 +1338,6 @@ export async function ativar(apolo) {
     disco.dispose()
     aro.dispose()
     feixe.dispose()
-    renderer.dispose()
   }
 }
 
@@ -1436,6 +1461,7 @@ const CSS = `
   .atlas-voce { color: var(--atlas-terceira); text-shadow: 0 0 8px color-mix(in srgb, var(--atlas-terceira) 60%, transparent); }
   .atlas-voce::before { background: var(--atlas-terceira); }
   .atlas-tela { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; touch-action: none; cursor: grab; }
+  .atlas-placa { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .atlas-tela.arrastando { cursor: grabbing; }
   .atlas-rotulos { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
   .atlas-rotulo {

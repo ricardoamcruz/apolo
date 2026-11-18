@@ -2,7 +2,7 @@
   "apolo": "1",
   "id": "atlas",
   "nome": "A.T.L.A.S.",
-  "versao": "0.2.0",
+  "versao": "0.2.1",
   "descricao": "O globo de pontos: marca lugares, coordenadas e resultados de pesquisa.",
   "interface": "interface.js",
   "icone": "icone.svg",

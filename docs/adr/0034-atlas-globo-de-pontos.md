@@ -33,9 +33,16 @@ inteiro. Ao fechar, o caminho inverso, e o Enxame volta enquanto os últimos pon
 juntam. Tudo no shader: a CPU só avança um número por quadro.
 
 **Desempenho.** O laço de desenho só roda com o mapa aberto ou em transição. As
-camadas são montadas depois da partida e sobem para a placa de vídeo invisíveis, para
-a primeira abertura não engasgar. A camada densa só é desenhada de perto. Densidade
-de pixels até 2.
+camadas são montadas na memória depois da partida. A camada densa só é desenhada de
+perto. Densidade de pixels até 2.
+
+**A placa de vídeo só com o mapa aberto** (revisão de 18/11/2026, depois do bug
+crítico em que a página da interface morreu). O contexto WebGL do A.T.L.A.S. nasce ao
+abrir o mapa, e os pontos sobem para a placa nessa hora. Ao terminar de fechar, a
+extensão tira tudo da placa (a memória de CPU fica, para a próxima abertura não montar
+de novo), perde o contexto de propósito e tira o canvas. Os blocos da cidade saem
+junto e voltam do cache do navegador. Com o mapa fechado, a página tem um contexto
+WebGL só: o da cena. Os gestos ficam num palco que não muda; o canvas entra e sai dele.
 
 **O zoom.**
 - Um lugar: uma calota do tamanho do lugar (pela caixa que a busca devolve), nunca

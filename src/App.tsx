@@ -24,6 +24,7 @@ import {
   watchConnection,
   watchAutodev,
   watchFenix,
+  watchExtensoes,
   autodev,
   fenix,
   bomDia,
@@ -46,6 +47,7 @@ import { chamadaDisponivel, deuBomDia, ouvirNome } from './lib/chamada'
 import { sistemasAgora } from './lib/estadoDosSistemas'
 import { resumoSistemas } from './lib/sistemas'
 import { handleBrowser } from './lib/navegador'
+import { aplicarExtensoes, chamarFerramentaDeExtensao, telaDasExtensoes, type ExtensaoNaPonte } from './lib/plugaveis'
 
 // Os passos da conexão de voz também vão para o log da ponte.
 registrarDestinoDaVoz(registrarVoz)
@@ -286,7 +288,7 @@ export default function App() {
         })
         if (cancelada.current) return { output: 'O Ricardo cancelou a tarefa.' }
         // O que o agente abriu fica na tela: a voz precisa saber, para reconhecer depois.
-        return { output: `${text || 'Tarefa concluída, sem nada a relatar.'}\n\n${telaAgora()}` }
+        return { output: `${text || 'Tarefa concluída, sem nada a relatar.'}\n\n${telaAgora()} ${telaDasExtensoes()}`.trim() }
       } catch (err) {
         sfx.play('error')
         return {
@@ -472,6 +474,7 @@ export default function App() {
       if (typeof args.popups === 'string') {
         const titulo = typeof args.popup === 'string' ? args.popup : undefined
         vazio = comandarPopup(args.popups as AcaoDePopup, titulo)
+        if (args.popups === 'listar') vazio = `${vazio} ${telaDasExtensoes()}`.trim()
       }
       if (args.modo_maos === false) {
         desligarModoMaos()
@@ -528,6 +531,13 @@ export default function App() {
       if (s.phase === 'thinking') s.setPhase('listening')
       janela.current.garantir()
       return { output: 'Ignorado.', silent: true, descartar: true }
+    }
+
+    // As extensões plugáveis (docs/adr/0033): ferramentas que vêm de extensoes/.
+    const daExtensao = await chamarFerramentaDeExtensao(name, args)
+    if (daExtensao) {
+      armIdle()
+      return daExtensao
     }
 
     return { output: `Ferramenta desconhecida: ${name}.` }
@@ -708,6 +718,7 @@ export default function App() {
     // O trabalho leva minutos, então o resultado é anunciado quando chega. Só
     // o que começou com esta página aberta: o estado salvo não é notícia.
     watchFenix((estado) => store.getState().setFenix(estado))
+    watchExtensoes((lista) => void aplicarExtensoes(lista as ExtensaoNaPonte[]))
     let acompanhando = false
     let testeAvisado = false
     watchAutodev((estado) => {

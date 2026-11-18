@@ -16,9 +16,13 @@ import { enxameVertex, particlesFragment, pontosDoEnxame } from './shaders'
  */
 
 const PONTOS = 2600
+
 const PONTOS_DO_MIOLO = 220
-/** O raio da esfera em relação ao do anel: ela tem volume, então cabe um pouco menor. */
-const RAIO_RELATIVO = 0.9
+/**
+ * O raio da esfera em relação ao do anel: ela tem volume, então cabe um pouco menor.
+ * Exportado para as extensões que tomam o lugar do núcleo (src/lib/plugaveis.ts).
+ */
+export const RAIO_RELATIVO = 0.9
 const MIOLO_RELATIVO = 0.2
 
 function criarCamada(quantos: number, tamanho: number) {
@@ -59,7 +63,8 @@ export function Enxame({ drive }: { drive: Drive }) {
   useFrame((state, dt) => {
     if (!grupo.current) return
     const r = drive.reactor
-    grupo.current.visible = r.visible && r.style === ESTILO_ENXAME
+    // Emprestado a uma extensão, o Enxame se apaga em vez de sumir: ela nasce dele.
+    grupo.current.visible = r.visible && r.style === ESTILO_ENXAME && drive.cedido < 0.995
     if (!grupo.current.visible) return
     const s = drive.standby
     grupo.current.scale.setScalar(
@@ -77,7 +82,7 @@ export function Enxame({ drive }: { drive: Drive }) {
       // Acumulado, como o anel: a espera quase para o giro, e ele retoma de onde estava.
       u.uPhase.value += dt * (0.35 + u.uLevel.value * 0.6) * drive.spin * r.spin * ritmo * (1 - s * 0.85)
       u.uOpen.value += (drive.open - u.uOpen.value) * Math.min(1, dt * 1.6)
-      u.uIntensity.value = r.intensity * THREE.MathUtils.lerp(1, 0.55 + drive.pulse * 0.45, s)
+      u.uIntensity.value = r.intensity * THREE.MathUtils.lerp(1, 0.55 + drive.pulse * 0.45, s) * (1 - drive.cedido)
       ;(u.uColor.value as THREE.Color).lerp(r.color, Math.min(1, dt * 2.5))
     }
   })

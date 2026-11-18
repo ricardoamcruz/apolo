@@ -26,8 +26,8 @@ detalhe está em `docs/`.
 - **Fase 0 — Fundação: concluída** (02/11/2026), exceto o Android, adiado.
   Próxima: **Fase 1 — Core**. Ver `docs/05-roadmap.md`.
 - **Fase 2 encerrada (17/11/2026, decisão do Ricardo):** a última branch dela foi
-  `fase-2.10/lapidacao`. A próxima branch é `fase-3/<nome-criativo>`, e depois
-  `fase-3.1/...` (ADR 0016).
+  `fase-2.10/lapidacao`. A Fase 3 começou com `fase-3.1/terra-a-vista` (a pedido
+  dele, já em 3.1); a próxima é `fase-3.2/<nome-criativo>` (ADR 0016).
 - **Pendências em etapas:** o que está aberto fica em "Pendências em etapas", no
   topo de `docs/05-roadmap.md` (08/11/2026): validar, Horizon, contexto e
   comunicação, o que está bloqueado e a Fase 1. Comece por lá.
@@ -196,6 +196,24 @@ detalhe está em `docs/`.
   só do roadmap na branch no ar; na `main`, ou com teste no ar, ele espera em
   `~/.apolo/bugs-pendentes.md` (`registrarBug`).
   Motivos de rollback ficam em `~/.apolo/fenix/eventos.log`.
+- **Extensões plugáveis (ADR 0033, RF-68):** uma pasta em `extensoes/<id>/`
+  (`apolo.extensao.json`, um `interface.js` de arquivo só e os dados) liga, troca ou
+  sai no ar, sem recompilar: a ponte lê e serve (`bridge/plugaveis.mjs`, sensível, que
+  não executa nada da extensão), e a interface importa o módulo como `blob:` e lhe dá a
+  API de `src/lib/plugaveis.ts` (o contrato inteiro). Só ferramentas `livre`; nome
+  repetido ou permissão maior não carrega. Cada uma é uma linha na aba SISTEMAS. Não
+  confunda com a tomada entre dispositivos (`bridge/extensoes.mjs`, ADR 0022).
+- **A.T.L.A.S., o mapa (ADR 0034, RF-69):** `extensoes/atlas/`. Pede o núcleo
+  (`apolo.nucleo.ceder()`): o Enxame se apaga e os pontos dele viram o globo; ao
+  fechar, voltam. Estilo Enxame cheio e marcador farol (contrastante). Busca no
+  OpenStreetMap pelo navegador (Nominatim, um pedido por segundo; Photon de
+  reserva). Sem botões: voz (`mapa`), mouse e toque. `terra.bin` vem de
+  `node extensoes/atlas/ferramentas/gerar-terra.mjs <land-50m.json>`. De perto, a
+  camada de cidade: blocos vetoriais do OpenFreeMap, decodificados num Web Worker
+  (`processarBloco`, testado em `scripts/atlas.test.mjs`) e em cache. A localização
+  do Ricardo (`minha_localizacao`, terceira cor de `src/lib/cor.ts`) só sai de
+  `apolo.localizacao()`, que confere a fala dele como a câmera; a coordenada nunca vai
+  na resposta à voz.
 - Escopo atual: **apenas o core e os pontos de extensão**. Módulos de domínio
   (e-mail, agenda, finanças, automação residencial) vêm depois.
 
@@ -277,6 +295,8 @@ npm run test:aurora  # testes da A.U.R.O.R.A.
 npm run test:comandos # testes dos comandos por voz (RF-20)
 npm run test:conversa # testes da janela de conversa (ADR 0024)
 npm run test:resiliencia # o pacto (ADR 0028): branch que mata a ponte volta à main; a Fênix morta é revivida
+npm run test:extensoes # testes das extensões plugáveis (ADR 0033)
+npm run test:atlas   # testes do A.T.L.A.S.: blocos vetoriais, terceira cor, pedido da localização (ADR 0034)
 npm test             # todos os testes (scripts/, fenix/test/, hermes/test/, modules/aurora/test/)
 ```
 

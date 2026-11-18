@@ -51,6 +51,9 @@ Fase: ver `05-roadmap.md`.
 | RF-66 | **Notificações push**: o H.E.R.M.E.S. entrega avisos dos serviços na central do macOS e no iPhone (ntfy), com botões de resposta de uso único, e leva ao Mac o que o Ricardo publicar pelo celular; a F.Ê.N.I.X. avisa versões, quedas e rotinas longas (ADR 0027) | S | 2 | em andamento |
 | RF-65 | **Avisos pelo WhatsApp**: testar o CallMeBot como canal gratuito de avisos curtos ao Ricardo, só para o número dele (`docs/poc/0001-callmebot-whatsapp.md`) | C | 3 | proposto |
 | RF-67 | **Pacto A.P.O.L.O. ↔ F.Ê.N.I.X.**: cada um faz a sua parte de qualquer ação pedida (ele conversa, mostra e muda o próprio código; ela cuida da máquina e da versão no ar); o A.P.O.L.O. pega tarefas do backlog pelo número e as faz como no chat (branch, commit, testes, versão de teste, PR); a Fênix volta à `main` uma branch que o derruba, e o A.P.O.L.O. revive a Fênix quando ela morre (ADR 0028) | S | 2 | em andamento |
+| RF-68 | **Extensões plugáveis**: uma pasta em `extensoes/` (manifesto, módulo da interface e dados) liga, troca ou sai do A.P.O.L.O. no ar, sem recompilar nem reiniciar; ferramentas de voz declaradas no manifesto, só `livre` por enquanto; cada uma é uma linha na aba SISTEMAS (ADR 0033) | S | 3 | em andamento |
+| RF-69 | **A.T.L.A.S., o mapa**: o Enxame vira um globo de pontos que marca cidades, coordenadas e listas de lugares, com zoom pelo tamanho do lugar ou pela distância entre eles até o nível das ruas (camada de cidade com ruas, rios, parques e nomes dos bairros), marcadores na cor contrastante agrupados quando juntos, busca no OpenStreetMap e controle por voz, mouse e toque, sem botões (ADR 0034) | S | 3 | em andamento |
+| RF-70 | **Localização no mapa**: a posição do Ricardo num ponto na terceira cor, só quando ele pede com a própria fala; fica na tela e não vai ao provedor da voz. Base para calcular rotas (ADR 0034) | S | 3 | em andamento |
 
 ## Requisitos não funcionais
 

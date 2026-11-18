@@ -29,6 +29,7 @@ export type AskHandlers = {
 /** Anything the bridge sends. Deliberately loose — a frame from a future
  *  bridge build should be ignored, not crash the turn. */
 type Frame = {
+  lista?: unknown[]
   extensao?: string
   dados?: unknown
   type?: string
@@ -399,6 +400,8 @@ function dispatch(ws: WebSocket) {
         })
         respostasDaFenix.delete(msg.resposta)
       }
+    } else if (msg.type === 'extensoes' && Array.isArray(msg.lista)) {
+      onExtensoes?.(msg.lista)
     } else if (msg.type === 'extensao' && msg.extensao) {
       ouvintesDeExtensao.get(msg.extensao)?.(msg.dados)
     } else if (msg.type === 'ui' && msg.op) {
@@ -407,6 +410,12 @@ function dispatch(ws: WebSocket) {
       onUi?.(msg.op, (msg.args ?? {}) as Record<string, unknown>)
     }
   })
+}
+
+/** As extensões plugáveis (docs/adr/0033): a lista vem ao conectar e a cada mudança na pasta. */
+let onExtensoes: ((lista: unknown[]) => void) | null = null
+export function watchExtensoes(fn: (lista: unknown[]) => void) {
+  onExtensoes = fn
 }
 
 /** Ponto de extensão entre dispositivos (docs/adr/0022). Nada usa ainda. */

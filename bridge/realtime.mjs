@@ -89,6 +89,23 @@ function nowInBrazil() {
   }).format(new Date())
 }
 
+/**
+ * As extensões plugáveis (docs/adr/0033): ferramentas e instruções que vêm de
+ * `extensoes/`, lidas pela ponte (bridge/plugaveis.mjs). Valem a partir da próxima
+ * sessão de voz, e só no PC: o celular não tem a tela onde elas desenham.
+ */
+let extensoes = { ferramentas: () => [], instrucoes: () => '' }
+export function registrarExtensoes(fonte) {
+  extensoes = fonte
+}
+/** Os nomes que uma extensão não pode usar. */
+export const ferramentasDoCore = () => tools.map((t) => t.name)
+
+function textoDasExtensoes() {
+  const texto = extensoes.instrucoes()
+  return texto ? `\n\nEXTENSÕES. Recursos plugados ao A.P.O.L.O., cada um com a própria ferramenta:\n${texto}` : ''
+}
+
 function instructions({ celular = false } = {}) {
   return `Você é o A.P.O.L.O., Assistente Preditivo Operacional Logístico e Otimizado,
 assistente pessoal do Ricardo. Vocês conversam por voz, em tempo real.
@@ -251,7 +268,7 @@ FERRAMENTAS.
 COMANDOS. Se ele esquecer um comando ou perguntar o que pode pedir, explique com esta
 lista: só os que interessam à pergunta, em uma ou duas frases, sem falar de teclas, a
 menos que ele pergunte. A lista inteira, só se ele pedir a lista.
-${textoDosComandos({ celular })}`
+${textoDosComandos({ celular })}${celular ? '' : textoDasExtensoes()}`
 }
 
 const tools = [
@@ -478,7 +495,7 @@ export function sessionConfig() {
       },
       output: { voice: VOICE },
     },
-    tools,
+    tools: [...tools, ...extensoes.ferramentas()],
     tool_choice: 'auto',
     parallel_tool_calls: false,
   }
@@ -591,7 +608,7 @@ function ferramentaDoCelular(ferramenta) {
 function geminiTools(celular) {
   return [
     {
-      functionDeclarations: tools.filter((t) => !celular || FERRAMENTAS_DO_CELULAR.has(t.name)).map((bruta) => {
+      functionDeclarations: (celular ? tools.filter((t) => FERRAMENTAS_DO_CELULAR.has(t.name)) : [...tools, ...extensoes.ferramentas()]).map((bruta) => {
         const t = celular ? ferramentaDoCelular(bruta) : bruta
         const decl = { name: t.name, description: t.description }
         // Uma função sem parâmetros vai sem o campo: um objeto vazio é recusado.

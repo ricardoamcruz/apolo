@@ -38,6 +38,13 @@ const AGRADECE = /^(ok |beleza |perfeito |otimo |show |certo )?(muito )?(obrigad
 
 export const agradece = (fala: string) => AGRADECE.test(normalizar(fala))
 
+/**
+ * Ele pediu a própria localização? Como a câmera, ela só liga com o pedido na fala
+ * dele (src/lib/plugaveis.ts, `localizacao`): nunca só porque o modelo chamou.
+ */
+const LOCALIZACAO = /\b(onde (eu )?(estou|to|esto)|minha (localizacao|posicao|casa)|localizacao|me (localiza|mostra no mapa|marca no mapa)|eu estou no mapa)\b/
+export const pedeLocalizacao = (fala: string) => LOCALIZACAO.test(normalizar(fala))
+
 export const pedeModoMaos = (fala: string) => /\b(maos?|gestos?|camera)\b/.test(normalizar(fala))
 
 /**

@@ -32,8 +32,21 @@ export function Sistemas() {
       {sistemasAgora().map((s) => (
         <div key={s.id} className={s.degradado ? 'rail-sistema degradado' : 'rail-sistema'}>
           <div className="rail-item">
-            {/* Cada sistema com o seu ícone; o que não tem um (um conector novo) fica com o losango. */}
-            {IconeDoSistema({ id: s.id, className: 'rail-icone' }) ?? <span className="tick" />}
+            {/* Cada sistema com o seu ícone: o desenhado aqui, o que a extensão traz (como
+                máscara, para pintar na cor do estado) ou o losango, na largura de um ícone. */}
+            {IconeDoSistema({ id: s.id, className: 'rail-icone' }) ??
+              (s.icone ? (
+                <span
+                  className="rail-icone rail-icone-externo"
+                  role="img"
+                  aria-label={s.nome}
+                  style={{ maskImage: `url("${s.icone}")`, WebkitMaskImage: `url("${s.icone}")` }}
+                />
+              ) : (
+                <span className="rail-icone rail-icone-vazio">
+                  <span className="tick" />
+                </span>
+              ))}
             {s.nome}
           </div>
           {s.problemas.map((p) => (

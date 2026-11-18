@@ -4,8 +4,8 @@ Marque `[x]` ao concluir e atualize o status em `01-requisitos.md`.
 
 ## Pendências em etapas (organizadas em 08/11/2026)
 **Fase 2 encerrada em 17/11/2026** pelo Ricardo, com a `fase-2.10/lapidacao`: a Etapa 6
-de bugs ficou zerada. O que segue aberto abaixo continua valendo, e a próxima branch é
-`fase-3/<nome>` (ADR 0016).
+de bugs ficou zerada. O que segue aberto abaixo continua valendo. A Fase 3 começou no
+mesmo dia, com a `fase-3.1/terra-a-vista` (extensões plugáveis e o A.T.L.A.S.).
 
 O que ficou aberto depois da `fase-2.7/alvorada`, na ordem sugerida. Cada etapa
 vira uma branch nova a partir da `main` (ADR 0016).
@@ -56,6 +56,9 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [x] **"Não tenho permissão para executar comandos" no git log (17/11/2026):** pedido para rodar `git log -1`, o Apolo tentou o terminal livre, que é bloqueado de propósito, porque nenhuma ferramenta `git_*` mostrava o histórico. Agora `git_log` (só leitura; hash, data, autor, título e, com até 3 commits, os arquivos) faz isso, e as instruções do agente dizem que pedido de comando git é para as ferramentas `git_*`
 - [x] **Teste da Fênix trava a suíte com a máquina carregada (17/11/2026):** "um serviço que trava é derrubado e sobe de novo" (`fenix/test/fenix.test.mjs`) travava o serviço de mentira 60 ms depois de iniciar e falhou uma vez na suíte completa; ao falhar, não chegava ao `encerrar()` e o serviço ficava subindo e caindo, e o `npm test` ficou 18 min parado. Agora o serviço trava depois de responder uma vez (por comportamento, não por relógio), a subida tem 5 s de folga, e os 8 testes que sobem processos encerram tudo por `t.after`, mesmo falhando. A falha não se reproduziu com carga artificial de CPU (veio da disputa de processos na suíte); a limpeza garantida é o que impede outro travamento
 - [x] **Avisos do lint (14/11/2026):** o `npm run lint` passava com 3 avisos. Corrigidos em 17/11/2026: o filtro do `voz_log` em `bridge/server.mjs` usa `\p{Cc}` em vez da faixa escrita à mão (e passou a tirar também DEL e C1 do log), o `catch` de `bridge/chrome.mjs` não declara o `err` que não usa, e `SISTEMAS_COM_ICONE`, que ninguém usava, saiu de `src/ui/icones.tsx`. O lint sai limpo
+- [x] **O mapa some sozinho (17/11/2026):** com o A.T.L.A.S. aberto, depois de um tempo o mapa fechou sem o Ricardo pedir. Suspeita: a extensão fecha em `ao('limpar')`, e a tela é limpa não só quando ele pede, mas também pelo agente de tarefas, que tem permissão para limpar "quando um assunto termina" (`SCREEN_DESCRIPTION`, em `bridge/ui.mjs`; vira `clearScreen` pela operação `screen` em `src/App.tsx`). Isso bate com o teste das cafeterias, que passou pelo agente. Também fecham: `dormir` chamado pelo modelo e Esc. Esperado: o mapa só fecha quando ele pede ("feche o mapa", Esc ou espera pedida), nunca por uma limpeza que ele não mandou. Conferir com o log da ponte qual evento fechou. Corrigido no mesmo dia: o A.T.L.A.S. não ouve mais as limpezas de tela; fecha só por `mapa` com "fechar", Esc ou espera pedida (ADR 0034)
+- [x] **Zoom de cidade não mostra nada (17/11/2026):** pedidas 5 cafeterias de uma cidade, o agente as mostrou num popup (ok) e o mapa enquadrou o zoom máximo (2,5°, cerca de 300 km), longe demais: os 5 marcadores ficaram empilhados. Esperado: perto o bastante para separar os pontos, e, ao chegar ao nível de uma cidade, as partículas se rearranjam para desenhar bairros, ruas principais e cidades vizinhas, com o máximo de nitidez e desempenho. Caminho provável: uma terceira camada de pontos gerada por área a partir do OpenStreetMap (vetores da região viram pontos, com cache), entrando como a camada densa entra hoje; e marcadores próximos demais agrupados num só, com a contagem, até o zoom os separar (ADR 0034). Estudo e protótipo feitos em 17/11/2026, com o Ricardo (fora do repositório): pontos de rua em plano tangente, avenidas e rios abaixo de ~60 km, ruas e parques abaixo de ~8 km, o enxame que desce e se assenta, zoom até ~900 m de altura e grupos de marcadores; a fonte recomendada é a dos blocos vetoriais do OpenFreeMap (o Overpass leva ~38 s por região). Aprovado e feito no mesmo dia (revisão da ADR 0034): blocos vetoriais do OpenFreeMap num Web Worker e em cache, ruas que descem e se assentam, nomes dos bairros, zoom até ~700 m, grupos com contagem; e, a pedido dele, a localização dele num ponto na terceira cor, só quando ele pede (base para rotas)
+- [x] **A.T.L.A.S. desalinhado na aba SISTEMAS (17/11/2026):** o nome do A.T.L.A.S. aparece à esquerda dos outros, porque não há ícone para ele em `src/ui/icones.tsx` e o marcador de reserva (`.tick`) é mais estreito que um ícone. Esperado: alinhado como os outros. Como as extensões são plugáveis, o ícone deveria vir da própria extensão (por exemplo, um `icone.svg` declarado no manifesto), e a reserva ter a mesma largura de um ícone. Corrigido no mesmo dia: o manifesto declara `icone` (um `.svg` da pasta), a aba o desenha como máscara na cor do estado, e o losango de reserva ocupa a largura de um ícone (ADR 0033); o A.T.L.A.S. ganhou um globo de traço
 
 ## Próxima versão — backlog (registrado em 03/11/2026)
 Os 6 pontos que o Ricardo definiu para a próxima versão. Eles têm prioridade
@@ -122,6 +125,12 @@ sobre a ordem das fases abaixo.
 - [ ] **Tudo o que for plugável aparece na aba SISTEMAS (RF-56):** cada skill, sub-sistema plugável, extensão, API e conector novo entra como uma linha própria, com estado e a cor de alerta quando degradado. Faz parte de concluir o item, não é um extra
 
 ## Fase 3 — Primeiros módulos
+- [x] **Extensões plugáveis (RF-68, ADR 0033):** `extensoes/<id>/` liga, troca ou sai no ar, sem recompilar; ferramentas de voz pelo manifesto; linha na aba SISTEMAS (`fase-3.1/terra-a-vista`)
+- [x] **A.T.L.A.S., o mapa (RF-69, ADR 0034):** o Enxame vira um globo de pontos; marca cidades, coordenadas e listas de lugares, com busca no OpenStreetMap; voz, mouse e toque (`fase-3.1/terra-a-vista`)
+- [ ] **Validar o A.T.L.A.S. no Mac:** "Apolo, onde fica Tóquio?", "mostre as capitais do Mercosul", uma coordenada falada, "feche o mapa"; girar e aproximar com mouse, trackpad e com as mãos; conferir que a transição do Enxame não engasga
+- [ ] **A.T.L.A.S.: rotas** a partir da localização dele (o ponto na terceira cor, revisão da ADR 0034)
+- [ ] **A.T.L.A.S.: detalhe de um ponto** na janela em popup (a opção B do estudo): aproximar um grupo quando houver muitos pontos juntos, ou mostrar mais informações de um ponto escolhido
+- [ ] Extensões com ferramentas de efeito no mundo, pelo gate (ADR nova)
 - [ ] E-mail (Gmail + Outlook) · [ ] Agenda (Google + Outlook) · [ ] Briefing diário
 
 ## Fase 4 — Expansão

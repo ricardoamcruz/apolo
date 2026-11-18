@@ -42,7 +42,14 @@ import {
   originAllowed,
   podeUsarFerramenta,
 } from './gate.mjs'
-import { createRealtimeSession, realtimeKey, realtimeModel, voiceProvider } from './realtime.mjs'
+import {
+  createRealtimeSession,
+  ferramentasDoCore,
+  realtimeKey,
+  realtimeModel,
+  registrarExtensoes,
+  voiceProvider,
+} from './realtime.mjs'
 import { fileURLToPath } from 'node:url'
 import { criarAutodev } from './autodev/index.mjs'
 import { criarPreferencias } from './preferencias.mjs'
@@ -63,8 +70,35 @@ import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBackl
 import { criarTelemetria } from './telemetria.mjs'
 import { garantirCertificado } from './tls.mjs'
 import { criarCentral } from './extensoes.mjs'
+import {
+  PASTA_PADRAO,
+  arquivoDaExtensao,
+  carregarExtensoes,
+  ferramentasDe,
+  instrucoesDe,
+  paraInterface,
+  vigiarExtensoes,
+} from './plugaveis.mjs'
 
 const PORT = Number(process.env.JARVIS_BRIDGE_PORT ?? 8787)
+
+/**
+ * As extensões plugáveis (docs/adr/0033): lidas na partida e de novo a cada
+ * mudança na pasta. A voz pega as ferramentas novas na próxima sessão; a interface
+ * recarrega só a extensão que mudou.
+ */
+const PASTA_DAS_EXTENSOES = process.env.APOLO_EXTENSOES_PASTA?.trim() || PASTA_PADRAO
+let extensoesPlugaveis = await carregarExtensoes({ pasta: PASTA_DAS_EXTENSOES, reservadas: ferramentasDoCore() })
+registrarExtensoes({
+  ferramentas: () => ferramentasDe(extensoesPlugaveis),
+  instrucoes: () => instrucoesDe(extensoesPlugaveis),
+})
+const relatarExtensoes = () => {
+  for (const e of extensoesPlugaveis) {
+    console.log(e.ok ? `[apolo] extensão ${e.nome} ${e.versao}` : `[apolo] extensão ${e.nome} não carregou: ${e.motivo}`)
+  }
+}
+relatarExtensoes()
 
 /**
  * A crash here takes the whole assistant down mid-sentence, and most of what
@@ -642,6 +676,24 @@ const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
     return res.end()
   }
 
+  // Os arquivos de uma extensão plugável, só os da pasta dela (bridge/plugaveis.mjs).
+  if (req.method === 'GET' && req.url?.startsWith('/extensoes/')) {
+    const [id, ...resto] = decodeURIComponent(req.url.split('?')[0]).slice('/extensoes/'.length).split('/')
+    const achado = await arquivoDaExtensao(extensoesPlugaveis, id, resto.join('/'))
+    if (!achado) {
+      res.writeHead(404, cors)
+      return res.end('not found')
+    }
+    res.writeHead(200, {
+      ...cors,
+      'content-type': achado.tipo,
+      'x-content-type-options': 'nosniff',
+      // A interface pede com ?v=<assinatura>: o que muda tem endereço novo.
+      'cache-control': 'no-cache',
+    })
+    return res.end(achado.corpo)
+  }
+
   if (req.method === 'GET' && req.url === '/health') {
     // `voz`: o que a interface do PC relatou da conexão de voz (registrarEstadoDaVoz).
     res.writeHead(200, { ...cors, 'content-type': 'application/json' })
@@ -898,6 +950,13 @@ const avisarTodos = (msg) => {
   }
 }
 const preferencias = criarPreferencias()
+
+// Trocar, apagar ou acrescentar uma pasta em extensoes/ vale sem reiniciar nada.
+vigiarExtensoes(PASTA_DAS_EXTENSOES, async () => {
+  extensoesPlugaveis = await carregarExtensoes({ pasta: PASTA_DAS_EXTENSOES, reservadas: ferramentasDoCore() })
+  relatarExtensoes()
+  broadcast({ type: 'extensoes', lista: paraInterface(extensoesPlugaveis) })
+})
 const telemetria = criarTelemetria()
 /** Ponto de extensão entre dispositivos (docs/adr/0022). Nenhuma registrada ainda. */
 const central = criarCentral()
@@ -1142,6 +1201,7 @@ const atender = (socket, { celular = false } = {}) => {
     socket.send(JSON.stringify({ type: 'autodev', estado: autodev.estado() }))
     socket.send(JSON.stringify({ type: 'preferencias', valores: preferencias.valores() }))
     socket.send(JSON.stringify({ type: 'fenix', estado: resumoDaFenix() }))
+    socket.send(JSON.stringify({ type: 'extensoes', lista: paraInterface(extensoesPlugaveis) }))
   }
 
   /** Resolves the pending user message into the SDK's input generator. */

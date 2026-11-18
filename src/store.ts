@@ -235,6 +235,14 @@ type State = {
    * espera; a espera automática, por silêncio, fecha o microfone e deixa a tela igual.
    */
   esperaPedida: boolean
+  /**
+   * A extensão que pediu o núcleo emprestado (docs/adr/0033), ou null. Com ele
+   * cedido, o Enxame se apaga e a extensão desenha no lugar dele (o mapa nasce
+   * dos pontos do núcleo).
+   */
+  nucleoCedido: string | null
+  /** Conta as vezes que a tela foi limpa: as extensões ouvem para fechar o que mostram. */
+  limpezas: number
   /** 0..1 mic loudness, drives the reactor pulse. */
   level: number
   /** What JARVIS is currently reading aloud or has just said. */
@@ -318,11 +326,14 @@ type State = {
   fireEffect: (kind: UiEffect['kind']) => void
   resetUi: () => void
   clearScreen: (what: 'all' | 'panels' | 'transcript') => void
+  cederNucleo: (extensao: string | null) => void
 }
 
 export const useStore = create<State>((set, get) => ({
   phase: 'offline',
   esperaPedida: false,
+  nucleoCedido: null,
+  limpezas: 0,
   level: 0,
   caption: '',
   turns: [],
@@ -508,11 +519,19 @@ export const useStore = create<State>((set, get) => ({
     // Blades clear with the panels. "Clear the screen" said out loud means the
     // screen, and leaving a full-height article standing while the cards
     // around it vanish is the interface arguing with the instruction.
-    const cleared = { panels: [], blades: [], focusedBlade: null, expandedBlade: null, sistemas: 'fechado' as const }
+    const cleared = {
+      panels: [],
+      blades: [],
+      focusedBlade: null,
+      expandedBlade: null,
+      sistemas: 'fechado' as const,
+      limpezas: get().limpezas + 1,
+    }
     return set(
       what === 'all' ? { ...cleared, turns: [], caption: '', activeTool: null } : cleared,
     )
   },
+  cederNucleo: (nucleoCedido) => set({ nucleoCedido }),
 }))
 
 /**

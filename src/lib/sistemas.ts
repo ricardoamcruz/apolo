@@ -16,6 +16,8 @@ export type Sistema = {
   degradado: boolean
   /** Em palavras, o que está errado. Vazio quando está tudo bem. */
   problemas: string[]
+  /** O endereço do ícone, quando ele vem de fora (uma extensão plugável). */
+  icone?: string
 }
 
 /**
@@ -29,10 +31,15 @@ const PLUGAVEIS: Record<string, string> = { fenix: 'F.Ê.N.I.X.', celular: 'H.E.
 
 const FALHAS: Record<string, string> = { failed: 'falhou', 'needs-auth': 'precisa de autorização', degraded: 'degradado' }
 
-/** @param voz null enquanto a voz ainda não deveria estar no ar */
+export type ExtensaoNoAr = { id: string; nome: string; ok: boolean; motivo?: string; icone?: string }
+
+/**
+ * @param voz null enquanto a voz ainda não deveria estar no ar
+ * @param extensoes as extensões plugáveis de extensoes/ (docs/adr/0033), cada uma uma linha
+ */
 export function montarSistemas(
   servidores: Servidor[],
-  { ponte, voz }: { ponte: boolean; voz: boolean | null },
+  { ponte, voz, extensoes = [] }: { ponte: boolean; voz: boolean | null; extensoes?: ExtensaoNoAr[] },
 ): Sistema[] {
   const problemas: string[] = []
   if (!ponte) problemas.push('ponte desconectada')
@@ -53,6 +60,16 @@ export function montarSistemas(
       problemas.push(`${nome.replace(/^mcp__/, '')}: ${falha}`)
     }
   }
+  for (const e of extensoes) {
+    plugaveis.push({
+      id: `extensao-${e.id}`,
+      nome: e.nome,
+      tipo: 'extensao',
+      degradado: !e.ok,
+      problemas: e.ok ? [] : [e.motivo || 'não carregou'],
+      ...(e.icone && { icone: e.icone }),
+    })
+  }
   return [
     { id: 'core', nome: 'C.O.R.E.', tipo: 'core', degradado: problemas.length > 0, problemas },
     ...plugaveis,
@@ -69,7 +86,12 @@ const FALADOS: Record<string, string> = {
   'H.E.R.M.E.S.': 'Hermes',
   'A.U.R.O.R.A.': 'Aurora',
 }
-export const nomeFalado = (nome: string) => FALADOS[nome] ?? nome
+/** Uma sigla com pontos que não esteja na lista (de uma extensão) vira a palavra: A.T.L.A.S. -> Atlas. */
+export const nomeFalado = (nome: string) =>
+  FALADOS[nome] ??
+  (/^(?:\p{Lu}\.){2,}$/u.test(nome)
+    ? nome.replace(/\./g, '').charAt(0) + nome.replace(/\./g, '').slice(1).toLowerCase()
+    : nome)
 
 /** O que o modelo de voz narra. */
 export function resumoSistemas(sistemas: Sistema[]) {

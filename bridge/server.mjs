@@ -69,6 +69,7 @@ import { criarSondas } from './sondas.mjs'
 import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog, registrarBug } from './desenvolvimento.mjs'
 import { criarTelemetria } from './telemetria.mjs'
 import { garantirCertificado } from './tls.mjs'
+import { criarRelatoDaVoz } from './relatoDaVoz.mjs'
 import { criarCentral } from './extensoes.mjs'
 import {
   PASTA_PADRAO,
@@ -163,34 +164,8 @@ const IGNORADOS = new Set(
     .filter(Boolean),
 )
 
-/**
- * A voz do PC como a interface relatou: só ela vê a conexão com o provedor.
- * `falhas` conta as tentativas seguidas que não ligaram; a F.Ê.N.I.X. lê isto
- * em /health e registra quando muda.
- */
-const vozDoPc = { estado: 'sem relato', falhas: 0, desde: Date.now(), ultimo: '' }
-// Uma tentativa vai do pedido da sessão à confirmação ou à primeira falha:
-// o tempo esgotado e o fechamento que vem depois dele contam uma vez só.
-let tentativaContada = false
-function registrarEstadoDaVoz(texto) {
-  const antes = vozDoPc.estado
-  if (texto.startsWith('abrindo a conexão') || texto.startsWith('pedindo a sessão')) {
-    tentativaContada = false
-    return
-  }
-  if (texto.startsWith('sessão confirmada')) {
-    vozDoPc.estado = 'ligada'
-    vozDoPc.falhas = 0
-    tentativaContada = true
-  } else if (/^(o Google não confirmou|a ponte não entregou|conexão fechada)/.test(texto)) {
-    if (tentativaContada) return
-    tentativaContada = true
-    vozDoPc.estado = 'falhando'
-    vozDoPc.falhas++
-  } else return
-  vozDoPc.ultimo = texto
-  if (vozDoPc.estado !== antes) vozDoPc.desde = Date.now()
-}
+/** A voz do PC como a interface relatou (bridge/relatoDaVoz.mjs): o que vai no /health. */
+const relatoDaVoz = criarRelatoDaVoz()
 
 function configuredServers() {
   try {
@@ -695,7 +670,7 @@ const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
   }
 
   if (req.method === 'GET' && req.url === '/health') {
-    // `voz`: o que a interface do PC relatou da conexão de voz (registrarEstadoDaVoz).
+    // `voz`: o que a interface do PC relatou da conexão de voz (bridge/relatoDaVoz.mjs).
     res.writeHead(200, { ...cors, 'content-type': 'application/json' })
     return res.end(
       JSON.stringify({
@@ -705,7 +680,7 @@ const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
         modelo: realtimeModel(),
         // A F.Ê.N.I.X. usa isto para saber se a interface voltou depois de uma troca.
         interfaces: interfacesDoPc.size,
-        voz: { ...vozDoPc },
+        voz: relatoDaVoz.paraSaude(),
       }),
     )
   }
@@ -1197,6 +1172,7 @@ const atender = (socket, { celular = false } = {}) => {
     socket.send(JSON.stringify({ type: 'fenix', estado: resumoDaFenix() }))
   } else {
     interfacesDoPc.add(socket)
+    relatoDaVoz.interfaceEntrou()
     ouvintesDosCanais.add(reenviarCanais)
     socket.send(JSON.stringify({ type: 'autodev', estado: autodev.estado() }))
     socket.send(JSON.stringify({ type: 'preferencias', valores: preferencias.valores() }))
@@ -1624,7 +1600,7 @@ const atender = (socket, { celular = false } = {}) => {
     if (msg.type === 'voz_log' && !celular && typeof msg.texto === 'string') {
       // Sem caracteres de controle (C0, DEL e C1): uma quebra de linha forjada não cria linha falsa no log.
       const texto = msg.texto.replace(/\p{Cc}+/gu, ' ').slice(0, 300)
-      registrarEstadoDaVoz(texto)
+      relatoDaVoz.registrar(texto)
       return console.log(`[apolo] voz: ${texto}`)
     }
 
@@ -1682,7 +1658,7 @@ const atender = (socket, { celular = false } = {}) => {
       celularesConectados--
       canaisMudaram()
     }
-    interfacesDoPc.delete(socket)
+    if (interfacesDoPc.delete(socket)) relatoDaVoz.interfaceSaiu()
     celularesNoAr.delete(socket)
     ouvintesDosCanais.delete(reenviarCanais)
     dispositivo.sair()

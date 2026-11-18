@@ -99,12 +99,24 @@ export function criarFenix(
       if (acao === 'descartar_versao') void versoes.reverter({ id: versoes.estado().id })
     },
   })
+  let ultimaInterfaceAvisada = 0
   const servicos = criarServicos({
     repo: config.repo,
     servicos: config.servicos,
     ambiente,
     log,
     saida,
+    aoVoz: (nome, voz) => {
+      // A página da interface morreu (bug crítico de 18/11/2026): com tudo de pé, ele
+      // não ouve nem responde, e só recarregar a janela resolve.
+      if (voz.estado !== 'sem interface' || Date.now() - ultimaInterfaceAvisada < 10 * 60_000) return
+      ultimaInterfaceAvisada = Date.now()
+      avisos.avisar({
+        titulo: `${config.nome}: a interface caiu`,
+        texto: 'A janela dele não está mais ligada à ponte, então ele não ouve nem responde. Recarregue a janela ou abra de novo.',
+        prioridade: 'alta',
+      })
+    },
     aoMudar: (nome, status, motivo) => {
       if (status === 'caiu' && motivo && Date.now() - (ultimaQuedaAvisada.get(nome) ?? 0) > 10 * 60_000) {
         ultimaQuedaAvisada.set(nome, Date.now())

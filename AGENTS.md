@@ -138,7 +138,9 @@ detalhe está em `docs/`.
   vezes em 10 min, desiste. Ctrl-C não ressuscita. `scripts/resiliencia.test.mjs` roda
   isso com a Fênix real e uma ponte mínima (`scripts/resiliencia/ponte.mjs`): mudou a
   Fênix, o cliente ou o renascimento, rode `npm run test:resiliencia`. Prazos da Fênix
-  podem vir de `tempos` no `fenix.config.json`.
+  podem vir de `tempos` no `fenix.config.json`. Sem nenhuma interface ligada à ponte
+  por 45 s, o `/health` diz voz "sem interface" (`bridge/relatoDaVoz.mjs`) e a Fênix
+  avisa para recarregar a janela; a página nunca desiste de religar à ponte.
 - **Asas próprias (ADR 0029):** toda troca de versão e a atualização da `main`
   passam por `conferirCopia` (`fenix/src/versoes.mjs`): motivo exato quando não dá
   (arquivos, operação do Git pela metade, branch que não existe), Git com prazo e

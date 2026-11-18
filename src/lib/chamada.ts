@@ -12,11 +12,14 @@ type Reconhecedor = {
   lang: string
   continuous: boolean
   interimResults: boolean
+  onstart: (() => void) | null
+  onaudiostart: (() => void) | null
   onresult: ((e: { resultIndex: number; results: ArrayLike<Resultado> }) => void) | null
   onerror: ((e: { error: string }) => void) | null
   onend: (() => void) | null
   start: () => void
   stop: () => void
+  abort: () => void
 }
 type Construtor = new () => Reconhecedor
 
@@ -83,67 +86,204 @@ const construtor = () => {
 
 export const chamadaDisponivel = () => construtor() !== undefined
 
+/** A espera entre religamentos: curta, e com teto baixo, porque cada segundo parado é um chamado perdido. */
+export const ESPERA_MIN_MS = 300
+export const ESPERA_MAX_MS = 5000
 /**
- * Escuta até `stop`. O Chrome encerra o reconhecimento sozinho de tempos em
- * tempos, então ele é religado enquanto a espera durar.
+ * Sem nenhum sinal do reconhecedor (início, áudio, resultado, erro ou fim) por este
+ * tempo, ele é dado como morto e recriado. O Chrome encerra uma escuta silenciosa bem
+ * antes disto, então em funcionamento normal sempre há algum sinal.
  */
-export function ouvirNome(aoChamar: (fala: string, pedido: string) => void, aoFalhar: (motivo: string) => void) {
-  const Construtor = construtor()
-  if (!Construtor) return { stop() {} }
-  let parado = false
-  let religar: ReturnType<typeof setTimeout> | undefined
-  let esperaMs = 300
-  let nomeSozinho: ReturnType<typeof setTimeout> | undefined
+export const VIGIA_MS = 45_000
 
-  const rec = new Construtor()
-  rec.lang = 'pt-BR'
-  rec.continuous = true
-  rec.interimResults = true
-  const chamar = (fala: string) => {
-    clearTimeout(nomeSozinho)
-    if (parado) return
-    parado = true
-    rec.stop()
-    aoChamar(fala, chamouPeloNome(fala).pedido)
+type Escuta = {
+  parado: boolean
+  esperaMs: number
+  nomeSozinho?: ReturnType<typeof setTimeout>
+  aoChamar: (fala: string, pedido: string) => void
+  aoFalhar: (motivo: string) => void
+  relatar: (texto: string) => void
+}
+
+/*
+ * Um reconhecedor só para a página inteira (bug de 18/11/2026). Antes, cada entrada
+ * na espera criava um novo, e numa troca rápida de fase o anterior ainda estava
+ * encerrando: o Chrome só deixa um capturar por vez. Agora a escuta nova espera o fim
+ * do anterior (`onend`) para começar, e quem recebe os resultados é sempre o dono da
+ * sessão que está rodando.
+ */
+let rec: Reconhecedor | null = null
+let ativo = false
+let dono: Escuta | null = null
+let donoDaSessao: Escuta | null = null
+let religar: ReturnType<typeof setTimeout> | undefined
+let vigia: ReturnType<typeof setInterval> | undefined
+let ultimoSinal = 0
+
+function criarReconhecedor(C: Construtor) {
+  const r = new C()
+  r.lang = 'pt-BR'
+  r.continuous = true
+  r.interimResults = true
+  const sinal = () => {
+    if (rec === r) ultimoSinal = Date.now()
   }
-  rec.onresult = (e) => {
-    esperaMs = 300
+  r.onstart = () => {
+    if (rec !== r) return
+    sinal()
+    ativo = true
+    // Começou de verdade: a espera volta ao mínimo (antes, só uma fala reconhecida zerava).
+    if (dono) dono.esperaMs = ESPERA_MIN_MS
+  }
+  r.onaudiostart = sinal
+  r.onresult = (e) => {
+    if (rec !== r) return
+    sinal()
+    const d = donoDaSessao
+    if (!d || d.parado || d !== dono) return
     // Qualquer trecho novo quer dizer que a fala continuou.
-    clearTimeout(nomeSozinho)
+    clearTimeout(d.nomeSozinho)
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const resultado = e.results[i]
       const fala = resultado[0].transcript.trim()
       const decisao = decidirChamada(fala, resultado.isFinal)
-      if (decisao === 'agora') return chamar(fala)
-      if (decisao === 'se_parar') nomeSozinho = setTimeout(() => chamar(fala), NOME_ESTAVEL_MS)
+      if (decisao === 'agora') return chamar(d, fala)
+      if (decisao === 'se_parar') d.nomeSozinho = setTimeout(() => chamar(d, fala), NOME_ESTAVEL_MS)
     }
   }
-  rec.onerror = ({ error }) => {
+  r.onerror = ({ error }) => {
+    if (rec !== r) return
+    sinal()
+    const d = dono
+    if (!d) return
     if (error === 'not-allowed' || error === 'service-not-allowed') {
-      parado = true
-      aoFalhar('O navegador recusou o reconhecimento de fala. Use Espaço para me acordar.')
-    } else if (error === 'network') {
-      esperaMs = Math.min(esperaMs * 2, 30_000)
+      d.parado = true
+      d.relatar(`escuta da espera recusada pelo navegador (${error})`)
+      d.aoFalhar('O navegador recusou o reconhecimento de fala. Use Espaço para me acordar.')
+    } else if (error !== 'no-speech' && error !== 'aborted') {
+      // Rede, microfone ocupado: espera um pouco mais, mas nunca mais que o teto.
+      d.esperaMs = Math.min(d.esperaMs * 2, ESPERA_MAX_MS)
+      d.relatar(`escuta da espera: erro ${error}; religo em ${d.esperaMs} ms`)
     }
   }
-  rec.onend = () => {
-    if (parado) return
-    religar = setTimeout(() => {
-      try {
-        rec.start()
-      } catch {
-        /* já estava ligado */
-      }
-    }, esperaMs)
+  r.onend = () => {
+    if (rec !== r) return
+    sinal()
+    ativo = false
+    donoDaSessao = null
+    agendar()
   }
-  rec.start()
+  return r
+}
+
+function agendar() {
+  clearTimeout(religar)
+  const d = dono
+  if (!d || d.parado || ativo) return
+  religar = setTimeout(iniciar, d.esperaMs)
+}
+
+function iniciar() {
+  const d = dono
+  if (!d || d.parado || ativo || !rec) return
+  try {
+    rec.start()
+    ativo = true
+    donoDaSessao = d
+    ultimoSinal = Date.now()
+  } catch (err) {
+    if ((err as Error)?.name === 'InvalidStateError') {
+      // Já estava ligado: segue, e o `onend` dele religa quando for a hora.
+      ativo = true
+      donoDaSessao = d
+      return
+    }
+    // Antes, este erro era engolido e nada mais religava: a escuta morria calada.
+    d.esperaMs = Math.min(d.esperaMs * 2, ESPERA_MAX_MS)
+    d.relatar(`escuta da espera não religou (${(err as Error)?.message ?? err}); recrio em ${d.esperaMs} ms`)
+    recriar()
+    agendar()
+  }
+}
+
+/** Joga fora o reconhecedor (que pode estar travado) e cria outro. */
+function recriar() {
+  const C = construtor()
+  const velho = rec
+  rec = C ? criarReconhecedor(C) : null
+  ativo = false
+  donoDaSessao = null
+  try {
+    velho?.abort()
+  } catch {
+    /* já parado */
+  }
+}
+
+function chamar(d: Escuta, fala: string) {
+  clearTimeout(d.nomeSozinho)
+  if (d.parado) return
+  d.parado = true
+  try {
+    rec?.stop()
+  } catch {
+    /* já parado */
+  }
+  d.aoChamar(fala, chamouPeloNome(fala).pedido)
+}
+
+/** Só para os testes: esquece o reconhecedor e a escuta, como numa página nova. */
+export function reiniciarEscutaParaTestes() {
+  clearTimeout(religar)
+  clearInterval(vigia)
+  rec = null
+  ativo = false
+  dono = null
+  donoDaSessao = null
+}
+
+/**
+ * Escuta até `stop`. O Chrome encerra o reconhecimento sozinho de tempos em tempos,
+ * então ele é religado enquanto a espera durar; e, se o reconhecedor parar de dar
+ * sinal, o vigia o recria. `relatar` leva ao log da ponte o que acontece com a escuta
+ * (sem a fala), para uma falha não ficar invisível.
+ */
+export function ouvirNome(
+  aoChamar: (fala: string, pedido: string) => void,
+  aoFalhar: (motivo: string) => void,
+  relatar: (texto: string) => void = () => {},
+) {
+  const C = construtor()
+  if (!C) return { stop() {} }
+  if (dono) dono.parado = true
+  const d: Escuta = { parado: false, esperaMs: ESPERA_MIN_MS, aoChamar, aoFalhar, relatar }
+  dono = d
+  if (!rec) rec = criarReconhecedor(C)
+  ultimoSinal = Date.now()
+  clearInterval(vigia)
+  vigia = setInterval(() => {
+    if (dono !== d || d.parado) return
+    if (Date.now() - ultimoSinal < VIGIA_MS) return
+    d.relatar('escuta da espera sem sinal; recriando o reconhecedor')
+    recriar()
+    iniciar()
+  }, 5000)
+  // Se o anterior ainda está encerrando, o `onend` dele começa esta.
+  if (!ativo) iniciar()
 
   return {
     stop() {
-      parado = true
+      d.parado = true
+      clearTimeout(d.nomeSozinho)
+      if (dono !== d) return
+      dono = null
       clearTimeout(religar)
-      clearTimeout(nomeSozinho)
-      rec.stop()
+      clearInterval(vigia)
+      try {
+        rec?.stop()
+      } catch {
+        /* já parado */
+      }
     },
   }
 }

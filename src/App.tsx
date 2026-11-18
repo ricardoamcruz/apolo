@@ -865,6 +865,8 @@ export default function App() {
     const escuta = ouvirNome(
       (fala, pedido) => void atenderChamado(fala, pedido),
       (motivo) => store.getState().setError(motivo),
+      // O que acontece com a escuta (nunca a fala) vai ao log da ponte, como a voz.
+      (texto) => registrarVoz(texto),
     )
     return () => escuta.stop()
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,0 +1,79 @@
+{
+  "apolo": "1",
+  "id": "atlas",
+  "nome": "A.T.L.A.S.",
+  "versao": "0.2.1",
+  "descricao": "O globo de pontos: marca lugares, coordenadas e resultados de pesquisa.",
+  "interface": "interface.js",
+  "icone": "icone.svg",
+  "ferramentas": [
+    {
+      "nome": "mapa",
+      "permissao": "livre",
+      "descricao": "O globo do A.T.L.A.S.: o núcleo vira um globo de pontos e marca lugares no mundo, até o nível das ruas de um bairro. Use para \"onde fica\", \"marque\", \"mostre no mapa\", para mostrar no mapa os lugares de uma resposta ou pesquisa e para \"onde eu estou\". Devolve o que foi marcado e o que não foi encontrado.",
+      "parametros": {
+        "type": "object",
+        "properties": {
+          "acao": {
+            "type": "string",
+            "enum": [
+              "marcar",
+              "acrescentar",
+              "minha_localizacao",
+              "limpar",
+              "abrir",
+              "fechar",
+              "enquadrar",
+              "aproximar",
+              "afastar"
+            ],
+            "description": "\"marcar\" troca os marcadores pelos lugares dados e enquadra todos; \"acrescentar\" soma aos que já estão. \"minha_localizacao\" marca onde o Ricardo está (só quando ele pedir, com as palavras dele). \"limpar\" tira os marcadores e mostra o globo inteiro. \"fechar\" devolve o núcleo. \"enquadrar\" volta a mostrar todos os marcadores; \"aproximar\" e \"afastar\" mudam o zoom."
+          },
+          "locais": {
+            "type": "array",
+            "description": "Com \"marcar\" ou \"acrescentar\": os lugares, até 25. Sempre com o país (e o estado, no Brasil), como \"Assunção, Paraguai\" ou \"Campinas, São Paulo, Brasil\": nomes se repetem pelo mundo. O A.T.L.A.S. busca a coordenada.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "nome": {
+                  "type": "string",
+                  "description": "O nome do lugar, como ele aparece no mapa."
+                },
+                "lat": {
+                  "type": "number",
+                  "description": "Só quando o Ricardo disser a coordenada: latitude em graus decimais, negativa ao sul."
+                },
+                "lon": {
+                  "type": "number",
+                  "description": "Só quando o Ricardo disser a coordenada: longitude em graus decimais, negativa a oeste."
+                }
+              },
+              "required": [
+                "nome"
+              ]
+            }
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "cidade",
+              "estado",
+              "pais",
+              "lugar",
+              "coordenada"
+            ],
+            "description": "O que os lugares são. \"lugar\" é endereço, monumento ou estabelecimento. Decide a busca e o zoom."
+          },
+          "categoria": {
+            "type": "string",
+            "description": "Com \"marcar\": o que os lugares são, no plural, como \"cafeterias\" ou \"capitais\". Aparece quando vários ficam juntos na tela (\"5 cafeterias\")."
+          }
+        },
+        "required": [
+          "acao"
+        ]
+      }
+    }
+  ],
+  "instrucoes": "\"Onde fica\", \"marque\", \"mostre no mapa\" e coordenadas faladas são a ferramenta mapa. Para vários lugares (as capitais de uma região, os resultados de uma pesquisa), mande todos de uma vez em locais, cada um com a cidade e o país, e diga a categoria (\"cafeterias\"). Só mande lat e lon que o Ricardo falou; para nomes, deixe o A.T.L.A.S. buscar. A resposta diz onde cada lugar foi achado: se algum estiver errado, marque de novo com o nome completo, sem comentar o engano. \"Onde eu estou\" ou \"me mostra no mapa\" é acao minha_localizacao, só quando ele pedir; você não recebe a coordenada, então não invente o endereço. Depois, diga em uma frase o que está na tela. \"Feche o mapa\" é acao fechar."
+}

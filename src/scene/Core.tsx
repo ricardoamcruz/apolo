@@ -73,7 +73,7 @@ export function Core({ drive }: { drive: Drive }) {
     const u = mat.current.uniforms
     const r = drive.reactor
 
-    mesh.current.visible = r.visible && r.style !== ESTILO_ENXAME
+    mesh.current.visible = r.visible && r.style !== ESTILO_ENXAME && drive.cedido < 0.995
     // Scaling the mesh rather than the shader's field. The ring sits at a fixed
     // radius inside a fixed quad with dark margin around it, so zooming the
     // field out would push the ring past the quad's own edge and cut it off in

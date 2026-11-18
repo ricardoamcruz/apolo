@@ -80,6 +80,47 @@ módulos: não depende deles diretamente.
 4. Declarar segredos no manifesto e documentá-los no README do módulo.
 5. Registrar o módulo em `docs/01-requisitos.md` e, se houver decisão nova, em uma ADR.
 
+## Extensões plugáveis (ADR 0033)
+
+Nem tudo precisa ser um módulo MCP ou um serviço com porta. Uma interface na tela,
+um algoritmo ou uma função que a voz chama é uma **extensão plugável**: uma pasta em
+`extensoes/<id>/`, ligada e desligada com o A.P.O.L.O. no ar, sem recompilar. Trocar
+a pasta troca a extensão. A primeira é o A.T.L.A.S., o mapa (`extensoes/atlas/`).
+
+```json
+{
+  "apolo": "1",
+  "id": "atlas",
+  "nome": "A.T.L.A.S.",
+  "versao": "0.1.0",
+  "descricao": "O globo de pontos.",
+  "interface": "interface.js",
+  "icone": "icone.svg",
+  "ferramentas": [
+    { "nome": "mapa", "permissao": "livre", "descricao": "…", "parametros": { "type": "object", "properties": {} } }
+  ],
+  "instrucoes": "Quando a voz deve usar a ferramenta, em poucas frases."
+}
+```
+
+- `interface.js` é um ES module de **um arquivo só**, sem `import`, que exporta
+  `ativar(apolo)` e pode devolver uma função de desligar. O three.js vem em
+  `apolo.THREE`; dados e imagens, por `apolo.arquivo('nome')`.
+- A API (`ApiDaExtensao`, em `src/lib/plugaveis.ts`) é o contrato inteiro: `ferramenta`,
+  `camada`, `cor`, `nucleo`, `ao`, `descreverTela`, `log`. Mexer em outra coisa quebra
+  na próxima versão.
+- Só ferramentas `livre` por enquanto: efeito no mundo exige o gate, que ainda não
+  chega às extensões. O manifesto que pedir outra permissão não carrega.
+- Nome de ferramenta igual a uma do core ou de outra extensão não carrega.
+- A ponte lê os manifestos e serve os arquivos (`bridge/plugaveis.mjs`), mas não
+  executa nada da extensão. As ferramentas novas valem na próxima sessão de voz.
+- Pasta começando com `_` ou `.` fica de fora (rascunho).
+
+Checklist: manifesto válido, um arquivo de interface, ferramentas livres com descrição
+clara, a linha na aba SISTEMAS (automática, com o `nome` do manifesto e o `icone`, um
+`.svg` de traço em 24 × 24 como os de `src/ui/icones.tsx`), um README na pasta, RF e
+ADR se houver decisão nova.
+
 ## Comunicação entre dispositivos
 
 Módulos poderão levar mensagens entre celular, servidor e web pelo ponto de extensão

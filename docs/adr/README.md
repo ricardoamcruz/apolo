@@ -34,6 +34,8 @@
 | 0030 | O app do iPhone com a autonomia do PC no core | proposta |
 | 0031 | Autodesenvolvimento a partir da versão no ar, um commit por alteração | proposta |
 | 0032 | O círculo do iPhone na densidade da tela | aceita |
+| 0033 | Extensões plugáveis, sem recompilar | aceita |
+| 0034 | A.T.L.A.S., o globo de pontos | aceita |
 
 ## Em aberto
 

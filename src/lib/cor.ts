@@ -56,6 +56,19 @@ export function contrastante(hex: string) {
 }
 
 /**
+ * A terceira cor: a da localização do Ricardo no mapa (ADR 0034). Fica 50° adiante da
+ * contrastante no círculo cromático, então a 130° da cor da interface e a 50° da do
+ * alerta: interface azul, marcador vermelho, localização amarela.
+ */
+export function terceira(hex: string) {
+  const { h } = paraHsl(paraRgb(contrastante(hex)))
+  const matiz = (h + 50) % 360
+  let l = 0.6
+  while (luminancia(paraHex(matiz, 1, l)) < LUMINANCIA_MINIMA && l < 0.9) l += 0.01
+  return paraHex(matiz, 1, l)
+}
+
+/**
  * A cor pedida à interface pode ser qualquer CSS ("gold", "rgb(...)"). O próprio
  * navegador a converte, e o resultado é hexadecimal para cores opacas.
  */

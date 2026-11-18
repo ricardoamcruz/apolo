@@ -63,6 +63,8 @@ export const SENSIVEIS = [
   // A criptografia da conexão e a tomada entre dispositivos.
   /^bridge\/tls\.mjs$/,
   /^bridge\/extensoes\.mjs$/,
+  // Decide o que a página carrega das extensões plugáveis (docs/adr/0033).
+  /^bridge\/plugaveis\.mjs$/,
   // Roda antes de todo o resto e decide a configuração que o gate lê.
   /^bridge\/env\.mjs$/,
   // Commita e envia código do próprio projeto: quem pode mexer nele pode

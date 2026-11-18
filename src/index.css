@@ -68,6 +68,18 @@ body::after {
   z-index: 1;
 }
 
+/* Extensões plugáveis (docs/adr/0033): cada uma ganha uma camada entre a cena e o
+   HUD. Sem toques por padrão: a extensão liga quando tiver o que tocar. */
+.extensoes,
+.extensao-camada {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+.extensoes {
+  z-index: 2;
+}
+
 /* --------------------------------------------------------------------- HUD */
 
 .hud {
@@ -187,6 +199,23 @@ body::after {
   flex: none;
   color: var(--accent);
   filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+/* O ícone de uma extensão plugável é um .svg dela, usado como máscara: assim ele pinta
+   na cor do estado (e na de alerta) como os desenhados aqui. */
+.rail-icone-externo {
+  background: currentColor;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}
+/* Sem ícone, o losango ocupa a largura de um, e os nomes ficam alinhados. */
+.rail-icone-vazio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .rail-sistema.degradado .rail-icone {
   color: var(--alerta);

@@ -38,6 +38,8 @@
     "test:aurora": "node --test modules/aurora/test/",
     "test:comandos": "node --test scripts/comandos.test.mjs",
     "test:conversa": "node --test scripts/conversa.test.mjs",
+    "test:extensoes": "node --test scripts/plugaveis.test.mjs",
+    "test:atlas": "node --test scripts/atlas.test.mjs",
     "test:resiliencia": "node --test scripts/resiliencia.test.mjs scripts/renascer.test.mjs"
   },
   "dependencies": {

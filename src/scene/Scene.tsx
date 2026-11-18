@@ -79,6 +79,8 @@ export type Drive = {
   pulse: number
   /** Raio do círculo em espera, em unidades do mundo: onde as partículas se juntam. */
   standbyRing: number
+  /** 0..1 o núcleo emprestado a uma extensão (docs/adr/0033): o Enxame se apaga. */
+  cedido: number
   /**
    * The reactor slice of the ui state, already resolved and smoothed.
    *
@@ -129,6 +131,7 @@ function Rig() {
       standby: 0,
       pulse: 0,
       standbyRing: 1,
+      cedido: 0,
       reactor: {
         color: new THREE.Color(phaseColor.offline),
         scale: 1,
@@ -183,6 +186,8 @@ function Rig() {
     const emEspera = phase === 'dormant'
     drive.standby += ((emEspera ? 1 : 0) - drive.standby) * Math.min(1, dt * STANDBY_RATE)
     drive.pulse = Math.sin((state.clock.elapsedTime * Math.PI * 2) / STANDBY_PULSE_S) * 0.5 + 0.5
+    // Rápido o bastante para os pontos da extensão tomarem o lugar sem um buraco no meio.
+    drive.cedido += ((estado.nucleoCedido ? 1 : 0) - drive.cedido) * Math.min(1, dt * 5)
 
     // Idle breathing so the orb is never completely still. Em espera, quem dá
     // sinal de vida é a pulsação: o som da sala não deve mexer em nada.

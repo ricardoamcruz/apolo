@@ -67,6 +67,8 @@ export function criarServicos({
   ambiente = process.env,
   log = console.log,
   aoMudar = () => {},
+  /** A voz relatada no /health mudou (nome do serviço, retrato da voz). */
+  aoVoz = () => {},
   esperasMs = ESPERAS_MS,
   estavelMs = 120_000,
   intervaloMs = 5000,
@@ -226,8 +228,8 @@ export function criarServicos({
 
   /**
    * A voz que a ponte relata em /health (a interface conta a ela se a conexão
-   * com o provedor ligou). Por enquanto só registra quando muda: é o que falta
-   * para ver por que o C.O.R.E. ficou mudo com tudo de pé.
+   * com o provedor ligou). Registra quando muda e avisa quem subiu a Fênix: "sem
+   * interface" quer dizer que a página morreu e ele está mudo com tudo de pé.
    */
   function registrarVoz(e, voz) {
     if (!voz || typeof voz.estado !== 'string') return
@@ -239,6 +241,7 @@ export function criarServicos({
     } else {
       log(`[fenix] ${e.def.nome}: voz ${voz.estado}`)
     }
+    aoVoz(e.def.nome, voz)
   }
 
   async function vigiar() {

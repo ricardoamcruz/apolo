@@ -533,6 +533,19 @@ function connect(): Promise<WebSocket> {
       settle(new Error('A ponte encerrou a conexão.'))
       if (socket === ws) {
         socket = null
+        // A resposta de um pedido à Fênix vinha por esta ponte e não vem mais. Numa
+        // atualização ou num reinício é o esperado; esperar o prazo (até 50 min)
+        // deixava a voz presa na ferramenta, sem responder.
+        for (const [id, responder] of respostasDaFenix) {
+          respostasDaFenix.delete(id)
+          responder({
+            ok: false,
+            mensagem:
+              'A ponte reiniciou antes de responder. Numa atualização ou num reinício, isso é o ' +
+              'esperado: a Fênix avisa o resultado pela central de notificações. Diga ao Ricardo, ' +
+              'em uma frase, que você está reiniciando e já volta.',
+          })
+        }
         onConnection?.('lost')
         scheduleReconnect()
       }

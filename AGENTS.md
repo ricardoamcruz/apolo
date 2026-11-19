@@ -281,7 +281,7 @@ npm run celular      # pareia o iPhone: token, Tailscale e código de pareamento
 npm run logs:celular # resume as medições do app (-- 7 para sete dias, --eventos para quedas)
 npm run popups       # compila os popups da web para o app do iPhone
 npm run rollback     # descarta a alteração em teste e volta à main (com tudo parado)
-npm run atualizar    # pede à F.Ê.N.I.X. no ar que traga a main nova; sai com 1 e o motivo se não der
+npm run atualizar    # pede à F.Ê.N.I.X. no ar que volte para a main (se estiver fora) e traga a mais nova; sai com 1 e o motivo se não der
 npm run avisar -- "título" "texto"  # a F.Ê.N.I.X. no ar manda o aviso pelo H.E.R.M.E.S. (Mac e iPhone)
 npm run hermes       # só o H.E.R.M.E.S., sem a Fênix (a F.Ê.N.I.X. já o sobe)
 npm run aurora       # só a A.U.R.O.R.A., sem a Fênix (a F.Ê.N.I.X. já a sobe)

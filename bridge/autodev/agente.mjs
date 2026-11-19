@@ -60,12 +60,32 @@ function resumo(nome, entrada) {
   return `${nome} ${String(alvo).replace(/^.*\/autodev\/worktrees\/[^/]+\//, '')}`.trim().slice(0, 120)
 }
 
+/** Por que o agente parou antes de terminar, em palavras para o Ricardo. */
+export const PARADAS = {
+  error_max_turns: `chegou ao limite de ${MAX_TURNOS} voltas`,
+  error_max_budget_usd: `chegou ao limite de ${ORCAMENTO_USD} dólares`,
+  error_during_execution: 'teve um erro durante a execução',
+}
+
+/** O pedido de uma sessão retomada depois do limite de voltas. */
+export const PEDIDO_DE_CONTINUAR =
+  'Você chegou ao limite de voltas antes de terminar. Não comece nada novo: conclua o que ' +
+  'está pela metade, rode npm run lint e npm run build, corrija o que falhar, atualize a ' +
+  'documentação pendente e entregue o resumo final com as linhas BRANCH e COMMIT. Se não ' +
+  'der para terminar, diga no resumo o que ficou faltando.'
+
 /**
  * Roda o pedido na cópia de trabalho.
  *
- * @returns {{ ok: boolean, texto: string }}
+ * O SDK entrega o resultado de uma parada (limite de voltas, de orçamento) e, logo
+ * depois, lança um erro. Com o resultado em mãos, o erro não traz nada novo: quem
+ * chama recebe `parada` e decide o que fazer com o que ficou na cópia, em vez de
+ * perder tudo numa exceção.
+ *
+ * @param retomar  id da sessão a continuar (resume), com o mesmo contexto
+ * @returns {{ ok: boolean, texto: string, parada?: string, sessao?: string, voltas: number }}
  */
-export async function rodarAgente({ pedido, pasta, repo, abortController, aoProgresso }) {
+export async function rodarAgente({ pedido, pasta, repo, abortController, aoProgresso, retomar }) {
   const sessao = query({
     prompt: pedido,
     options: {
@@ -74,6 +94,7 @@ export async function rodarAgente({ pedido, pasta, repo, abortController, aoProg
       model: MODELO,
       effort: ESFORCO,
       maxTurns: MAX_TURNOS,
+      ...(retomar && { resume: retomar }),
       maxBudgetUsd: ORCAMENTO_USD,
       mcpServers: {},
       settingSources: [],
@@ -97,23 +118,45 @@ export async function rodarAgente({ pedido, pasta, repo, abortController, aoProg
         if (nome === 'Bash') ok = comandoPermitido(entrada?.command)
         if (ok) return { behavior: 'allow', updatedInput: entrada }
         console.log(`[autodev] negado: ${resumo(nome, entrada)}`)
-        return { behavior: 'deny', message: 'Bloqueado pela política do autodesenvolvimento.' }
+        // O motivo exato poupa voltas: sem ele, o agente tenta variações do mesmo comando.
+        const message =
+          nome === 'Bash'
+            ? 'Bloqueado pela política do autodesenvolvimento: um comando simples por vez, sem |, ;, &&, ' +
+              'redirecionamento ou $(...). Só passam npm run lint, npm run build, npx tsc, npx oxlint, ' +
+              'git status/diff/log/show e ls, cat, head, tail, grep, rg, find, wc. Testes rodam depois, ' +
+              'na conferência do A.P.O.L.O.: não tente executá-los.'
+            : 'Bloqueado pela política do autodesenvolvimento.'
+        return { behavior: 'deny', message }
       },
     },
   })
 
   let texto = ''
   let ok = false
-  for await (const msg of sessao) {
-    if (msg.type === 'assistant') {
-      for (const bloco of msg.message?.content ?? []) {
-        if (bloco.type === 'tool_use') aoProgresso(resumo(bloco.name, bloco.input))
+  let parada
+  let id
+  // Uma volta é uma resposta do modelo; o SDK pode mandá-la em várias mensagens.
+  const respostas = new Set()
+  try {
+    for await (const msg of sessao) {
+      if (msg.session_id) id = msg.session_id
+      if (msg.type === 'assistant') {
+        respostas.add(msg.message?.id ?? respostas.size)
+        for (const bloco of msg.message?.content ?? []) {
+          if (bloco.type === 'tool_use') {
+            aoProgresso(resumo(bloco.name, bloco.input), { voltas: respostas.size, limite: MAX_TURNOS })
+          }
+        }
+      }
+      if (msg.type === 'result') {
+        ok = msg.subtype === 'success' && !msg.is_error
+        if (!ok) parada = msg.subtype
+        texto = msg.result ?? ''
       }
     }
-    if (msg.type === 'result') {
-      ok = msg.subtype === 'success' && !msg.is_error
-      texto = msg.result ?? `O agente parou: ${msg.subtype}.`
-    }
+  } catch (err) {
+    // O erro que vem depois do resultado de uma parada repete o que já se sabe.
+    if (!parada || abortController?.signal.aborted) throw err
   }
-  return { ok, texto }
+  return { ok, texto, parada, sessao: id, voltas: respostas.size }
 }

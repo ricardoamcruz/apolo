@@ -194,7 +194,7 @@ export function criarFenix(
       versao: versoes.estado(),
       rotinas: [
         { nome: 'reiniciar', descricao: 'Reinicia um serviço, ou todos os versionados', parametros: { servico: 'nome do serviço' } },
-        { nome: 'atualizar', descricao: `Traz a ${config.versaoSegura} mais nova e sobe com ela; volta se quebrar`, parametros: {} },
+        { nome: 'atualizar', descricao: `Volta para a ${config.versaoSegura} se estiver fora dela, traz a mais nova e sobe com ela; volta se quebrar`, parametros: {} },
         { nome: 'diagnostico', descricao: 'Serviços, versão, eventos recentes, disco e memória', parametros: {} },
         ...config.rotinas.map((r) => ({
           nome: r.nome,
@@ -238,12 +238,30 @@ export function criarFenix(
     return { ok: true, mensagem: 'Diagnóstico pronto.', saida: linhas.join('\n') }
   }
 
+  /**
+   * O resultado da atualização em frases para gente: o erro do Git (que vem em
+   * "Não consegui atualizar: ...") fica no eventos.log, nunca na notificação.
+   */
+  const avisoDaAtualizacao = ({ ok, mensagem }) => {
+    if (ok || !/^Não consegui atualizar/.test(mensagem)) return mensagem
+    const onde = 'O motivo ficou no eventos.log da Fênix.'
+    if (/nem voltar/.test(mensagem)) return `A atualização falhou e não consegui voltar para a versão de antes: confira a cópia. ${onde}`
+    if (/Voltei para/.test(mensagem)) return `A atualização falhou; voltei para a versão de antes, que segue no ar. ${onde}`
+    return `A atualização falhou antes de trocar qualquer coisa. ${onde}`
+  }
+
   async function rotina(nome, parametros = {}) {
     if (rodando.has(nome)) return { ok: false, mensagem: `A rotina ${nome} já está rodando.` }
     rodando.add(nome)
     try {
       if (nome === 'diagnostico') return await diagnostico()
-      if (nome === 'atualizar') return await versoes.atualizar()
+      if (nome === 'atualizar') {
+        const r = await versoes.atualizar()
+        // A ponte que pediu reinicia no meio, e a resposta por ela se perde: o
+        // resultado chega ao Ricardo também pela central (Mac e iPhone).
+        avisos.avisar({ titulo: `${config.nome}: atualização`, texto: avisoDaAtualizacao(r), prioridade: r.ok ? 'normal' : 'alta' })
+        return r
+      }
       if (nome === 'reiniciar') {
         if (versoes.emTroca()) return { ok: false, mensagem: 'Há uma troca em andamento ou uma alteração em teste.' }
         const alvo = parametros?.servico

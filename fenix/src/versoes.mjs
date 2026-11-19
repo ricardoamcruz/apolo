@@ -555,17 +555,24 @@ export function criarVersoes({
 
     /**
      * Traz a versão segura mais nova do remoto e sobe com ela. Se a versão nova
-     * não ficar de pé, volta para o commit de antes — a remota continua lá, e a
+     * não ficar de pé, volta para onde estava — a remota continua lá, e a
      * próxima atualização tenta de novo.
+     *
+     * Fora da versão segura (uma branch de fase, ou HEAD destacado), faz antes o
+     * checkout dela: o pedido do Ricardo é "volte para a main e atualize". A branch
+     * de onde saiu continua guardada, com tudo o que tem; só deixa de estar no ar.
      *
      * Em etapas, uma depois da outra, e cada uma conferida: busca, confere que dá
      * para avançar sem merge, troca, confere o commit, reinstala se precisar, sobe
-     * e observa. Qualquer falha no caminho volta ao commit de antes e religa os
-     * serviços: a cópia nunca fica no meio, e a resposta diz o motivo exato.
+     * e observa. Qualquer falha no caminho volta à branch e ao commit de antes e
+     * religa os serviços: a cópia nunca fica no meio, e a resposta diz o motivo exato.
      */
     async atualizar() {
       if (ocupado || emTeste) return { ok: false, mensagem: 'Há uma troca em andamento ou uma alteração em teste.' }
       ocupado = true
+      /** Onde a cópia estava (branch e commit): é para lá que uma falha volta. */
+      let origem = null
+      /** A versão segura local antes de avançar; vazia se ela só existia no remoto. */
       let antes = null
       let desligados = false
       let mexeu = false
@@ -579,25 +586,36 @@ export function criarVersoes({
         ligar()
         desligados = false
       }
-      /** Volta ao commit de antes; nunca deixa a troca pela metade. */
+      /** Volta à branch e ao commit de antes; nunca deixa a troca pela metade. */
       const restaurar = async () => {
         if (!desligados) {
           await desligar()
           desligados = true
         }
-        await git('reset', '--hard', '--quiet', antes)
-        await atualizarSubmodulos()
-        const agora = await git('rev-parse', 'HEAD')
-        if (agora !== antes) throw new Error(`a cópia ficou em ${curto(agora)}, e não em ${curto(antes)}`)
+        const { ref } = await versaoAtual()
+        // A versão segura volta ao commit em que estava; se ela nem existia, sai.
+        if (ref === versaoSegura && antes) await git('reset', '--hard', '--quiet', antes)
+        if (origem.ref !== versaoSegura) {
+          await trocarPara(origem)
+          if (!antes && (await existeLocal(versaoSegura))) await git('branch', '-D', versaoSegura)
+        } else {
+          await atualizarSubmodulos()
+        }
+        const agora = await versaoAtual()
+        if (agora.sha !== origem.sha || agora.ref !== origem.ref) {
+          throw new Error(`a cópia ficou em ${agora.ref} (${curto(agora.sha)}), e não em ${origem.ref} (${curto(origem.sha)})`)
+        }
         if (reinstalar) await rodarInstalar().catch((err) => anotar(`[fenix] ATENÇÃO: a reinstalação da versão anterior falhou: ${err.message}`))
       }
+      const onde = (o) => (o.ref === o.sha ? `HEAD destacado em ${curto(o.sha)}` : o.ref)
       try {
         const copia = await conferirCopia()
         if (copia) return recusa(copia.replace('nada foi trocado', 'nada foi atualizado').replace('Nada foi trocado', 'Nada foi atualizado'))
-        const { ref, sha } = await versaoAtual()
-        if (ref === sha) return recusa(`A cópia está com HEAD destacado em ${curto(sha)}; só atualizo na ${versaoSegura}.`)
-        if (ref !== versaoSegura) return recusa(`Só atualizo na ${versaoSegura}; agora estou em ${ref}.`)
-        antes = sha
+        origem = await versaoAtual()
+        const fora = origem.ref !== versaoSegura
+        antes = fora
+          ? await git('rev-parse', '--verify', '--quiet', `refs/heads/${versaoSegura}^{commit}`).catch(() => '')
+          : origem.sha
 
         const remoto = await remotoDe(versaoSegura)
         const ramo = (await git('config', `branch.${versaoSegura}.merge`).catch(() => '')).replace(/^refs\/heads\//, '') || versaoSegura
@@ -607,8 +625,8 @@ export function criarVersoes({
         await gitRede('fetch', '--prune', '--quiet', remoto)
         const depois = await git('rev-parse', '--verify', '--quiet', `refs/remotes/${remoto}/${ramo}^{commit}`).catch(() => '')
         if (!depois) return recusa(`O remoto ${remoto} não tem a branch ${ramo}; nada foi atualizado.`)
-        if (depois === antes) return { ok: true, mensagem: 'Já estava na versão mais nova.' }
-        if (!(await sim(git('merge-base', '--is-ancestor', antes, depois)))) {
+        if (!fora && depois === antes) return { ok: true, mensagem: 'Já estava na versão mais nova.' }
+        if (antes && antes !== depois && !(await sim(git('merge-base', '--is-ancestor', antes, depois)))) {
           const aFrente = await sim(git('merge-base', '--is-ancestor', depois, antes))
           return recusa(
             aFrente
@@ -620,41 +638,58 @@ export function criarVersoes({
         const colisao = await conferirCopia(depois)
         if (colisao) return recusa(colisao.replace('Nada foi trocado', 'Nada foi atualizado'))
 
-        const mudados = (await git('diff', '--name-only', antes, depois)).split('\n').filter(Boolean)
+        // O que muda é o que está no ar agora contra o alvo, e não só a main local.
+        const mudados = (await git('diff', '--name-only', origem.sha, depois)).split('\n').filter(Boolean)
         reinstalar = Boolean(instalar && mudados.some((f) => instalar.quando.some((re) => re.test(f))))
-        anotar(`[fenix] atualizando ${versaoSegura} de ${curto(antes)} para ${curto(depois)}`)
+        anotar(
+          fora
+            ? `[fenix] saindo de ${onde(origem)} para a ${versaoSegura} e atualizando para ${curto(depois)}`
+            : `[fenix] atualizando ${versaoSegura} de ${curto(antes)} para ${curto(depois)}`,
+        )
 
         await desligar()
         desligados = true
         mexeu = true
-        await git('merge', '--ff-only', '--quiet', depois)
+        if (fora) {
+          // Sem a main local, ela nasce acompanhando a do remoto, já no commit novo.
+          await trocarPara({ ref: versaoSegura, sha: antes || depois })
+        }
+        if (antes && antes !== depois) await git('merge', '--ff-only', '--quiet', depois)
         await atualizarSubmodulos()
-        const agora = await git('rev-parse', 'HEAD')
-        if (agora !== depois) throw new Error(`a cópia ficou em ${curto(agora)}, e não em ${curto(depois)}`)
+        const agora = await versaoAtual()
+        if (agora.ref !== versaoSegura || agora.sha !== depois) {
+          throw new Error(`a cópia ficou em ${agora.ref} (${curto(agora.sha)}), e não em ${versaoSegura} (${curto(depois)})`)
+        }
         if (reinstalar) await rodarInstalar()
         religar()
 
         const motivo = await observar(false)
         if (!motivo) {
-          anotar(`[fenix] ${versaoSegura} atualizada para ${curto(depois)}`)
-          return { ok: true, mensagem: `Atualizei de ${curto(antes)} para ${curto(depois)}, ${mudados.length} arquivos.` }
+          anotar(`[fenix] ${versaoSegura} atualizada para ${curto(depois)}${fora ? ` (saindo de ${onde(origem)})` : ''}`)
+          if (!fora) return { ok: true, mensagem: `Atualizei de ${curto(antes)} para ${curto(depois)}, ${mudados.length} arquivos.` }
+          const guardada = origem.ref === origem.sha ? '' : ` A ${origem.ref} continua guardada, só fora do ar.`
+          const passo = antes === depois ? `, que já estava na versão mais nova (${curto(depois)})` : `, atualizada de ${curto(antes) || 'nada'} para ${curto(depois)}`
+          return {
+            ok: true,
+            mensagem: `Saí de ${onde(origem)} para a ${versaoSegura}${passo}; ${mudados.length} arquivos mudaram no ar.${guardada}`,
+          }
         }
         await restaurar()
         religar()
-        anotar(`[fenix] a atualização falhou (${motivo}); de volta a ${curto(antes)}`)
-        return { ok: false, mensagem: `${motivo} Voltei para a versão de antes, ${curto(antes)}.` }
+        anotar(`[fenix] a atualização falhou (${motivo}); de volta a ${onde(origem)} (${curto(origem.sha)})`)
+        return { ok: false, mensagem: `${motivo} Voltei para a versão de antes, ${onde(origem)} (${curto(origem.sha)}).` }
       } catch (err) {
         anotar(`[fenix] falha ao atualizar: ${err.message}`)
         if (!mexeu) return { ok: false, mensagem: `Não consegui atualizar: ${err.message}. Nada foi trocado.` }
         try {
           await restaurar()
-          anotar(`[fenix] de volta a ${curto(antes)} depois da falha`)
-          return { ok: false, mensagem: `Não consegui atualizar: ${err.message}. Voltei para a versão de antes, ${curto(antes)}.` }
+          anotar(`[fenix] de volta a ${onde(origem)} (${curto(origem.sha)}) depois da falha`)
+          return { ok: false, mensagem: `Não consegui atualizar: ${err.message}. Voltei para a versão de antes, ${onde(origem)} (${curto(origem.sha)}).` }
         } catch (falha) {
-          anotar(`[fenix] ATENÇÃO: não consegui voltar para ${curto(antes)}: ${falha.message}`)
+          anotar(`[fenix] ATENÇÃO: não consegui voltar para ${onde(origem)}: ${falha.message}`)
           return {
             ok: false,
-            mensagem: `Não consegui atualizar (${err.message}) nem voltar para ${curto(antes)} (${falha.message}). Confira a cópia com git status.`,
+            mensagem: `Não consegui atualizar (${err.message}) nem voltar para ${onde(origem)} (${falha.message}). Confira a cópia com git status.`,
           }
         }
       } finally {

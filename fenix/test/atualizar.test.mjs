@@ -123,12 +123,92 @@ test('um merge pela metade barra a atualização com o motivo', async () => {
   assert.match(res.mensagem, /no meio de um merge/)
 })
 
-test('fora da main ou com HEAD destacado, diz onde está e não mexe', async () => {
+/** A cópia numa branch de fase, com um commit que a main não tem. */
+function naFase(r, nome = 'fase-3.2/fio-de-ariadne') {
+  r.git('switch', '-qc', nome)
+  writeFileSync(join(r.repo, 'fase.txt'), 'trabalho da fase\n')
+  r.git('add', '-A')
+  r.git('commit', '-qm', 'trabalho da fase')
+  return r.git('rev-parse', 'HEAD')
+}
+
+test('fora da main, faz o checkout dela, atualiza e deixa a branch de fase guardada', async () => {
   const r = comRemoto()
-  r.git('switch', '-qc', 'fase-2.9/outra')
-  assert.match((await montar(r).versoes.atualizar()).mensagem, /Só atualizo na main; agora estou em fase-2\.9\/outra/)
+  const fase = naFase(r)
+  const novo = r.publicar()
+  const { versoes, eventos } = montar(r)
+  const res = await versoes.atualizar()
+  assert.equal(res.ok, true, res.mensagem)
+  assert.match(res.mensagem, /^Saí de fase-3\.2\/fio-de-ariadne para a main, atualizada de \w{7} para \w{7}; 2 arquivos mudaram no ar\. A fase-3\.2\/fio-de-ariadne continua guardada/)
+  assert.equal(r.git('rev-parse', '--abbrev-ref', 'HEAD'), 'main')
+  assert.equal(r.git('rev-parse', 'HEAD'), novo)
+  assert.equal(r.git('rev-parse', 'fase-3.2/fio-de-ariadne'), fase)
+  assert.deepEqual(eventos, ['desligar', 'ligar'])
+  assert.deepEqual(await versoes.atualizar(), { ok: true, mensagem: 'Já estava na versão mais nova.' })
+})
+
+test('fora da main com ela já em dia, só faz o checkout e sobe', async () => {
+  const r = comRemoto()
+  naFase(r)
+  const main = r.git('rev-parse', 'main')
+  const { versoes, eventos } = montar(r)
+  const res = await versoes.atualizar()
+  assert.equal(res.ok, true, res.mensagem)
+  assert.match(res.mensagem, /para a main, que já estava na versão mais nova/)
+  assert.equal(r.git('rev-parse', '--abbrev-ref', 'HEAD'), 'main')
+  assert.equal(r.git('rev-parse', 'HEAD'), main)
+  assert.deepEqual(eventos, ['desligar', 'ligar'])
+})
+
+test('com HEAD destacado, também volta para a main', async () => {
+  const r = comRemoto()
   r.git('switch', '-q', '--detach', 'main')
-  assert.match((await montar(r).versoes.atualizar()).mensagem, /HEAD destacado em \w{7}/)
+  const novo = r.publicar()
+  const res = await montar(r).versoes.atualizar()
+  assert.equal(res.ok, true, res.mensagem)
+  assert.match(res.mensagem, /^Saí de HEAD destacado em \w{7} para a main/)
+  assert.equal(r.git('rev-parse', '--abbrev-ref', 'HEAD'), 'main')
+  assert.equal(r.git('rev-parse', 'HEAD'), novo)
+})
+
+test('sem a main local, ela nasce acompanhando a do remoto', async () => {
+  const r = comRemoto()
+  naFase(r)
+  r.git('branch', '-D', 'main')
+  const novo = r.publicar()
+  const res = await montar(r).versoes.atualizar()
+  assert.equal(res.ok, true, res.mensagem)
+  assert.equal(r.git('rev-parse', 'HEAD'), novo)
+  assert.equal(r.git('rev-parse', '--abbrev-ref', 'main@{upstream}'), 'origin/main')
+})
+
+test('a main que não sobe, vinda de uma branch de fase, volta para ela e deixa a main onde estava', async () => {
+  const r = comRemoto()
+  const mainAntes = r.git('rev-parse', 'main')
+  const fase = naFase(r)
+  r.publicar()
+  const { versoes, eventos } = montar(r, { saude: async () => ({ ok: false, motivo: 'não respondeu' }) })
+  const res = await versoes.atualizar()
+  assert.equal(res.ok, false)
+  assert.match(res.mensagem, /Voltei para a versão de antes, fase-3\.2\/fio-de-ariadne \(\w{7}\)/)
+  assert.equal(r.git('rev-parse', '--abbrev-ref', 'HEAD'), 'fase-3.2/fio-de-ariadne')
+  assert.equal(r.git('rev-parse', 'HEAD'), fase)
+  assert.equal(r.git('rev-parse', 'main'), mainAntes)
+  assert.equal(eventos.at(-1), 'ligar')
+})
+
+test('fora da main com alteração não commitada, nada é trocado nem desligado', async () => {
+  const r = comRemoto()
+  const fase = naFase(r)
+  r.publicar()
+  writeFileSync(join(r.repo, 'fase.txt'), 'mexido\n')
+  const { versoes, eventos } = montar(r)
+  const res = await versoes.atualizar()
+  assert.equal(res.ok, false)
+  assert.match(res.mensagem, /alterações não commitadas \(fase\.txt\); nada foi atualizado/)
+  assert.equal(r.git('rev-parse', '--abbrev-ref', 'HEAD'), 'fase-3.2/fio-de-ariadne')
+  assert.equal(r.git('rev-parse', 'HEAD'), fase)
+  assert.deepEqual(eventos, [])
 })
 
 test('remoto inexistente, fora do ar ou sem a branch: motivo exato, nada desligado', async () => {

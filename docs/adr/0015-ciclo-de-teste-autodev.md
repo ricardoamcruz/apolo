@@ -76,3 +76,27 @@ a troca de versão funcionava e que o problema estava em volta dela:
   falado, conferido na transcrição, a ação `pull_request` envia a branch e abre o PR
   pelo sub-módulo git (ADR 0014), com o título do commit. Exige `--writes`, abre uma
   vez por alteração, e o merge continua sendo do Ricardo.
+
+## Revisão de 18/11/2026: parar no limite sem perder o trabalho
+
+Um item do backlog esgotou as 80 voltas do agente quando só faltava a documentação, e a
+ponte apagou a cópia de trabalho: o SDK entrega o resultado `error_max_turns` e depois
+lança um erro, que era tratado como falha comum. Enquanto isso, a voz só sabia dizer
+"em andamento".
+
+- **Limite de voltas:** a mesma sessão é retomada uma vez (`resume`), com o contexto
+  inteiro e o pedido de concluir sem começar nada novo. Ela ganha outro tanto de voltas.
+  O estado mostra `continuando`, e a voz avisa o Ricardo na hora.
+- **Parada sem terminar** (de novo o limite de voltas, o orçamento ou o prazo de
+  `APOLO_AUTODEV_LIMITE_MIN`): se a cópia tiver alterações, elas viram um commit
+  `Incompleto: ...` numa branch `fase-x.y/nome`, para revisão. Não passam pelas checagens
+  e não vão ao ar. Sem alterações, a falha diz o motivo em palavras. O prazo é uma parada
+  e o "cancelar" do Ricardo, não: só o cancelamento descarta.
+- **Estado honesto:** `estado` diz há quanto tempo o agente trabalha, a volta do limite,
+  a etapa atual e que a branch só nasce depois das checagens. A voz consulta o estado
+  sempre que ele pergunta.
+- **Rastro:** a ponte que reinicia no meio do trabalho registra a perda no `eventos.log`,
+  e a recusa de um comando diz ao agente exatamente o que passa.
+
+O preço é que um trabalho que precisa de mais voltas pode custar até o dobro antes de
+parar. O orçamento em dólares continua valendo para cada rodada.

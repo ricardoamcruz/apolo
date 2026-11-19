@@ -721,9 +721,20 @@ export default function App() {
     watchExtensoes((lista) => void aplicarExtensoes(lista as ExtensaoNaPonte[]))
     let acompanhando = false
     let testeAvisado = false
+    let continuacaoAvisada = false
     watchAutodev((estado) => {
       store.getState().setAutodev(estado)
       if (estado.fase !== 'ocioso' && estado.fase !== 'proposto') acompanhando = true
+      // Um trabalho em dificuldade é notícia na hora, não só quando ele perguntar.
+      if (estado.continuando && !continuacaoAvisada && acompanhando) {
+        continuacaoAvisada = true
+        session.current?.prompt(
+          `O agente do autodesenvolvimento esgotou as ${estado.limiteDeVoltas ?? ''} voltas sem terminar ` +
+            'e ganhou mais uma rodada para concluir. Avise o Ricardo em uma frase: o trabalho continua, ' +
+            'e, se não der, o que foi feito fica guardado numa branch para ele revisar.',
+        )
+      }
+      if (!estado.continuando) continuacaoAvisada = false
       if (estado.fase === 'testando' && !testeAvisado && acompanhando) {
         testeAvisado = true
         session.current?.prompt(

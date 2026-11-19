@@ -23,7 +23,7 @@ import { obterLocal } from '../tls.mjs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { BASE, PASTA_AUTODEV, classificar, gateIntacto } from './politica.mjs'
-import { rodarAgente } from './agente.mjs'
+import { PARADAS, PEDIDO_DE_CONTINUAR, rodarAgente } from './agente.mjs'
 import { abrirEditor as abrirEditorPadrao, fecharEditor as fecharEditorPadrao } from './editor.mjs'
 import { historicoDeBranches, proximaFase } from '../branches.mjs'
 import { branchValida, lerEntrega, nomeLivre, pedidoVago } from './entrega.mjs'
@@ -89,6 +89,34 @@ export function textoDaRevisao(motivo, branch, resumo) {
   return resumo ? `${inicio}\n\nO que foi feito: ${resumo}` : inicio
 }
 
+const minutos = (ms) => Math.max(1, Math.round(ms / 60_000))
+
+/**
+ * Como está o trabalho, para a voz contar ao Ricardo: há quanto tempo, quantas
+ * voltas do limite e o que está fazendo agora. "Em andamento", sozinho, escondia
+ * um trabalho perto de esgotar o limite.
+ */
+export function textoDoEstado(estado, agora = Date.now()) {
+  const { fase, etapa, resultado, inicio, voltas, limiteDeVoltas, continuando } = estado
+  if (fase === 'ocioso') return resultado?.mensagem ?? 'Nenhum trabalho em andamento.'
+  if (fase === 'proposto') return 'Há uma proposta aguardando a confirmação do Ricardo.'
+  if (fase === 'testando') return 'A alteração está no ar, em teste, esperando ele aprovar ou descartar.'
+  if (fase === 'aplicando') return `A Fênix está pondo a alteração no ar (${etapa ?? 'reiniciando'}).`
+  const partes = [fase === 'verificando' ? 'Conferindo o trabalho: lint, tipos, build e testes.' : 'O agente está trabalhando.']
+  if (inicio) partes.push(`Começou há ${minutos(agora - inicio)} min.`)
+  if (voltas && limiteDeVoltas) {
+    partes.push(
+      continuando
+        ? `Esgotou as ${limiteDeVoltas} voltas e está numa continuação para terminar: volta ${voltas} de mais ${limiteDeVoltas}.`
+        : `Volta ${voltas} de ${limiteDeVoltas}.`,
+    )
+  }
+  if (fase === 'trabalhando' && etapa) partes.push(`Agora: ${etapa}.`)
+  // A branch só nasce depois das checagens: sem isto, a falta dela parece defeito.
+  partes.push('Ainda não há branch: ela só é criada quando o trabalho termina e passa nas checagens.')
+  return partes.join(' ')
+}
+
 /**
  * As checagens antes de trocar a versão.
  *
@@ -148,6 +176,15 @@ export function criarAutodev({
   const arqEstado = join(pasta, 'estado.json')
   const arqEventos = join(pasta, 'eventos.log')
 
+  const registrar = (linha) => {
+    console.log(linha)
+    try {
+      appendFileSync(arqEventos, `${new Date().toISOString()} ${linha}\n`)
+    } catch {
+      /* o registro nunca interrompe o trabalho */
+    }
+  }
+
   let estado = { ligado, fase: 'ocioso' }
   try {
     const salvo = JSON.parse(readFileSync(arqEstado, 'utf8'))
@@ -155,10 +192,16 @@ export function criarAutodev({
     // A ponte morreu no meio do trabalho: o agente foi junto. Já 'aplicando' é
     // o caminho normal: quem subiu agora é a versão nova, e o resultado vem aí.
     if (estado.fase === 'trabalhando' || estado.fase === 'verificando') {
+      const mensagem =
+        'A ponte reiniciou no meio do trabalho, e o agente parou junto. O que ele tinha feito ' +
+        'se perdeu; é preciso pedir de novo.'
+      // Sem esta linha, um trabalho morto assim não deixava rastro nenhum.
+      registrar(`[autodev] ${salvo.id}: falhou — ${mensagem}`)
       estado = {
         ligado,
         fase: 'ocioso',
-        resultado: { id: salvo.id, tipo: 'falhou', mensagem: 'A ponte reiniciou no meio do trabalho.' },
+        ultimoPedido: salvo.pedido ?? salvo.ultimoPedido,
+        resultado: { id: salvo.id, tipo: 'falhou', mensagem },
       }
     }
     // Sem a Fênix não há troca possível. Com ela, quem diz se ainda há algo em
@@ -180,13 +223,7 @@ export function criarAutodev({
   }
 
   const terminar = (id, tipo, mensagem, extra = {}) => {
-    const linha = `[autodev] ${id}: ${tipo} — ${mensagem}`
-    console.log(linha)
-    try {
-      appendFileSync(arqEventos, `${new Date().toISOString()} ${linha}\n`)
-    } catch {
-      /* o registro nunca interrompe o trabalho */
-    }
+    registrar(`[autodev] ${id}: ${tipo} — ${mensagem}`)
     controle = null
     mudar({
       fase: 'ocioso',
@@ -194,6 +231,10 @@ export function criarAutodev({
       pedido: undefined,
       ultimoPedido: estado.pedido ?? estado.ultimoPedido,
       criadoEm: undefined,
+      inicio: undefined,
+      voltas: undefined,
+      limiteDeVoltas: undefined,
+      continuando: undefined,
       etapa: undefined,
       entrega: undefined,
       testeDesde: undefined,
@@ -266,29 +307,64 @@ export function criarAutodev({
     if (sinal.aborted) return ['cancelado', 'O trabalho foi cancelado.']
     abrirEditor(copia)
 
-    const limite = setTimeout(() => controle?.abort(), LIMITE_MS)
-    const r = await agente({
-      pedido,
-      pasta: copia,
-      repo,
-      abortController: controle,
-      aoProgresso: (etapa) => mudar({ etapa }),
-    }).finally(() => clearTimeout(limite))
+    // O prazo é uma parada, não um cancelamento: o que ficou na cópia é guardado.
+    let passouDoPrazo = false
+    const limite = setTimeout(() => {
+      passouDoPrazo = true
+      controle?.abort()
+    }, LIMITE_MS)
+    const rodar = (extra = {}) =>
+      agente({
+        pedido,
+        pasta: copia,
+        repo,
+        abortController: controle,
+        aoProgresso: (etapa, info) =>
+          mudar({ etapa, ...(info && { voltas: info.voltas, limiteDeVoltas: info.limite }) }),
+        ...extra,
+      })
+    let r
+    try {
+      r = await rodar()
+      // 80 voltas acabaram com um item quase pronto, só faltando a documentação, e
+      // tudo foi apagado. A mesma sessão, com o contexto inteiro, ganha mais uma rodada.
+      if (!sinal.aborted && r.parada === 'error_max_turns' && r.sessao) {
+        registrar(`[autodev] ${id}: ${PARADAS.error_max_turns}; continuando a mesma sessão para terminar`)
+        mudar({ continuando: true, voltas: 0, etapa: 'chegou ao limite de voltas; continuando para terminar' })
+        const antes = r.voltas ?? 0
+        r = await rodar({ pedido: PEDIDO_DE_CONTINUAR, retomar: r.sessao })
+        r = { ...r, voltas: antes + (r.voltas ?? 0) }
+      }
+    } catch (err) {
+      if (!passouDoPrazo) throw err
+      r = { ok: false, texto: '' }
+    } finally {
+      clearTimeout(limite)
+    }
 
-    if (sinal.aborted) return ['cancelado', 'O trabalho foi cancelado.']
+    if (sinal.aborted && !passouDoPrazo) return ['cancelado', 'O trabalho foi cancelado.']
+    if (passouDoPrazo) r = { ...r, ok: false, parada: 'prazo' }
     const entrega = lerEntrega(r.texto, pedido)
-    if (!r.ok) return ['falhou', entrega.resumo]
+    const parada = r.ok
+      ? ''
+      : r.parada === 'prazo'
+        ? `passou do prazo de ${minutos(LIMITE_MS)} minutos`
+        : (PARADAS[r.parada] ?? '')
+    if (!r.ok && !parada) return ['falhou', entrega.resumo || 'O agente terminou com erro, sem dizer qual.']
 
     await git(copia, 'add', '-A')
     const nomes = (await git(copia, 'diff', '--cached', '--name-only')).split('\n').filter(Boolean)
-    if (!nomes.length) return ['falhou', entrega.resumo || 'Nenhum arquivo foi alterado.']
+    if (!nomes.length) {
+      return ['falhou', parada ? `O agente ${parada} sem terminar e não deixou alterações.` : entrega.resumo || 'Nenhum arquivo foi alterado.']
+    }
 
     const { proibidos, sensiveis } = classificar(nomes)
     if (proibidos.length) {
       return ['falhou', `A alteração tocou em ${proibidos.join(', ')} e foi descartada.`]
     }
 
-    await git(copia, 'commit', '-m', entrega.titulo, '-m', `${entrega.resumo}\n\nPedido: ${pedido}`)
+    const titulo = parada ? `Incompleto: ${entrega.titulo}`.slice(0, 72) : entrega.titulo
+    await git(copia, 'commit', '-m', titulo, '-m', `${entrega.resumo}\n\nPedido: ${pedido}`)
     const sha = await git(copia, 'rev-parse', 'HEAD')
 
     // Código sensível não roda antes de alguém ler, nem nas checagens. Vai
@@ -299,6 +375,14 @@ export function criarAutodev({
       const final = await nomeDaBranch(entrega.branch)
       await git(repo, 'branch', final, sha)
       return ['revisao', textoDaRevisao(motivo, final, entrega.resumo), { branch: final, ...extra }]
+    }
+    // Trabalho pela metade não vai ao ar, mas também não se perde.
+    if (parada) {
+      return guardar(
+        `O agente ${parada} antes de terminar (${r.voltas ?? 0} voltas no total). O que ele fez está ` +
+          'incompleto e não passou pelas checagens.',
+        { incompleto: true },
+      )
     }
     if (sensiveis.length) {
       return guardar(`Ela toca arquivos sensíveis (${sensiveis.join(', ')}) e precisa da revisão do Ricardo.`, { sensiveis })
@@ -383,7 +467,7 @@ export function criarAutodev({
     }
     controle = new AbortController()
     // A base fica no estado: é para ela que o commit vai, mesmo depois do reinício do teste.
-    mudar({ fase: 'trabalhando', etapa: 'preparando a cópia de trabalho', base })
+    mudar({ fase: 'trabalhando', etapa: 'preparando a cópia de trabalho', base, inicio: Date.now() })
     void trabalhar(estado.id, estado.pedido)
     return { ok: true, mensagem: 'Trabalho iniciado. Você pode continuar usando o assistente.' }
   }
@@ -398,11 +482,7 @@ export function criarAutodev({
       if (!ligado) {
         return { ok: false, mensagem: 'O autodesenvolvimento está desligado. Inicie com npm start -- --autodev.' }
       }
-      if (acao === 'estado') {
-        const { fase, pedido: p, etapa, resultado } = estado
-        if (fase !== 'ocioso') return { ok: true, mensagem: `${fase}: ${p ?? ''} ${etapa ?? ''}`.trim() }
-        return { ok: true, mensagem: resultado?.mensagem ?? 'Nenhum trabalho em andamento.' }
-      }
+      if (acao === 'estado') return { ok: true, mensagem: textoDoEstado(estado) }
       if (acao === 'propor') {
         const texto = String(pedido ?? '').trim()
         if (!texto) return { ok: false, mensagem: 'Pedido vazio.' }

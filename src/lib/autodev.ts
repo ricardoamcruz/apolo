@@ -12,6 +12,13 @@ export type AutodevEstado = {
   pedido?: string
   etapa?: string
   criadoEm?: number
+  /** Quando o agente começou a trabalhar. */
+  inicio?: number
+  /** Voltas do agente na rodada atual, e o limite de cada rodada. */
+  voltas?: number
+  limiteDeVoltas?: number
+  /** O agente esgotou as voltas e está numa rodada extra para terminar. */
+  continuando?: boolean
   testeDesde?: number
   resumo?: string
   resultado?: {

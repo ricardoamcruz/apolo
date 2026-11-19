@@ -14,7 +14,7 @@ import {
   leituraPermitida,
 } from '../bridge/autodev/politica.mjs'
 import { branchValida, lerEntrega, nomeLivre, pedidoVago } from '../bridge/autodev/entrega.mjs'
-import { criarAutodev, textoDaRevisao } from '../bridge/autodev/index.mjs'
+import { criarAutodev, textoDaRevisao, textoDoEstado } from '../bridge/autodev/index.mjs'
 import { historicoDeBranches, proximaFase } from '../bridge/branches.mjs'
 import { foraDeHora, ouviuConfirmacao, pareceConfirmacao, registrarFala } from '../src/lib/autodev.ts'
 
@@ -532,4 +532,103 @@ test('o autodev numera a branch pela maior já usada', async () => {
   await g.a.acao('propor', { pedido: 'dependência' })
   await g.a.acao('confirmar')
   assert.equal((await g.fim()).resultado.branch, 'fase-2.8/dependencia')
+})
+
+// Bug crítico de 18/11/2026: o agente esgotou as 80 voltas quase no fim de um item,
+// o trabalho inteiro foi apagado e a voz só dizia "em andamento".
+
+test('no limite de voltas, a mesma sessão continua e o trabalho segue para o teste', async () => {
+  const r = repositorio()
+  const chamadas = []
+  const agente = async ({ pasta, pedido, retomar }) => {
+    chamadas.push({ pedido, retomar })
+    if (!retomar) {
+      writeFileSync(join(pasta, 'novo.txt'), 'metade\n')
+      return { ok: false, texto: '', parada: 'error_max_turns', sessao: 's1', voltas: 80 }
+    }
+    writeFileSync(join(pasta, 'novo.txt'), 'inteiro\n')
+    return { ok: true, texto: 'Terminei.\nBRANCH: inteiro\nCOMMIT: Termina o item', sessao: 's1', voltas: 6 }
+  }
+  const g = gerente(r, { agente })
+  await g.a.acao('propor', { pedido: 'item grande' })
+  await g.a.acao('confirmar')
+  assert.equal((await g.fim()).fase, 'aplicando')
+  assert.equal(chamadas.length, 2)
+  assert.equal(chamadas[1].retomar, 's1')
+  assert.match(chamadas[1].pedido, /limite de voltas/)
+  assert.ok(g.estados.some((e) => e.continuando), 'a continuação aparece no estado, para a voz avisar')
+  assert.equal(readFileSync(join(g.pasta, 'eventos.log'), 'utf8').includes('continuando a mesma sessão'), true)
+})
+
+test('se nem a continuação termina, o que foi feito fica numa branch, e não se perde', async () => {
+  const r = repositorio()
+  let checou = false
+  const agente = async ({ pasta }) => {
+    writeFileSync(join(pasta, 'novo.txt'), 'metade\n')
+    return { ok: false, texto: '', parada: 'error_max_turns', sessao: 's1', voltas: 80 }
+  }
+  const g = gerente(r, { agente, verificar: async () => ((checou = true), { ok: true }) })
+  await g.a.acao('propor', { pedido: 'item enorme' })
+  await g.a.acao('confirmar')
+  const e = await g.fim()
+  assert.equal(e.resultado.tipo, 'revisao')
+  assert.equal(e.resultado.incompleto, true)
+  assert.match(e.resultado.mensagem, /^A alteração NÃO foi ao ar\. O agente chegou ao limite de \d+ voltas antes de terminar \(160 voltas no total\)/)
+  const branch = e.resultado.branch
+  assert.equal(r.git('show', `${branch}:novo.txt`), 'metade')
+  assert.match(r.git('log', '-1', '--format=%s', branch), /^Incompleto: /)
+  assert.equal(checou, false, 'trabalho pela metade não passa pelas checagens nem vai ao ar')
+  assert.equal(g.pedidos.length, 0)
+  assert.equal(r.git('worktree', 'list').split('\n').length, 1)
+})
+
+test('limite sem nenhuma alteração diz o motivo em palavras, sem o erro do SDK', async () => {
+  const r = repositorio()
+  const g = gerente(r, {
+    agente: async () => ({ ok: false, texto: '', parada: 'error_max_budget_usd', sessao: 's1', voltas: 30 }),
+  })
+  await g.a.acao('propor', { pedido: 'x' })
+  await g.a.acao('confirmar')
+  const e = await g.fim()
+  assert.equal(e.resultado.tipo, 'falhou')
+  assert.match(e.resultado.mensagem, /^O agente chegou ao limite de .* dólares sem terminar e não deixou alterações\.$/)
+})
+
+test('o estado conta tempo, voltas e etapa, e explica por que ainda não há branch', async () => {
+  const r = repositorio()
+  let solta
+  const g = gerente(r, {
+    agente: ({ aoProgresso }) =>
+      new Promise((ok) => {
+        aoProgresso('Edit docs/05-roadmap.md', { voltas: 64, limite: 80 })
+        solta = () => ok({ ok: false, texto: 'Erro.' })
+      }),
+  })
+  await g.a.acao('propor', { pedido: 'x' })
+  await g.a.acao('confirmar')
+  while (g.a.estado().voltas !== 64) await new Promise((ok) => setTimeout(ok, 10))
+  const { mensagem } = await g.a.acao('estado')
+  assert.match(mensagem, /Começou há 1 min\./)
+  assert.match(mensagem, /Volta 64 de 80\./)
+  assert.match(mensagem, /Agora: Edit docs\/05-roadmap\.md\./)
+  assert.match(mensagem, /Ainda não há branch/)
+  assert.match(
+    textoDoEstado({ fase: 'trabalhando', voltas: 5, limiteDeVoltas: 80, continuando: true }),
+    /Esgotou as 80 voltas e está numa continuação para terminar: volta 5 de mais 80\./,
+  )
+  solta()
+  assert.equal((await g.fim()).resultado.tipo, 'falhou')
+  assert.equal((await g.a.acao('estado')).mensagem, 'Erro.')
+})
+
+test('a ponte que reinicia no meio do trabalho deixa o rastro no eventos.log', async () => {
+  const r = repositorio()
+  const pasta = temp()
+  writeFileSync(join(pasta, 'estado.json'), JSON.stringify({ fase: 'trabalhando', id: '42', pedido: 'algo' }))
+  const a = criarAutodev({ repo: r.repo, ligado: true, pasta, supervisor: null, avisar: () => {}, fecharEditor: () => {} })
+  await a.pronto
+  assert.equal(a.estado().resultado.tipo, 'falhou')
+  assert.match(a.estado().resultado.mensagem, /se perdeu/)
+  assert.equal(a.estado().ultimoPedido, 'algo')
+  assert.match(readFileSync(join(pasta, 'eventos.log'), 'utf8'), /\[autodev\] 42: falhou — A ponte reiniciou/)
 })

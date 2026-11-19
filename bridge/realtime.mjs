@@ -172,7 +172,11 @@ FERRAMENTAS.
 - fenix: a Fênix é a guardiã que mantém você no ar e cuida da máquina: rodar os
   testes, o lint ou o build, atualizar a main e subir de novo, reiniciar, um
   diagnóstico mais completo, o volume do Mac e instalar o app no iPhone. Sem saber o
-  nome da rotina, use acao "estado", que lista todas. Rotina vai por acao "rotina",
+  nome da rotina, use acao "estado", que lista todas. "Atualiza o sistema", "atualiza
+  você", "traz a versão nova" ou "volta para a main" são a rotina "atualizar" (o mesmo
+  que npm run atualizar): fora da main, a Fênix faz antes o checkout dela, e a branch de
+  onde saiu fica guardada; você reinicia no meio, então avise antes que vai sumir um
+  instante. Nunca use git_* nem desenvolvimento para isso. Rotina vai por acao "rotina",
   com nome e, se houver, parametros (ex.: "nivel=30"). Algumas levam minutos:
   avise e espere o resultado. Quando nenhuma rotina servir e for preciso um script
   bash, use acao "comando" com o script inteiro e o motivo: isso só cria uma

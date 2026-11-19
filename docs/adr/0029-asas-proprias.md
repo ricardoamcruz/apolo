@@ -98,3 +98,21 @@ tinha) e os WSS com token que já existiam. Sobre isso:
 - O `.claude/settings.local.json` entra no `.gitignore`.
 - Ficam para depois: um contrato de saúde versionado (RNF-08) e o mesmo cuidado
   com a interface (Vite), que continua filha comum da Fênix.
+
+## Revisão de 19/11/2026: atualizar também fora da main
+
+Pedido do Ricardo: `npm run atualizar` (e "atualiza o sistema", por voz) fora da `main`
+faz antes o checkout dela e segue a atualização, em vez de recusar.
+
+- Fora da `main` (uma branch de fase ou HEAD destacado), a rotina compara a `main`
+  local com a do remoto, desliga, troca para a `main` (que nasce acompanhando o remoto
+  se não existir), avança sem merge e sobe. A branch de onde saiu continua guardada,
+  só fora do ar; nada dela é apagado.
+- As travas são as mesmas: cópia limpa, nada de operação do Git pela metade, nenhum não
+  rastreado sobrescrito, `main` local à frente ou divergente recusada, e nenhum serviço
+  desligado no fim. Uma falha volta para a branch e o commit de antes, com a `main` no
+  commit em que estava.
+- A voz pede a mesma rotina pela ferramenta `fenix`. A ponte que pediu reinicia no
+  meio: a página resolve na hora os pedidos à Fênix que ficaram sem resposta (antes, a
+  voz esperava até 50 minutos, presa na ferramenta), e a Fênix avisa o resultado pela
+  central de notificações, com as falhas técnicas em frases e o detalhe no `eventos.log`.

@@ -237,13 +237,22 @@ export async function connectGemini(
   let loudRun = 0
   let bargeOpen = false
   let rmsDoMic = 0
+  /**
+   * O pulso da conversa, que vai ao log da ponte: sem ele, "não responde" não
+   * dizia se o áudio subia, se o Google ouvia ou se a resposta não tocava. Só
+   * contagens e volume, nunca o que foi dito.
+   */
+  const pulso = { trechos: 0, somaRms: 0, ouviu: 0, respostas: 0, audios: 0, turnos: 0, ferramentas: 0, erros: 0, descartados: 0 }
 
   capture.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
     rmsDoMic = micOn ? rms(new Int16Array(e.data)) : 0
     if (!micOn || closed || reconnecting || ws?.readyState !== WebSocket.OPEN) return
     const buf = e.data
-    const sendChunk = (b: ArrayBuffer) =>
+    const sendChunk = (b: ArrayBuffer) => {
+      pulso.trechos++
+      pulso.somaRms += rmsDoMic
       send({ realtimeInput: { audio: { data: toBase64(b), mimeType: `audio/pcm;rate=${IN_RATE}` } } })
+    }
 
     if (!speaking) {
       bargeOpen = false
@@ -305,6 +314,7 @@ export async function connectGemini(
       return
     }
     if (msg.toolCall?.functionCalls?.length) {
+      pulso.ferramentas++
       diag.lastEvent = 'toolCall'
       closeUserTurn()
       void runTools(msg.toolCall.functionCalls)
@@ -321,6 +331,7 @@ export async function connectGemini(
       h.onSpeechStart()
     }
     if (sc.inputTranscription?.text) {
+      pulso.ouviu++
       if (!userOpen) {
         userOpen = true
         userText = ''
@@ -335,6 +346,8 @@ export async function connectGemini(
       closeUserTurn()
       for (const p of sc.modelTurn.parts) {
         if (p.inlineData?.data && (p.inlineData.mimeType ?? '').startsWith('audio/')) {
+          pulso.audios++
+          if (dropUntilTurnEnd || mudo) pulso.descartados++
           play(p.inlineData.data)
         }
       }
@@ -342,6 +355,7 @@ export async function connectGemini(
     if (sc.outputTranscription?.text && !dropUntilTurnEnd && !mudo) {
       closeUserTurn()
       if (!assistantOpen) {
+        pulso.respostas++
         assistantOpen = true
         diag.responses++
         h.onAssistantStart()
@@ -349,6 +363,7 @@ export async function connectGemini(
       h.onAssistantDelta(sc.outputTranscription.text)
     }
     if (sc.turnComplete) {
+      pulso.turnos++
       diag.lastEvent = 'turnComplete'
       closeUserTurn()
       assistantOpen = false
@@ -412,6 +427,8 @@ export async function connectGemini(
           return
         }
         if (msg.error?.message) {
+          pulso.erros++
+          logVoz(`erro do Google: ${msg.error.message.slice(0, 200)}`)
           diag.lastError = msg.error.message
           h.onError(`Erro na voz: ${msg.error.message}`)
         }
@@ -462,6 +479,7 @@ export async function connectGemini(
   const finish = () => {
     if (closed) return
     closed = true
+    clearInterval(relogioDoPulso)
     diag.state = 'encerrado'
     diag.micOn = false
     diag.speaking = false
@@ -495,11 +513,31 @@ export async function connectGemini(
 
   diag.state = 'conectado'
   diag.connectedAt = Date.now()
+
+  // A cada 20 s com algo acontecendo, uma linha no log da ponte.
+  let pulsoQuieto = 0
+  const relogioDoPulso = setInterval(() => {
+    const p = { ...pulso }
+    Object.keys(pulso).forEach((k) => (pulso[k as keyof typeof pulso] = 0))
+    const recebeu = p.ouviu + p.audios + p.turnos + p.ferramentas + p.erros
+    // Em silêncio com o microfone fechado, nada a dizer; aberto, um aviso por minuto.
+    if (!recebeu && (!micOn || (p.trechos > 0 && ++pulsoQuieto % 3 !== 1))) return
+    if (recebeu) pulsoQuieto = 0
+    const volume = p.trechos ? Math.round((p.somaRms / p.trechos) * 1000) / 1000 : 0
+    logVoz(
+      `pulso: microfone ${micOn ? 'aberto' : 'fechado'}${mudo ? ' (mudo)' : ''}, ${p.trechos} trechos enviados ` +
+        `(volume médio ${volume}); do Google: ${p.ouviu} transcrições da fala, ${p.respostas} respostas, ` +
+        `${p.audios} áudios${p.descartados ? ` (${p.descartados} descartados)` : ''}, ${p.turnos} fins de turno, ` +
+        `${p.ferramentas} ferramentas, ${p.erros} erros; socket ${ws ? ['abrindo', 'aberto', 'fechando', 'fechado'][ws.readyState] : 'nenhum'}` +
+        `${reconnecting ? ', reconectando' : ''}${speaking ? ', falando' : ''}`,
+    )
+  }, 20_000)
   diag.micOn = true
 
   return {
     model: first.model,
     setMicOn(on) {
+      if (on !== micOn) logVoz(`microfone ${on ? 'aberto' : 'fechado'}`)
       micOn = on
       mic.enabled = on
       diag.micOn = on

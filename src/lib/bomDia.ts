@@ -8,6 +8,8 @@ import type { Blade } from '../store'
  */
 
 export type NoticiaDoDia = { titulo: string; fonte?: string | null }
+/** Onde o bom dia está acontecendo: no PC há tocador; no celular, não (docs/adr/0037). */
+export type OndeEhOBomDia = 'pc' | 'celular'
 export type DadosDoBomDia = {
   agenda?: { disponivel: boolean; eventos?: { titulo: string; hora: string | null; local: string | null }[] }
   noticias?: { tema: string; itens: NoticiaDoDia[] }[]
@@ -23,10 +25,22 @@ export type DadosDoBomDia = {
   }
 }
 
+/** O resumo como a voz recebe, da ponte (PC) ou do core pelo H.E.R.M.E.S. (celular). */
+export type ResumoDoBomDia = DadosDoBomDia & {
+  ok: boolean
+  texto?: string
+  musica?: { titulo: string } | null
+  /** Por que a música não veio, quando não veio. No celular é sempre nulo. */
+  avisoDaMusica?: string | null
+  mensagem?: string
+}
+
 /** Prefixo dos ids: é por ele que o "obrigado" sabe o que fechar. */
 export const PREFIXO_DO_BOM_DIA = 'bomdia-'
 /** O intervalo entre um popup e o próximo da diagonal. */
 export const INTERVALO_DOS_POPUPS_MS = 900
+/** Quanto tempo a conversa fica aberta, em silêncio, com os popups do bom dia na tela. */
+export const LEITURA_DO_BOM_DIA_MS = 3 * 60_000
 
 const escapar = (t: unknown) =>
   String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
@@ -117,3 +131,50 @@ export function descreverPopups(popups: Blade[]): string {
   if (!popups.length) return ''
   return `Na tela, em popups: ${popups.map((p) => p.title.toLowerCase()).join(', ')}.`
 }
+
+/**
+ * O que a voz sabe da música. Sem ela, o motivo vai junto: calado, ele não saberia
+ * explicar depois por que o bom dia veio sem rock. No celular não há tocador
+ * (docs/adr/0037): o silêncio ali é o esperado, e não uma falha a relatar.
+ */
+function sobreAMusica(r: ResumoDoBomDia, onde: OndeEhOBomDia): string {
+  if (onde === 'celular') {
+    return (
+      'Você está no celular, e o rock do bom dia só toca no computador: não anuncie música ' +
+      'nem diga que faltou alguma coisa. Se ele perguntar da música, diga que ela fica no computador. '
+    )
+  }
+  if (r.musica) return 'A música já está tocando baixinho por baixo: não a anuncie, a não ser que ele pergunte. '
+  if (r.avisoDaMusica) {
+    return (
+      `A música não tocou hoje: ${r.avisoDaMusica}. No fim do resumo, diga isso em uma frase simples, ` +
+      'com o que resolve, sem ler comandos letra por letra. Se ele perguntar, explique esse motivo. '
+    )
+  }
+  return ''
+}
+
+/**
+ * A narração do bom dia, com o resumo da A.U.R.O.R.A. e o que fazer depois dele.
+ * É a mesma no PC e no celular, tirando a música e os botões que só o PC tem.
+ */
+export function instrucaoDoBomDia(r: ResumoDoBomDia, popups: Blade[], onde: OndeEhOBomDia): string {
+  return (
+    `${r.texto ?? ''}\n${descreverPopups(popups)}\n\nDê bom dia ao Ricardo e resuma isso em até 30 segundos, ` +
+    'como um assistente que conhece a rotina dele: compromissos primeiro, um destaque por tema ' +
+    'de notícia, o GitHub numa frase. Os detalhes já estão nos popups: não leia listas. ' +
+    sobreAMusica(r, onde) +
+    'Se ele agradecer, despeça-se em poucas palavras: a tela fecha os popups e entra em espera ' +
+    'sozinha. Se ele mudar de assunto, chame ajustar_interface com popups "minimizar" antes ' +
+    'de responder; se ele perguntar de uma notícia ou de um compromisso, os popups ficam. ' +
+    'Termine o resumo com uma pergunta curta, como se quer detalhar alguma notícia, e ' +
+    'espere: a conversa continua.' +
+    (onde === 'pc'
+      ? ' A voz dele por cima da música é para você: não use ignorar_fala por causa da música.'
+      : '')
+  )
+}
+
+/** O recado quando o resumo não veio, igual nos dois lados. */
+export const semOBomDia = (motivo?: string) =>
+  `O resumo do dia não veio (${motivo ?? 'sem detalhe'}). Dê bom dia normalmente, sem resumo.`

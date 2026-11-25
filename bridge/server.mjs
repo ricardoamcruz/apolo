@@ -64,7 +64,7 @@ import {
 } from './hermes.mjs'
 import { criarClienteFenix } from './fenix.mjs'
 import { criarRenascimento, lerReceita } from './renascer.mjs'
-import { criarClienteAurora } from './aurora.mjs'
+import { criarClienteAurora, semAMusica } from './aurora.mjs'
 import { criarSondas } from './sondas.mjs'
 import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog, registrarBug, versaoNoAr } from './desenvolvimento.mjs'
 import { criarTelemetria } from './telemetria.mjs'
@@ -1628,11 +1628,14 @@ const atender = (socket, { celular = false } = {}) => {
       broadcast({ type: 'preferencias', valores: preferencias.gravar(msg.valores) })
     }
 
-    if (msg.type === 'aurora' && !celular) {
+    // O bom dia, no PC e no celular (docs/adr/0026 e 0037). Lá vai sem a música.
+    if (msg.type === 'aurora') {
       void Promise.all([
         aurora ? aurora.bomDia() : Promise.resolve({ ok: false, mensagem: 'falta APOLO_AURORA_TOKEN no .env.local' }),
         estadoDoDesenvolvimento({ repo: REPO, autodev: autodev.estado() }),
-      ]).then(([r, desenvolvimento]) => send({ ...r, desenvolvimento, type: 'aurora', resposta: msg.id }))
+      ]).then(([r, desenvolvimento]) =>
+        send({ ...(celular ? semAMusica(r) : r), desenvolvimento, type: 'aurora', resposta: msg.id }),
+      )
     }
 
     if (msg.type === 'fenix' && typeof msg.acao === 'string') {

@@ -33,7 +33,6 @@ import {
   assumirVoz,
   watchDona,
   watchRecarregar,
-  type BomDiaResposta,
   type FenixResposta,
 } from './lib/bridge'
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
@@ -43,7 +42,14 @@ import { startAnalyser, micLevel, retomarAnalyser } from './lib/audio'
 import { foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/autodev'
 import { lerParametros, textoDaFenix } from './lib/fenix'
 import { agradece, pedeModoMaos, vigiarCancelamento } from './lib/comandos'
-import { INTERVALO_DOS_POPUPS_MS, PREFIXO_DO_BOM_DIA, descreverPopups, popupsDoBomDia } from './lib/bomDia'
+import {
+  INTERVALO_DOS_POPUPS_MS,
+  LEITURA_DO_BOM_DIA_MS,
+  PREFIXO_DO_BOM_DIA,
+  instrucaoDoBomDia,
+  popupsDoBomDia,
+  semOBomDia,
+} from './lib/bomDia'
 import { criarJanela } from './lib/conversa'
 import { comandarPopup, telaAgora, type AcaoDePopup } from './lib/comandosDePopup'
 import { abrirNoYoutube } from './lib/musica'
@@ -150,23 +156,6 @@ function clearScreenAndReport(what: 'all' | 'panels' | 'transcript'): string | n
   return saiu.length ? saiu.join(' e ') : null
 }
 
-/**
- * O que a voz sabe da música. Sem ela, o motivo vai junto: calado, ele não saberia
- * explicar depois por que o bom dia veio sem rock.
- */
-function sobreAMusica(r: BomDiaResposta): string {
-  if (r.musica) return 'A música já está tocando baixinho por baixo: não a anuncie, a não ser que ele pergunte. '
-  if (r.avisoDaMusica) {
-    return (
-      `A música não tocou hoje: ${r.avisoDaMusica}. No fim do resumo, diga isso em uma frase simples, ` +
-      'com o que resolve, sem ler comandos letra por letra. Se ele perguntar, explique esse motivo. '
-    )
-  }
-  return ''
-}
-
-/** Quanto tempo a conversa fica aberta, em silêncio, com os popups do bom dia na tela. */
-const LEITURA_DO_BOM_DIA_MS = 3 * 60_000
 /** Religou logo depois de cair: ele ainda está ali, esperando ser ouvido. */
 const AINDA_ESPERANDO_MS = 60_000
 
@@ -356,7 +345,7 @@ export default function App() {
     if (name === 'bom_dia') {
       armIdle()
       const r = await bomDia()
-      if (!r.ok) return { output: `O resumo do dia não veio (${r.mensagem}). Dê bom dia normalmente, sem resumo.` }
+      if (!r.ok) return { output: semOBomDia(r.mensagem) }
       if (r.musica) s.setMusica({ ...r.musica, tocando: true, posicao: r.musica.inicio })
       // Notícias, compromissos e desenvolvimento, em diagonal, um de cada vez.
       const popups = popupsDoBomDia(r)
@@ -364,19 +353,7 @@ export default function App() {
       popups.forEach((b, i) => setTimeout(() => store.getState().pushBlade(b), i * INTERVALO_DOS_POPUPS_MS))
       bomDiaNaTela.current = popups.length > 0
       bomDiaDesde.current = Date.now()
-      return {
-        output:
-          `${r.texto}\n${descreverPopups(popups)}\n\nDê bom dia ao Ricardo e resuma isso em até 30 segundos, ` +
-          'como um assistente que conhece a rotina dele: compromissos primeiro, um destaque por tema ' +
-          'de notícia, o GitHub numa frase. Os detalhes já estão nos popups: não leia listas. ' +
-          sobreAMusica(r) +
-          'Se ele agradecer, despeça-se em poucas palavras: a tela fecha os popups e entra em espera ' +
-          'sozinha. Se ele mudar de assunto, chame ajustar_interface com popups "minimizar" antes ' +
-          'de responder; se ele perguntar de uma notícia ou de um compromisso, os popups ficam. ' +
-          'Termine o resumo com uma pergunta curta, como se quer detalhar alguma notícia, e ' +
-          'espere: a conversa continua. A voz dele por cima da música é para você: não use ' +
-          'ignorar_fala por causa da música.',
-      }
+      return { output: instrucaoDoBomDia(r, popups, 'pc') }
     }
 
     if (name === 'musica') {

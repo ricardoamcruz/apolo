@@ -38,6 +38,7 @@
 | 0034 | A.T.L.A.S., o globo de pontos | aceita |
 | 0035 | A voz que volta sozinha | aceita |
 | 0036 | A fala marcada do lado de cá | aceita |
+| 0037 | O bom dia também no celular, sem a música | proposta |
 
 ## Em aberto
 

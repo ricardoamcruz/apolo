@@ -70,7 +70,8 @@ detalhe está em `docs/`.
   `com.ricardocruz.apolo`, Personal Team `9F2MVYQ9SF`). Ele ouve e responde por
   voz, como o PC, sem conversa escrita, pelo H.E.R.M.E.S. (`hermes/`, porta 8788 com
   token, só com o canal e a mídia dos popups, publicada pelo Tailscale). Desde a
-  ADR 0030 ele tem a autonomia do PC no core: backlog, autodesenvolvimento e Fênix
+  ADR 0030 ele tem a autonomia do PC no core (e o bom dia sem música, pela ADR
+  0037): backlog, autodesenvolvimento e Fênix
   (rotinas e scripts bash), com as mesmas travas e a confirmação falada conferida na
   transcrição do microfone do celular; sem botões, ele confirma dizendo "confirmo". A
   voz (`src/lib/voz/celular.ts`) e os `Panels` e `Blades` da web são compilados por
@@ -175,7 +176,10 @@ detalhe está em `docs/`.
   importa o módulo. O bom dia abre em diagonal os popups de notícias, compromissos e
   desenvolvimento (`src/lib/bomDia.ts`, ids `bomdia-*`; o desenvolvimento vem de
   `bridge/desenvolvimento.mjs`). "Obrigado" sai da transcrição (`agradece`, em
-  `src/lib/comandos.ts`): fecha tudo e entra em espera. O Chrome só toca o iframe com
+  `src/lib/comandos.ts`): fecha tudo e entra em espera. Desde a ADR 0037 o bom dia
+  também vale no celular, pelo core (`aurora` em `MENSAGENS_DO_CELULAR`), com a mesma
+  narração (`instrucaoDoBomDia`) e os mesmos popups, **sem a música**: lá não há
+  tocador, e a resposta passa por `semAMusica` (`bridge/aurora.mjs`). O Chrome só toca o iframe com
   som depois de um clique: `scripts/subir-apolo.command` abre a interface com
   `--autoplay-policy=no-user-gesture-required`; fora dela, o tocador pede o clique.
 - **Autodesenvolvimento (ADR 0011 e 0015):** com `npm start -- --autodev`, o

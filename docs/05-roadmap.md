@@ -33,7 +33,7 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [ ] **Contexto compartilhado (RF-18):** decidir entre branch local e arquivo de contexto (ADR nova); é o único item do backlog que não começou
 - [ ] O A.P.O.L.O. e a A.U.R.O.R.A. pedindo notificações ao H.E.R.M.E.S. (hoje só a Fênix pede)
 - [ ] Aviso ditado por voz no app do iPhone indo para a central do Mac
-- [ ] Bom dia também no celular
+- [x] **Bom dia também no celular (25/11/2026, ADR 0037):** pelo app, "bom dia" traz o resumo da A.U.R.O.R.A. narrado (agenda, notícias por tema, GitHub e as pendências do roadmap) e os três popups em diagonal, com a conversa aberta por até 3 minutos, os popups minimizados quando o assunto muda e o "obrigado" fechando tudo e pondo em espera. A ponte aceita `aurora` do celular (`bridge/hermes.mjs`, sensível: entra por revisão) e tira a música da resposta (`semAMusica`). **Sem a música, e isso é decisão do Ricardo:** o player oficial do YouTube tem de ficar visível em 200×200 (ADR 0026), e onde ele entra na tela do iPhone — e se o alto-falante atrapalha o microfone aberto — só ele decide, de preferência com protótipo. Falta validar no aparelho
 - [ ] Temas de notícia editáveis por voz ("tira games do bom dia")
 - [ ] Servidor ntfy próprio, para o texto das notificações não passar por terceiros
 

@@ -252,6 +252,8 @@ type State = {
   /** O que a tarefa em andamento está fazendo: decide a cor de `tooling`. */
   atividade: Atividade | null
   error: string | null
+  /** Um problema da voz, em palavras para ele. Sempre na tela, ao contrário de `error`. */
+  avisoDeVoz: string | null
   connected: Servidor[]
   exibicao: Exibicao
   /** A aba SISTEMAS: 'aba' pedida por voz; 'completo' pela tecla D, com a janela de voz. */
@@ -313,6 +315,7 @@ type State = {
   setActiveTool: (t: string | null) => void
   setAtividade: (a: Atividade | null) => void
   setError: (e: string | null) => void
+  setAvisoDeVoz: (aviso: string | null) => void
   setConnected: (c: Servidor[]) => void
   setSistemas: (s: State['sistemas']) => void
   setExibicao: (e: Exibicao) => void
@@ -340,6 +343,7 @@ export const useStore = create<State>((set, get) => ({
   activeTool: null,
   atividade: null,
   error: null,
+  avisoDeVoz: null,
   connected: [],
   sistemas: 'fechado',
   exibicao: { exibirPonte: false, exibirChat: false },
@@ -459,6 +463,7 @@ export const useStore = create<State>((set, get) => ({
   setActiveTool: (activeTool) => set({ activeTool }),
   setAtividade: (atividade) => set({ atividade }),
   setError: (error) => set({ error }),
+  setAvisoDeVoz: (avisoDeVoz) => set({ avisoDeVoz }),
   setConnected: (connected) => set({ connected }),
   setSistemas: (sistemas) => set({ sistemas }),
   setExibicao: (exibicao) => set({ exibicao }),

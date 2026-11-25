@@ -83,6 +83,8 @@ export function lerConfig(arquivo, envDoTerminal = process.env) {
             ca: s.saude.ca ? caminho(s.saude.ca) : null,
             clientes: s.saude.clientes ?? null,
             prazoMs: Number(s.saude.prazoMs ?? 3000),
+            // O comando que reabre a janela quando a voz não volta (docs/adr/0035).
+            reabrir: Array.isArray(s.saude.reabrir) && s.saude.reabrir.length ? s.saude.reabrir.map(String) : null,
           }
         : null,
     }
@@ -166,6 +168,7 @@ const TEMPOS = {
   servicos: ['estavelMs', 'intervaloMs', 'subidaMs'],
   versoes: ['subidaMs', 'estabilidadeMs', 'intervaloMs', 'vigiaMs'],
   rotinas: ['avisoMs'],
+  voz: ['ruimMs', 'degrauMs', 'rearmarMs'],
 }
 function tempos(bruto) {
   const saida = {}

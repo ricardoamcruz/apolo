@@ -49,6 +49,20 @@ export const realtimeKey = () => (voiceProvider() === 'gemini' ? geminiKey() : o
 /** `gemini-3.8-live` é o recomendado pelo Google para voz com baixa latência. */
 const GEMINI_MODEL = env('APOLO_GEMINI_MODELO', 'gemini-3.8-live')
 
+/**
+ * Os modelos, em ordem: o principal e os de reserva, para quando ele não ouve
+ * (docs/adr/0035). O 2.5 respondeu nos testes, mas transcreve mal: com ele, o que
+ * depende da transcrição (cancelar, confirmar) pode falhar, e sempre para o lado seguro.
+ */
+const GEMINI_MODELOS = [
+  GEMINI_MODEL,
+  ...env('APOLO_GEMINI_RESERVAS', 'gemini-2.5-flash-native-audio-latest')
+    .split(',')
+    .map((m) => m.trim())
+    .filter((m) => m && m !== 'nenhum' && m !== GEMINI_MODEL),
+]
+const modeloDaReserva = (n) => GEMINI_MODELOS[(Number.isInteger(n) && n > 0 ? n : 0) % GEMINI_MODELOS.length]
+
 /** Vozes do Gemini: Charon, Orus e Fenrir são graves; Kore, Aoede e Leda, agudas. */
 const GEMINI_VOICE = env('APOLO_GEMINI_VOZ', 'Charon')
 
@@ -169,6 +183,11 @@ FERRAMENTAS.
   "volta a música" e "para a música" são pausar, tocar e parar. Se ele pedir para
   continuar a playlist, ouvir mais ou abrir no YouTube, use "playlist": abre numa aba
   do YouTube Music, a partir dessa música, e o tocador do canto para.
+- Em que branch você está, qual o último commit ou se há algo sem commit: chame fenix com
+  acao "estado", que responde na hora. O histórico ou mais detalhe do Git vai por
+  executar_tarefa. Nunca proponha um script para ler isso. Se algo for recusado por
+  "comandos livres desligados", é só a partida sem --writes, e não um defeito: diga isso
+  e use outro caminho.
 - fenix: a Fênix é a guardiã que mantém você no ar e cuida da máquina: rodar os
   testes, o lint ou o build, atualizar a main e subir de novo, reiniciar, um
   diagnóstico mais completo, o volume do Mac e instalar o app no iPhone. Sem saber o
@@ -629,9 +648,9 @@ function geminiTools(celular) {
 }
 
 /** A mensagem de configuração que o navegador manda ao abrir o WebSocket. */
-export function geminiSetup({ celular = false } = {}) {
+export function geminiSetup({ celular = false, reserva = 0 } = {}) {
   return {
-    model: `models/${GEMINI_MODEL}`,
+    model: `models/${modeloDaReserva(reserva)}`,
     generationConfig: {
       responseModalities: ['AUDIO'],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_VOICE } } },
@@ -696,7 +715,14 @@ async function createGeminiSession(opcoes) {
     throw err
   }
   const data = JSON.parse(text)
-  return { provider: 'gemini', token: data.name, model: GEMINI_MODEL, setup: geminiSetup(opcoes) }
+  return {
+    provider: 'gemini',
+    token: data.name,
+    model: modeloDaReserva(opcoes?.reserva),
+    // Só o PC escolhe a reserva: o celular pede a credencial sem ela.
+    modelos: opcoes?.celular ? 1 : GEMINI_MODELOS.length,
+    setup: geminiSetup(opcoes),
+  }
 }
 
 /** Emite a credencial temporária do provedor escolhido. */

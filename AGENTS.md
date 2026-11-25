@@ -27,7 +27,7 @@ detalhe está em `docs/`.
   Próxima: **Fase 1 — Core**. Ver `docs/05-roadmap.md`.
 - **Fase 2 encerrada (17/11/2026, decisão do Ricardo):** a última branch dela foi
   `fase-2.10/lapidacao`. A Fase 3 começou com `fase-3.1/terra-a-vista` (a pedido
-  dele, já em 3.1); a próxima é `fase-3.2/<nome-criativo>` (ADR 0016).
+  dele, já em 3.1); a próxima é `fase-3.4/<nome-criativo>` (ADR 0016).
 - **Pendências em etapas:** o que está aberto fica em "Pendências em etapas", no
   topo de `docs/05-roadmap.md` (08/11/2026): validar, Horizon, contexto e
   comunicação, o que está bloqueado e a Fase 1. Comece por lá.
@@ -198,6 +198,17 @@ detalhe está em `docs/`.
   só do roadmap na branch no ar; na `main`, ou com teste no ar, ele espera em
   `~/.apolo/bugs-pendentes.md` (`registrarBug`).
   Motivos de rollback ficam em `~/.apolo/fenix/eventos.log`.
+- **A voz que volta (ADR 0035, RF-71):** a interface religa a voz sempre, e percebe a
+  sessão surda (`src/lib/voz/surdez.ts`): outra conexão, modelos de
+  `APOLO_GEMINI_RESERVAS` e, por fim, a transcrição do navegador indo como texto
+  (`transcrever`, em `chamada.ts`). Uma janela tem a voz por vez
+  (`bridge/donaDaVoz.mjs`). O retrato é `bridge/relatoDaVoz.mjs`, que lê o **começo** dos
+  textos de `logVoz`/`registrarVoz`: mudou um texto, confira lá. A Fênix recarrega a
+  página, reabre a janela ou avisa (`fenix/src/voz.mjs`). Problema de voz vai em
+  `avisoDeVoz`, sempre na tela; o log fica em `~/.apolo/logs/voz-*.log`, nunca com a fala.
+- **A fala é marcada aqui (ADR 0036):** `src/lib/voz/detectorDeFala.ts` manda
+  `activityStart`/`activityEnd`; o detector do Gemini fica desligado, porque deixava o 3.8
+  surdo. Não volte a ligá-lo sem medir de novo.
 - **Extensões plugáveis (ADR 0033, RF-68):** uma pasta em `extensoes/<id>/`
   (`apolo.extensao.json`, um `interface.js` de arquivo só e os dados) liga, troca ou
   sai no ar, sem recompilar: a ponte lê e serve (`bridge/plugaveis.mjs`, sensível, que

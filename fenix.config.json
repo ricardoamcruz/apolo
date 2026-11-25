@@ -32,7 +32,8 @@
       "saude": {
         "urls": ["https://localhost:${JARVIS_BRIDGE_PORT:-8787}/health"],
         "ca": "${APOLO_TLS_CERT:-~/.apolo/tls/apolo.pem}",
-        "clientes": "interfaces"
+        "clientes": "interfaces",
+        "reabrir": ["bash", "scripts/abrir-interface.command", "--de-novo"]
       }
     },
     {

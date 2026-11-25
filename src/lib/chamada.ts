@@ -101,6 +101,8 @@ type Escuta = {
   esperaMs: number
   nomeSozinho?: ReturnType<typeof setTimeout>
   aoChamar: (fala: string, pedido: string) => void
+  /** Transcrição livre: cada frase fechada, sem procurar o nome (docs/adr/0035). */
+  aoTexto?: (fala: string, final: boolean) => void
   aoFalhar: (motivo: string) => void
   relatar: (texto: string) => void
 }
@@ -119,6 +121,9 @@ let donoDaSessao: Escuta | null = null
 let religar: ReturnType<typeof setTimeout> | undefined
 let vigia: ReturnType<typeof setInterval> | undefined
 let ultimoSinal = 0
+/** Recriações seguidas sem o reconhecedor dar partida. Parado em silêncio não conta. */
+let semPartida = 0
+export const RECRIACOES_ATE_MUDA = 3
 
 function criarReconhecedor(C: Construtor) {
   const r = new C()
@@ -132,6 +137,8 @@ function criarReconhecedor(C: Construtor) {
     if (rec !== r) return
     sinal()
     ativo = true
+    if (semPartida >= RECRIACOES_ATE_MUDA) dono?.relatar('a escuta da espera voltou')
+    semPartida = 0
     // Começou de verdade: a espera volta ao mínimo (antes, só uma fala reconhecida zerava).
     if (dono) dono.esperaMs = ESPERA_MIN_MS
   }
@@ -146,6 +153,10 @@ function criarReconhecedor(C: Construtor) {
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const resultado = e.results[i]
       const fala = resultado[0].transcript.trim()
+      if (d.aoTexto) {
+        if (fala) d.aoTexto(fala, resultado.isFinal)
+        continue
+      }
       const decisao = decidirChamada(fala, resultado.isFinal)
       if (decisao === 'agora') return chamar(d, fala)
       if (decisao === 'se_parar') d.nomeSozinho = setTimeout(() => chamar(d, fala), NOME_ESTAVEL_MS)
@@ -240,6 +251,7 @@ export function reiniciarEscutaParaTestes() {
   ativo = false
   dono = null
   donoDaSessao = null
+  semPartida = 0
 }
 
 /**
@@ -253,10 +265,26 @@ export function ouvirNome(
   aoFalhar: (motivo: string) => void,
   relatar: (texto: string) => void = () => {},
 ) {
+  return escutar({ aoChamar, aoFalhar, relatar })
+}
+
+/**
+ * Transcreve tudo, até `stop`: a saída de emergência de quando o provedor de voz não
+ * ouve o microfone (docs/adr/0035). Usa o mesmo reconhecedor único da página.
+ */
+export function transcrever(
+  aoTexto: (fala: string, final: boolean) => void,
+  aoFalhar: (motivo: string) => void,
+  relatar: (texto: string) => void = () => {},
+) {
+  return escutar({ aoChamar: () => {}, aoTexto, aoFalhar, relatar })
+}
+
+function escutar(opcoes: Pick<Escuta, 'aoChamar' | 'aoTexto' | 'aoFalhar' | 'relatar'>) {
   const C = construtor()
   if (!C) return { stop() {} }
   if (dono) dono.parado = true
-  const d: Escuta = { parado: false, esperaMs: ESPERA_MIN_MS, aoChamar, aoFalhar, relatar }
+  const d: Escuta = { parado: false, esperaMs: ESPERA_MIN_MS, ...opcoes }
   dono = d
   if (!rec) rec = criarReconhecedor(C)
   ultimoSinal = Date.now()
@@ -266,6 +294,7 @@ export function ouvirNome(
     if (Date.now() - ultimoSinal < VIGIA_MS) return
     d.relatar('escuta da espera sem sinal; recriando o reconhecedor')
     recriar()
+    if (++semPartida === RECRIACOES_ATE_MUDA) d.relatar('a escuta da espera não dá partida')
     iniciar()
   }, 5000)
   // Se o anterior ainda está encerrando, o `onend` dele começa esta.

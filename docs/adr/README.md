@@ -36,6 +36,8 @@
 | 0032 | O círculo do iPhone na densidade da tela | aceita |
 | 0033 | Extensões plugáveis, sem recompilar | aceita |
 | 0034 | A.T.L.A.S., o globo de pontos | aceita |
+| 0035 | A voz que volta sozinha | aceita |
+| 0036 | A fala marcada do lado de cá | aceita |
 
 ## Em aberto
 

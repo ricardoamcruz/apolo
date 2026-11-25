@@ -30,6 +30,15 @@ export type RealtimeHandlers = {
   onError: (message: string) => void
   /** A sessão acabou (expirou, caiu ou foi encerrada). */
   onClosed: () => void
+  /** O microfone está captando fala agora, a cada bloco. */
+  onFalando?: () => void
+  /** Uma fala subiu sem retorno, e a voz está sendo religada: a conversa não pode fechar. */
+  onSemRetorno?: (seguidas: number) => void
+  /**
+   * O provedor não ouve o microfone, e acabaram os remédios (docs/adr/0035). Devolver
+   * true é assumir a fala por outro caminho, com `prompt`. `false` em `surda`: voltou.
+   */
+  onSurdez?: (surda: boolean) => boolean
 }
 
 export type RealtimeSession = {
@@ -83,4 +92,4 @@ export function logVoz(texto: string) {
 /** O que a ponte devolve em POST /realtime/sessao. */
 export type SessionGrant =
   | { provider: 'openai'; value: string; model: string }
-  | { provider: 'gemini'; token: string; model: string; setup: Record<string, unknown> }
+  | { provider: 'gemini'; token: string; model: string; setup: Record<string, unknown>; /** Quantos modelos há, com as reservas. */ modelos?: number }

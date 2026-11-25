@@ -11,7 +11,8 @@ let analyser: AnalyserNode | null = null
 let buf: Uint8Array | null = null
 
 export async function getMic(): Promise<MediaStream> {
-  if (stream) return stream
+  // Um microfone desligado da tomada deixa a faixa morta: pede outro.
+  if (stream?.getAudioTracks().some((f) => f.readyState === 'live')) return stream
   stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: true,

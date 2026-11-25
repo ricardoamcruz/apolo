@@ -7,6 +7,8 @@ import {
   type SessionGrant,
   type ToolResult,
 } from './types'
+import { ANTES_MS, criarDetectorDeFala } from './detectorDeFala'
+import { NOVA_CHANCE_DO_AUDIO_MS, criarOuvidoSurdo, esperaDeReligar, remedioDaSurdez, semCota } from './surdez'
 
 /**
  * Provedor Gemini Live — speech-to-speech por WebSocket (docs/adr/0010).
@@ -41,10 +43,14 @@ const CHUNK = 640
 const BARGE_RMS = 0.05
 /** Blocos seguidos acima do limiar para contar como fala, não como estalo. */
 const BARGE_CHUNKS = 3
-/** Blocos guardados enquanto ele fala, para não cortar o começo da sua frase. */
-const PREROLL = 6
+/** Blocos guardados de antes da fala abrir, para não cortar o começo dela. */
+const PREROLL = Math.round(ANTES_MS / ((CHUNK / IN_RATE) * 1000))
 /** Abaixo disto é o chiado do microfone, não alguém falando. */
 const PISO_DO_MIC = 0.006
+/** Tentativas de retomar uma conexão que caiu, antes de a sessão acabar. */
+const TENTATIVAS_DE_RETOMAR = 3
+const ESPERA_DO_ANTERIOR_MS = 800
+const BLOCO_MS = (CHUNK / IN_RATE) * 1000
 
 const CAPTURE_WORKLET = `
 class ApoloCaptura extends AudioWorkletProcessor {
@@ -113,15 +119,21 @@ function rms(pcm: Int16Array): number {
 /** Motivos de fechamento do Google, ditos de um jeito que ajuda. */
 function explainClose(code: number, reason: string): string {
   const r = reason || `código ${code}`
-  if (/quota|exhausted|rate/i.test(r)) return `O limite gratuito do Gemini foi atingido: ${r}`
+  if (semCota(r)) return `O limite gratuito do Gemini foi atingido: ${r}`
   if (/api key|permission|unauth|token/i.test(r)) return `O Google recusou a chave: ${r}`
   if (/model/i.test(r)) return `O Google recusou o modelo de voz: ${r}`
   return `A conexão de voz com o Google fechou: ${r}`
 }
 
+/** O silêncio que encerra a fala, como a ponte configurou (PC e celular diferem). */
+function silencioDoSetup(setup: Record<string, unknown>): number {
+  const rt = setup.realtimeInputConfig as { automaticActivityDetection?: { silenceDurationMs?: number } } | undefined
+  return rt?.automaticActivityDetection?.silenceDurationMs ?? 1200
+}
+
 export async function connectGemini(
   first: Extract<SessionGrant, { provider: 'gemini' }>,
-  renew: () => Promise<SessionGrant>,
+  renew: (reserva?: number) => Promise<SessionGrant>,
   h: RealtimeHandlers,
 ): Promise<RealtimeSession> {
   diag.model = first.model
@@ -216,6 +228,18 @@ export async function connectGemini(
   let userOpen = false
   let assistantOpen = false
 
+  // -- surdez (docs/adr/0035) ----------------------------------------------------
+  const ouvido = criarOuvidoSurdo()
+  let surdezes = 0
+  let reserva = 0
+  let modelos = first.modelos ?? 1
+  /** A fala vai por texto, e o áudio do microfone não sobe. */
+  let porTexto = false
+  /** Acabaram os remédios e ele ainda não deu sinal de que voltou a ouvir. */
+  let emSurdez = false
+  let ferramentasAbertas = 0
+  let novaChance: ReturnType<typeof setTimeout> | undefined
+
   const send = (msg: Record<string, unknown>) => {
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
   }
@@ -235,51 +259,139 @@ export async function connectGemini(
   // -- microfone → servidor, com o portão anti-eco -----------------------------
   const preroll: ArrayBuffer[] = []
   let loudRun = 0
-  let bargeOpen = false
+  const detector = criarDetectorDeFala(silencioDoSetup(first.setup), BLOCO_MS)
   let rmsDoMic = 0
   /**
    * O pulso da conversa, que vai ao log da ponte: sem ele, "não responde" não
    * dizia se o áudio subia, se o Google ouvia ou se a resposta não tocava. Só
    * contagens e volume, nunca o que foi dito.
    */
-  const pulso = { trechos: 0, somaRms: 0, ouviu: 0, respostas: 0, audios: 0, turnos: 0, ferramentas: 0, erros: 0, descartados: 0 }
+  const pulso = { falas: 0, trechos: 0, somaRms: 0, ouviu: 0, respostas: 0, audios: 0, turnos: 0, ferramentas: 0, erros: 0, descartados: 0 }
 
   capture.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
     rmsDoMic = micOn ? rms(new Int16Array(e.data)) : 0
-    if (!micOn || closed || reconnecting || ws?.readyState !== WebSocket.OPEN) return
+    if (!micOn || porTexto || closed || reconnecting || ws?.readyState !== WebSocket.OPEN) return
     const buf = e.data
-    const sendChunk = (b: ArrayBuffer) => {
-      pulso.trechos++
-      pulso.somaRms += rmsDoMic
-      send({ realtimeInput: { audio: { data: toBase64(b), mimeType: `audio/pcm;rate=${IN_RATE}` } } })
-    }
+    // Só conta como surdez quando ele deveria estar ouvindo, e não no meio de algo.
+    if (speaking || mudo || ferramentasAbertas) ouvido.zerar()
+    else if (ouvido.trecho(rmsDoMic, BLOCO_MS)) setTimeout(tratarSurdez)
 
-    if (!speaking) {
-      bargeOpen = false
-      loudRun = 0
-      preroll.length = 0
-      sendChunk(buf)
-      return
-    }
-    if (bargeOpen) {
-      sendChunk(buf)
-      return
-    }
-    // Ele está falando: só sobe se for a sua voz por cima da dele.
     preroll.push(buf)
     if (preroll.length > PREROLL) preroll.shift()
-    loudRun = rms(new Int16Array(buf)) > BARGE_RMS ? loudRun + 1 : 0
-    if (loudRun >= BARGE_CHUNKS) {
-      bargeOpen = true
-      for (const b of preroll) sendChunk(b)
-      preroll.length = 0
+
+    if (speaking && !detector.dentro()) {
+      // Ele está falando: só sobe se for a sua voz por cima da dele.
+      loudRun = rmsDoMic > BARGE_RMS ? loudRun + 1 : 0
+      if (loudRun < BARGE_CHUNKS) return
+      loudRun = 0
+      detector.abrir()
+      return comecarFala()
     }
+    loudRun = 0
+    const passo = detector.bloco(rmsDoMic)
+    if (passo === 'comeca') return comecarFala()
+    if (passo === 'fora') return
+    h.onFalando?.()
+    sendChunk(buf)
+    if (passo === 'termina') terminarFala()
+  }
+
+  const sendChunk = (b: ArrayBuffer) => {
+    pulso.trechos++
+    pulso.somaRms += rmsDoMic
+    send({ realtimeInput: { audio: { data: toBase64(b), mimeType: `audio/pcm;rate=${IN_RATE}` } } })
+  }
+  const comecarFala = () => {
+    pulso.falas++
+    h.onFalando?.()
+    send({ realtimeInput: { activityStart: {} } })
+    // O bloco atual já está na fila.
+    for (const b of preroll) sendChunk(b)
+    preroll.length = 0
+  }
+  const terminarFala = () => {
+    preroll.length = 0
+    send({ realtimeInput: { activityEnd: {} } })
+  }
+  /** O microfone fecha, ou a fala muda de caminho: o que já subiu vale como fala inteira. */
+  const interromperFala = () => {
+    if (detector.dentro()) terminarFala()
+    detector.reiniciar()
+    preroll.length = 0
+    loudRun = 0
+  }
+
+  /** Subiu fala e nada voltou: outra conexão, outro modelo, ou outro caminho. */
+  const tratarSurdez = () => {
+    if (closed || reconnecting || porTexto || (emSurdez && surdezes)) return
+    const remedio = remedioDaSurdez(++surdezes, modelos)
+    logVoz(`sem retorno da fala (${surdezes} seguida(s)): ${remedio.acao}`)
+    h.onSemRetorno?.(surdezes)
+    if (remedio.acao === 'retomar') return void reconnect()
+    if (remedio.acao === 'trocar') {
+      reserva = remedio.reserva
+      // A retomada é do modelo anterior.
+      handle = null
+      marcarNovaChance()
+      return void reconnect()
+    }
+    emSurdez = true
+    porTexto = h.onSurdez?.(true) ?? false
+    if (porTexto) interromperFala()
+    logVoz(porTexto ? 'voz por texto: o provedor não ouve o microfone' : 'voz surda: o provedor não ouve o microfone')
+    marcarNovaChance()
+    // Por texto, o modelo principal serve, e é o melhor.
+    if (porTexto && reserva) {
+      reserva = 0
+      handle = null
+      void reconnect()
+    }
+  }
+
+  const marcarNovaChance = () => {
+    clearTimeout(novaChance)
+    novaChance = setTimeout(darNovaChance, NOVA_CHANCE_DO_AUDIO_MS)
+  }
+
+  /** O provedor pode ter se recuperado: o microfone volta a subir, e a conta recomeça. */
+  const darNovaChance = () => {
+    if (closed) return
+    // No modelo de reserva, voltar ao principal perde o fio: só com o microfone fechado.
+    if (speaking || ferramentasAbertas || reconnecting || (reserva && micOn)) {
+      novaChance = setTimeout(darNovaChance, 10_000)
+      return
+    }
+    logVoz('nova chance ao áudio')
+    surdezes = 0
+    ouvido.zerar()
+    if (reserva) {
+      reserva = 0
+      handle = null
+      void reconnect()
+    }
+    if (porTexto) {
+      porTexto = false
+      h.onSurdez?.(false)
+    }
+  }
+
+  /** O provedor deu sinal de que ouviu. */
+  const ouviu = () => {
+    ouvido.zerar()
+    if (porTexto || (!surdezes && !emSurdez)) return
+    surdezes = 0
+    // Numa reserva, o prazo segue correndo: é ele que volta ao principal.
+    if (!reserva) clearTimeout(novaChance)
+    if (emSurdez) h.onSurdez?.(false)
+    emSurdez = false
+    logVoz('o Google voltou a ouvir')
   }
 
   // -- ferramentas -------------------------------------------------------------
   const runTools = async (
     calls: Array<{ id?: string; name?: string; args?: Record<string, unknown> }>,
   ) => {
+    ferramentasAbertas++
     const responses: Array<Record<string, unknown>> = []
     for (const call of calls) {
       if (!call.name) continue
@@ -300,6 +412,8 @@ export async function connectGemini(
       }
       responses.push({ id: call.id, name: call.name, response: { result: result.output } })
     }
+    ferramentasAbertas--
+    ouvido.zerar()
     if (!closed && responses.length) send({ toolResponse: { functionResponses: responses } })
   }
 
@@ -315,6 +429,7 @@ export async function connectGemini(
     }
     if (msg.toolCall?.functionCalls?.length) {
       pulso.ferramentas++
+      ouvido.zerar()
       diag.lastEvent = 'toolCall'
       closeUserTurn()
       void runTools(msg.toolCall.functionCalls)
@@ -332,6 +447,7 @@ export async function connectGemini(
     }
     if (sc.inputTranscription?.text) {
       pulso.ouviu++
+      ouviu()
       if (!userOpen) {
         userOpen = true
         userText = ''
@@ -343,6 +459,7 @@ export async function connectGemini(
     }
     if (sc.modelTurn?.parts?.length) {
       diag.lastEvent = 'modelTurn'
+      ouvido.zerar()
       closeUserTurn()
       for (const p of sc.modelTurn.parts) {
         if (p.inlineData?.data && (p.inlineData.mimeType ?? '').startsWith('audio/')) {
@@ -383,6 +500,8 @@ export async function connectGemini(
       const passou = () => `${Date.now() - inicio} ms`
       const ESTADOS = ['conectando', 'aberto', 'fechando', 'fechado']
       logVoz(`abrindo a conexão com o Google (${handle ? 'retomada' : 'nova'}, modelo ${grant.model})`)
+      // Uma conexão nova não conhece a fala que estava aberta na anterior.
+      detector.reiniciar()
       const sock = new WebSocket(`${WS_URL}?access_token=${encodeURIComponent(grant.token)}`)
       sock.binaryType = 'arraybuffer'
       let ready = false
@@ -397,7 +516,11 @@ export async function connectGemini(
       }, 12000)
 
       sock.onopen = () => {
-        const setup = { ...grant.setup }
+        // Quem marca a fala somos nós (docs/adr/0036).
+        const setup: Record<string, unknown> = {
+          ...grant.setup,
+          realtimeInputConfig: { automaticActivityDetection: { disabled: true } },
+        }
         if (handle) setup.sessionResumption = { handle }
         const texto = JSON.stringify({ setup })
         sock.send(texto)
@@ -447,10 +570,15 @@ export async function connectGemini(
         if (handle) void reconnect()
         else {
           diag.lastError = explainClose(e.code, e.reason)
-          finish()
+          void reconnect()
         }
       }
     })
+
+  const soltarSocket = () => {
+    ws?.close()
+    ws = null
+  }
 
   const reconnect = async () => {
     if (reconnecting || closed) return
@@ -463,10 +591,35 @@ export async function connectGemini(
     } catch {
       /* já fechado */
     }
+    // O Google recusa a retomada enquanto a conexão anterior não terminou de sair.
+    if (old && handle) await new Promise((ok) => setTimeout(ok, ESPERA_DO_ANTERIOR_MS))
     try {
-      const grant = await renew()
-      if (grant.provider !== 'gemini') throw new Error('o provedor de voz mudou')
-      await open(grant)
+      if (closed) return
+      for (let tentativa = 1; ; tentativa++) {
+        try {
+          const grant = await renew(reserva)
+          if (grant.provider !== 'gemini') throw new Error('o provedor de voz mudou')
+          if (closed) return
+          modelos = grant.modelos ?? 1
+          await open(grant)
+          break
+        } catch (err) {
+          const motivo = err instanceof Error ? err.message : String(err)
+          if (closed) return
+          // Sem a cota, insistir aqui não adianta: quem chamou espera mais.
+          if (tentativa >= TENTATIVAS_DE_RETOMAR || /limite gratuito/.test(motivo)) throw err
+          // Vencido, não adianta insistir; no mais, a última tentativa é uma conversa nova.
+          if (/not found|expired/i.test(motivo) || tentativa === TENTATIVAS_DE_RETOMAR - 1) handle = null
+          await new Promise((ok) => setTimeout(ok, esperaDeReligar(tentativa - 1)))
+          if (closed) return
+        }
+      }
+      // Encerrada enquanto abria: o socket novo não pode ficar ouvindo.
+      if (closed) {
+        soltarSocket()
+        return
+      }
+      ouvido.zerar()
       diag.state = 'conectado'
     } catch (err) {
       diag.lastError = err instanceof Error ? err.message : String(err)
@@ -480,6 +633,8 @@ export async function connectGemini(
     if (closed) return
     closed = true
     clearInterval(relogioDoPulso)
+    clearTimeout(novaChance)
+    if (emSurdez) h.onSurdez?.(false)
     diag.state = 'encerrado'
     diag.micOn = false
     diag.speaking = false
@@ -521,11 +676,11 @@ export async function connectGemini(
     Object.keys(pulso).forEach((k) => (pulso[k as keyof typeof pulso] = 0))
     const recebeu = p.ouviu + p.audios + p.turnos + p.ferramentas + p.erros
     // Em silêncio com o microfone fechado, nada a dizer; aberto, um aviso por minuto.
-    if (!recebeu && (!micOn || (p.trechos > 0 && ++pulsoQuieto % 3 !== 1))) return
+    if (!recebeu && (!micOn || ++pulsoQuieto % 3 !== 1)) return
     if (recebeu) pulsoQuieto = 0
     const volume = p.trechos ? Math.round((p.somaRms / p.trechos) * 1000) / 1000 : 0
     logVoz(
-      `pulso: microfone ${micOn ? 'aberto' : 'fechado'}${mudo ? ' (mudo)' : ''}, ${p.trechos} trechos enviados ` +
+      `pulso: microfone ${micOn ? 'aberto' : 'fechado'}${mudo ? ' (mudo)' : ''}, ${p.falas} falas, ${p.trechos} trechos enviados ` +
         `(volume médio ${volume}); do Google: ${p.ouviu} transcrições da fala, ${p.respostas} respostas, ` +
         `${p.audios} áudios${p.descartados ? ` (${p.descartados} descartados)` : ''}, ${p.turnos} fins de turno, ` +
         `${p.ferramentas} ferramentas, ${p.erros} erros; socket ${ws ? ['abrindo', 'aberto', 'fechando', 'fechado'][ws.readyState] : 'nenhum'}` +
@@ -538,6 +693,7 @@ export async function connectGemini(
     model: first.model,
     setMicOn(on) {
       if (on !== micOn) logVoz(`microfone ${on ? 'aberto' : 'fechado'}`)
+      if (!on) interromperFala()
       micOn = on
       mic.enabled = on
       diag.micOn = on

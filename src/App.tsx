@@ -1,5 +1,5 @@
 import { atividadeDaFerramenta } from './lib/estados'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Scene } from './scene/Scene'
 import { Hud } from './ui/Hud'
 import { Diagnostics } from './ui/Diagnostics'
@@ -30,11 +30,15 @@ import {
   bomDia,
   bridgeServers,
   registrarVoz,
+  assumirVoz,
+  watchDona,
+  watchRecarregar,
   type BomDiaResposta,
   type FenixResposta,
 } from './lib/bridge'
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
 import { registrarDestinoDaVoz } from './lib/voz/types'
+import { esperaDeReligar, reservaDaTentativa } from './lib/voz/surdez'
 import { startAnalyser, micLevel, retomarAnalyser } from './lib/audio'
 import { foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/autodev'
 import { lerParametros, textoDaFenix } from './lib/fenix'
@@ -43,7 +47,7 @@ import { INTERVALO_DOS_POPUPS_MS, PREFIXO_DO_BOM_DIA, descreverPopups, popupsDoB
 import { criarJanela } from './lib/conversa'
 import { comandarPopup, telaAgora, type AcaoDePopup } from './lib/comandosDePopup'
 import { abrirNoYoutube } from './lib/musica'
-import { chamadaDisponivel, deuBomDia, ouvirNome } from './lib/chamada'
+import { chamadaDisponivel, deuBomDia, ouvirNome, transcrever } from './lib/chamada'
 import { sistemasAgora } from './lib/estadoDosSistemas'
 import { resumoSistemas } from './lib/sistemas'
 import { handleBrowser } from './lib/navegador'
@@ -163,6 +167,8 @@ function sobreAMusica(r: BomDiaResposta): string {
 
 /** Quanto tempo a conversa fica aberta, em silêncio, com os popups do bom dia na tela. */
 const LEITURA_DO_BOM_DIA_MS = 3 * 60_000
+/** Religou logo depois de cair: ele ainda está ali, esperando ser ouvido. */
+const AINDA_ESPERANDO_MS = 60_000
 
 export default function App() {
   const store = useStore
@@ -170,6 +176,15 @@ export default function App() {
   const session = useRef<RealtimeSession | null>(null)
   const connecting = useRef<Promise<RealtimeSession> | null>(null)
   const booting = useRef(false)
+  /** A voz é desta janela (docs/adr/0035). Até a ponte dizer o contrário, é. */
+  const [vozMinha, setVozMinha] = useState(true)
+  const minha = useRef(true)
+  /** O provedor não ouve o microfone: a fala vai transcrita pelo navegador. */
+  const [porTexto, setPorTexto] = useState(false)
+  const porTextoAgora = useRef(false)
+  const religar = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  /** Quando ele foi deixado sem voz no meio da conversa; 0 se não foi. */
+  const querOuvir = useRef(0)
   /** Quando a última fala foi ouvida, de quem for. */
   const ultimaFala = useRef(0)
   /** Alguém falou e o modelo ainda não respondeu nem ignorou: a conversa não fecha. */
@@ -223,6 +238,7 @@ export default function App() {
    */
   const goDormant = (pedida = false) => {
     clearIdle()
+    querOuvir.current = 0
     session.current?.interrupt()
     session.current?.setMicOn(false)
     const s = store.getState()
@@ -545,12 +561,66 @@ export default function App() {
 
   // -- sessão de voz ----------------------------------------------------------
 
-  const openSession = (): Promise<RealtimeSession> => {
+  /** Tenta a voz de novo, com espera crescente, até conseguir. */
+  const religarVoz = (tentativa: number, motivo = '') => {
+    clearTimeout(religar.current)
+    if (!minha.current) return
+    store.getState().setAvisoDeVoz(
+      /limite gratuito/i.test(motivo)
+        ? 'O limite gratuito do Gemini foi atingido. Tento de novo em alguns minutos.'
+        : 'A voz não conectou. Estou tentando de novo.',
+    )
+    religar.current = setTimeout(async () => {
+      const p = store.getState().phase
+      if (session.current || !minha.current || p === 'offline' || p === 'boot') return
+      try {
+        const rt = await openSession(reservaDaTentativa(tentativa))
+        if (store.getState().phase !== 'dormant') return
+        const esperando = Date.now() - querOuvir.current < AINDA_ESPERANDO_MS
+        rt.setMicOn(esperando)
+        if (!esperando) return
+        store.getState().setPhase('listening')
+        sfx.play('listen')
+        armIdle()
+      } catch (err) {
+        religarVoz(tentativa + 1, err instanceof Error ? err.message : String(err))
+      }
+    }, esperaDeReligar(tentativa, motivo))
+  }
+
+  /** A voz foi para outra janela: esta só mostra a tela. */
+  const cederVoz = () => {
+    minha.current = false
+    setVozMinha(false)
+    clearTimeout(religar.current)
+    const s = store.getState()
+    if (s.phase !== 'offline' && s.phase !== 'boot') goDormant()
+    session.current?.close()
+    s.setError(null)
+    s.setAvisoDeVoz('A voz está em outra janela. Espaço traz para cá.')
+  }
+
+  const retomarVoz = () => {
+    if (minha.current) return
+    minha.current = true
+    setVozMinha(true)
+    store.getState().setAvisoDeVoz(null)
+  }
+
+  /** A outra janela fechou, e a voz voltou para esta: abre quieta, em espera. */
+  const voltouASerMinha = () => {
+    if (minha.current) return
+    retomarVoz()
+    religarVoz(0)
+  }
+
+  const openSession = (reserva = 0): Promise<RealtimeSession> => {
     if (session.current) return Promise.resolve(session.current)
     if (connecting.current) return connecting.current
 
     connecting.current = connectRealtime({
       onSpeechStart: () => {
+        if (!porTextoAgora.current) store.getState().setAvisoDeVoz(null)
         // Não reabre a janela: ouvir alguém não quer dizer que falaram com ele.
         ultimaFala.current = Date.now()
         const s = store.getState()
@@ -596,6 +666,8 @@ export default function App() {
         falaPendente.current = false
         clearIdle()
         const s = store.getState()
+        // Por texto, o aviso fica: ele responde, mas o microfone segue sem ser ouvido.
+        if (!porTextoAgora.current) s.setAvisoDeVoz(null)
         sfx.duck(true)
         music.duck(true)
         if (s.phase !== 'dormant' && s.phase !== 'tooling') s.setPhase('speaking')
@@ -616,7 +688,12 @@ export default function App() {
           armIdle()
         }
       },
-      onToolCall: runTool,
+      onToolCall: (name, args) => {
+        // Só o nome e a ação, nunca o que foi pedido: para saber depois o que ele tentou.
+        const acao = typeof args.acao === 'string' && /^[a-z_]{1,20}$/.test(args.acao) ? ` (${args.acao})` : ''
+        registrarVoz(`ferramenta da voz: ${name}${acao}`)
+        return runTool(name, args)
+      },
       onError: (message) => {
         console.warn('[apolo]', message)
         store.getState().setError(message)
@@ -625,14 +702,48 @@ export default function App() {
         session.current = null
         falaPendente.current = false
         const s = store.getState()
+        const estava = s.phase
         if (s.phase !== 'offline' && s.phase !== 'boot') {
           clearIdle()
           s.setPhase('dormant')
-          s.setError('A sessão de voz foi encerrada. Ela recomeça quando você me chamar.')
+          s.setError('A sessão de voz foi encerrada.')
+          // Caiu no meio da conversa: religando logo, ele volta a ouvir.
+          if (minha.current && estava !== 'dormant') querOuvir.current = Date.now()
+          religarVoz(0)
         }
       },
-    })
+      // O 3.8 só transcreve no fim: sem isto, a conversa fecharia no meio de uma fala longa.
+      onFalando: () => {
+        ultimaFala.current = Date.now()
+      },
+      onSemRetorno: (seguidas) => {
+        // Sem isto, a conversa fecharia por silêncio antes de a voz ser recuperada.
+        if (store.getState().phase === 'listening') armIdle()
+        // A primeira se resolve calada, na mesma conversa; só a repetição é notícia.
+        if (seguidas > 1) store.getState().setAvisoDeVoz('Não recebi resposta à sua fala. Estou religando a voz: repita, por favor.')
+      },
+      onSurdez: (surda) => {
+        const assume = surda && chamadaDisponivel()
+        setPorTexto(assume)
+        porTextoAgora.current = assume
+        store.getState().setAvisoDeVoz(
+          !surda
+            ? null
+            : assume
+              ? 'O Google não está ouvindo o microfone. Sigo pela transcrição do navegador.'
+              : 'O Google não está ouvindo o microfone. Sigo tentando.',
+        )
+        return assume
+      },
+    }, reserva)
       .then((rt) => {
+        // A voz foi para outra janela enquanto esta abria.
+        if (!minha.current) {
+          rt.close()
+          throw new Error('A voz está em outra janela.')
+        }
+        clearTimeout(religar.current)
+        store.getState().setAvisoDeVoz(null)
         session.current = rt
         store.getState().setVoice(rt.model)
         return rt
@@ -648,6 +759,10 @@ export default function App() {
     const s = store.getState()
     if (s.phase === 'offline' || s.phase === 'boot') return
     s.setError(null)
+    if (!minha.current) {
+      retomarVoz()
+      assumirVoz()
+    }
     sfx.play('wake')
     try {
       const rt = await openSession()
@@ -658,7 +773,10 @@ export default function App() {
     } catch (err) {
       sfx.play('error')
       store.getState().setPhase('dormant')
-      store.getState().setError(err instanceof Error ? err.message : String(err))
+      const motivo = err instanceof Error ? err.message : String(err)
+      store.getState().setError(motivo)
+      querOuvir.current = Date.now()
+      religarVoz(0, motivo)
     }
   }
 
@@ -689,6 +807,9 @@ export default function App() {
     } catch (err) {
       booting.current = false
       console.error('[apolo] falha ao iniciar:', err)
+      const motivo = err instanceof Error ? err.message : String(err)
+      registrarVoz(`a interface não iniciou: ${motivo}`)
+      store.getState().setAvisoDeVoz(`Não consegui iniciar: ${motivo}`)
       store.getState().setPhase('offline')
       store
         .getState()
@@ -832,6 +953,19 @@ export default function App() {
       }
     })
 
+    watchDona((ehMinha) => (ehMinha ? voltouASerMinha() : minha.current && cederVoz()))
+    // A Fênix pede uma página nova quando a voz não volta: nunca no meio de uma tarefa.
+    watchRecarregar(() => {
+      if (!minha.current) return
+      const tentar = () => {
+        const p = store.getState().phase
+        if (p === 'tooling' || p === 'speaking') return void setTimeout(tentar, 5000)
+        registrarVoz('recarregando a página a pedido da Fênix')
+        setTimeout(() => location.reload(), 200)
+      }
+      tentar()
+    })
+
     watchConnection((state) => {
       if (state === 'lost') {
         store.getState().setError('Conexão com o agente de tarefas perdida — reconectando.')
@@ -857,8 +991,11 @@ export default function App() {
       await voiceUp
     } catch (err) {
       store.getState().setPhase('dormant')
-      store.getState().setError(err instanceof Error ? err.message : String(err))
+      const motivo = err instanceof Error ? err.message : String(err)
+      store.getState().setError(motivo)
       sfx.play('error')
+      querOuvir.current = Date.now()
+      religarVoz(0, motivo)
       return
     }
 
@@ -872,7 +1009,7 @@ export default function App() {
 
   /** Em espera, só o nome acorda por voz (RF-11). */
   useEffect(() => {
-    if (phase !== 'dormant' || !chamadaDisponivel()) return
+    if (phase !== 'dormant' || !vozMinha || !chamadaDisponivel()) return
     const escuta = ouvirNome(
       (fala, pedido) => void atenderChamado(fala, pedido),
       (motivo) => store.getState().setError(motivo),
@@ -881,14 +1018,44 @@ export default function App() {
     )
     return () => escuta.stop()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase])
+  }, [phase, vozMinha])
+
+  /**
+   * O provedor não ouve o microfone (docs/adr/0035): o navegador transcreve, e a frase
+   * vai como texto. Enquanto ele fala, não: o reconhecedor ouviria a própria voz dele.
+   */
+  const transcrevendo =
+    porTexto && vozMinha && (phase === 'listening' || phase === 'thinking' || phase === 'tooling')
+  useEffect(() => {
+    if (!transcrevendo) return
+    const escuta = transcrever(
+      (fala, final) => {
+        ultimaFala.current = Date.now()
+        // A mesma conferência da fala dele que a transcrição do provedor alimenta.
+        registrarFala(fala)
+        const s = store.getState()
+        if (s.phase === 'tooling') return vigia.current.ouvir(fala)
+        s.setCaption(final ? '' : fala)
+        if (!final) return
+        s.pushTurn({ id: newId(), role: 'user', text: fala })
+        if (bomDiaNaTela.current && agradece(fala)) encerrarBomDia()
+        falaPendente.current = true
+        s.setPhase('thinking')
+        session.current?.prompt(fala)
+      },
+      (motivo) => store.getState().setAvisoDeVoz(motivo),
+      (texto) => registrarVoz(texto),
+    )
+    return () => escuta.stop()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transcrevendo])
 
   /**
    * Uma palma liga a interface. Em espera ela não acorda mais, porque só o nome
    * deve acordá-lo, salvo num navegador que não saiba ouvir o nome.
    */
   useEffect(() => {
-    if (phase !== 'offline' && !(phase === 'dormant' && !chamadaDisponivel())) return
+    if (phase !== 'offline' && !(phase === 'dormant' && vozMinha && !chamadaDisponivel())) return
     let live: { stop: () => void } | null = null
     let gone = false
     void listenForClap(() => {
@@ -978,6 +1145,7 @@ export default function App() {
       window.removeEventListener('keydown', onKey)
       clearIdle()
       session.current?.close()
+      clearTimeout(religar.current)
       hands.disableHands()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

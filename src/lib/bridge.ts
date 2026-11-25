@@ -29,6 +29,7 @@ export type AskHandlers = {
 /** Anything the bridge sends. Deliberately loose — a frame from a future
  *  bridge build should be ignored, not crash the turn. */
 type Frame = {
+  dona?: string | null
   lista?: unknown[]
   extensao?: string
   dados?: unknown
@@ -421,6 +422,10 @@ function dispatch(ws: WebSocket) {
         })
         respostasDaFenix.delete(msg.resposta)
       }
+    } else if (msg.type === 'voz_dona') {
+      onDona?.(msg.dona === JANELA)
+    } else if (msg.type === 'recarregar') {
+      onRecarregar?.()
     } else if (msg.type === 'extensoes' && Array.isArray(msg.lista)) {
       onExtensoes?.(msg.lista)
     } else if (msg.type === 'extensao' && msg.extensao) {
@@ -457,6 +462,35 @@ export function registrarVoz(texto: string) {
   if (vozPendente.length > 40) vozPendente.shift()
   if (socket?.readyState !== WebSocket.OPEN) return
   for (const t of vozPendente.splice(0)) socket.send(JSON.stringify({ type: 'voz_log', texto: t }))
+}
+
+/**
+ * Uma janela com voz por vez (docs/adr/0035). `desde` é quando esta assumiu: ao abrir,
+ * ou quando ele a acorda. Religar à ponte manda o mesmo valor, e não rouba a voz.
+ */
+const JANELA = crypto.randomUUID()
+let assumiuEm = Date.now()
+let onDona: ((minha: boolean) => void) | null = null
+let onRecarregar: (() => void) | null = null
+export function watchDona(fn: (minha: boolean) => void) {
+  onDona = fn
+}
+export function watchRecarregar(fn: () => void) {
+  onRecarregar = fn
+}
+const contarQueAssumiu = () => {
+  if (socket?.readyState !== WebSocket.OPEN) return
+  socket.send(JSON.stringify({ type: 'voz_assumir', janela: JANELA, desde: assumiuEm }))
+}
+export function assumirVoz() {
+  assumiuEm = Date.now()
+  contarQueAssumiu()
+}
+if (typeof window !== 'undefined') {
+  // Fechar a janela não é queda: a Fênix não deve reabri-la.
+  window.addEventListener('pagehide', () => {
+    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'adeus' }))
+  })
 }
 
 export function enviarExtensao(extensao: string, dados: unknown) {
@@ -499,9 +533,11 @@ function connect(): Promise<WebSocket> {
       socket = ws
       attempt = 0
       dispatch(ws)
+      contarQueAssumiu()
       settle(null)
       onConnection?.(everConnected ? 'reconnected' : 'open')
       everConnected = true
+      // Depois de assumir: a ponte só conta o relato da janela que tem a voz.
       if (vozPendente.length) registrarVoz(vozPendente.pop() as string)
     }
     ws.onerror = () => {

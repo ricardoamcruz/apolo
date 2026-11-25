@@ -54,6 +54,7 @@ Fase: ver `05-roadmap.md`.
 | RF-68 | **Extensões plugáveis**: uma pasta em `extensoes/` (manifesto, módulo da interface e dados) liga, troca ou sai do A.P.O.L.O. no ar, sem recompilar nem reiniciar; ferramentas de voz declaradas no manifesto, só `livre` por enquanto; cada uma é uma linha na aba SISTEMAS (ADR 0033) | S | 3 | em andamento |
 | RF-69 | **A.T.L.A.S., o mapa**: o Enxame vira um globo de pontos que marca cidades, coordenadas e listas de lugares, com zoom pelo tamanho do lugar ou pela distância entre eles até o nível das ruas (camada de cidade com ruas, rios, parques e nomes dos bairros), marcadores na cor contrastante agrupados quando juntos, busca no OpenStreetMap e controle por voz, mouse e toque, sem botões (ADR 0034) | S | 3 | em andamento |
 | RF-70 | **Localização no mapa**: a posição do Ricardo num ponto na terceira cor, só quando ele pede com a própria fala; fica na tela e não vai ao provedor da voz. Base para calcular rotas (ADR 0034) | S | 3 | em andamento |
+| RF-71 | **A voz que volta sozinha**: religa sempre, percebe a sessão surda, troca de modelo, segue por texto, tem uma janela de voz por vez, avisa na tela, e a F.Ê.N.I.X. recarrega ou reabre a interface (ADR 0035) | M | 3 | em andamento |
 
 ## Requisitos não funcionais
 

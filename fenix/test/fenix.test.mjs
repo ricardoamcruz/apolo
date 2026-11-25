@@ -370,9 +370,9 @@ test('os tempos do config valem só como números positivos e só os que existem
     }),
   )
   const c = lerConfig(join(pasta, 'fenix.config.json'), {})
-  assert.deepEqual(c.tempos, { servicos: { intervaloMs: 300, esperasMs: [200, 400] }, versoes: { subidaMs: 6000 }, rotinas: {} })
+  assert.deepEqual(c.tempos, { servicos: { intervaloMs: 300, esperasMs: [200, 400] }, versoes: { subidaMs: 6000 }, rotinas: {}, voz: {} })
   writeFileSync(join(pasta, 'fenix.config.json'), JSON.stringify({ servicos: [{ nome: 'app', comando: ['node', 'app.mjs'] }] }))
-  assert.deepEqual(lerConfig(join(pasta, 'fenix.config.json'), {}).tempos, { servicos: {}, versoes: {}, rotinas: {} })
+  assert.deepEqual(lerConfig(join(pasta, 'fenix.config.json'), {}).tempos, { servicos: {}, versoes: {}, rotinas: {}, voz: {} })
 })
 
 test('quem a Fênix sobe recebe o pid dela e a receita para revivê-la (docs/adr/0028)', async (t) => {

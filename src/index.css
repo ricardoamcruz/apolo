@@ -369,6 +369,18 @@ body::after {
   text-align: center;
 }
 
+.aviso-de-voz {
+  position: absolute;
+  left: 50%;
+  bottom: 72px;
+  transform: translateX(-50%);
+  color: var(--alerta, var(--interface));
+  font-family: var(--font-ui);
+  font-size: 13px;
+  max-width: 70vw;
+  text-align: center;
+}
+
 .hud-bottom {
   position: absolute;
   bottom: 44px;

@@ -15,10 +15,10 @@ import { diag, logVoz, type RealtimeHandlers, type RealtimeSession, type Session
 export type { RealtimeHandlers, RealtimeSession, ToolResult } from './voz/types'
 export { diag } from './voz/types'
 
-async function grant(): Promise<SessionGrant> {
+async function grant(reserva = 0): Promise<SessionGrant> {
   let res: Response
   try {
-    res = await fetch(`${BRIDGE_HTTP_URL}/realtime/sessao`, {
+    res = await fetch(`${BRIDGE_HTTP_URL}/realtime/sessao${reserva ? `?reserva=${reserva}` : ''}`, {
       method: 'POST',
       signal: AbortSignal.timeout(15000),
     })
@@ -35,14 +35,14 @@ async function grant(): Promise<SessionGrant> {
   return res.json()
 }
 
-export async function connectRealtime(h: RealtimeHandlers): Promise<RealtimeSession> {
+export async function connectRealtime(h: RealtimeHandlers, reserva = 0): Promise<RealtimeSession> {
   diag.state = 'conectando'
   diag.lastError = ''
   let g: SessionGrant
   const inicio = Date.now()
   logVoz('pedindo a sessão de voz à ponte')
   try {
-    g = await grant()
+    g = await grant(reserva)
   } catch (err) {
     diag.state = 'falhou'
     diag.lastError = err instanceof Error ? err.message : String(err)

@@ -12,6 +12,9 @@
 /** Folga para a página recarregar (o Vite, um F5) sem virar alarme. */
 export const SEM_INTERFACE_MS = 45_000
 
+/** Estados que só uma conexão nova pedida pela página, ou o provedor ouvindo, desfazem. */
+const SURDEZ = new Set(['surda', 'por texto'])
+
 export function criarRelatoDaVoz({ agora = Date.now } = {}) {
   const voz = { estado: 'sem relato', falhas: 0, desde: agora(), ultimo: '' }
   // Uma tentativa vai do pedido da sessão à confirmação ou à primeira falha:
@@ -19,6 +22,10 @@ export function criarRelatoDaVoz({ agora = Date.now } = {}) {
   let tentativaContada = false
   let interfaces = 0
   let saiuEm = null
+  /** A escuta do nome, na espera, não dá partida: chamá-lo não o acorda. */
+  let escutaMudaDesde = null
+  /** A página se despediu: a janela foi fechada ou recarregada, e não caiu. */
+  let despediu = false
 
   return {
     /** Um passo relatado pela interface. Só alguns mudam o estado. */
@@ -26,13 +33,30 @@ export function criarRelatoDaVoz({ agora = Date.now } = {}) {
       const antes = voz.estado
       if (texto.startsWith('abrindo a conexão') || texto.startsWith('pedindo a sessão')) {
         tentativaContada = false
+        // Uma sessão nova: a surdez da anterior não vale para ela.
+        if (texto.startsWith('pedindo') && SURDEZ.has(voz.estado)) voz.estado = 'sem relato'
+        return
+      }
+      if (texto.startsWith('a escuta da espera não dá partida')) {
+        escutaMudaDesde ??= agora()
+        return
+      }
+      if (texto.startsWith('a escuta da espera voltou')) {
+        escutaMudaDesde = null
         return
       }
       if (texto.startsWith('sessão confirmada')) {
-        voz.estado = 'ligada'
+        // Reabrir não cura a surdez: só o provedor voltar a ouvir.
+        if (!SURDEZ.has(voz.estado)) voz.estado = 'ligada'
         voz.falhas = 0
         tentativaContada = true
-      } else if (/^(o Google não confirmou|a ponte não entregou|conexão fechada)/.test(texto)) {
+      } else if (texto.startsWith('voz surda')) {
+        voz.estado = 'surda'
+      } else if (texto.startsWith('voz por texto')) {
+        voz.estado = 'por texto'
+      } else if (texto.startsWith('o Google voltou a ouvir')) {
+        voz.estado = 'ligada'
+      } else if (/^(o Google não confirmou|a ponte não entregou|conexão fechada|a interface não iniciou)/.test(texto)) {
         if (tentativaContada) return
         tentativaContada = true
         voz.estado = 'falhando'
@@ -45,17 +69,31 @@ export function criarRelatoDaVoz({ agora = Date.now } = {}) {
     interfaceEntrou() {
       interfaces++
       saiuEm = null
+      despediu = false
     },
 
     interfaceSaiu() {
       interfaces = Math.max(0, interfaces - 1)
-      if (!interfaces) saiuEm = agora()
+      // A escuta é da página que saiu; a próxima relata a dela.
+      if (!interfaces) {
+        saiuEm = agora()
+        escutaMudaDesde = null
+      }
+    },
+
+    /** A última página avisou que ia fechar: ficar sem interface não é queda. */
+    despedida() {
+      despediu = true
     },
 
     /** O retrato para o /health. Sem interface há tempo, o último relato não vale mais. */
     paraSaude() {
       if (!interfaces && saiuEm !== null && agora() - saiuEm >= SEM_INTERFACE_MS) {
+        if (despediu) return { ...voz, estado: 'fechada', desde: saiuEm, ultimo: 'a janela foi fechada' }
         return { ...voz, estado: 'sem interface', desde: saiuEm, ultimo: 'nenhuma interface ligada à ponte' }
+      }
+      if (escutaMudaDesde !== null && voz.estado === 'ligada') {
+        return { ...voz, estado: 'escuta muda', desde: escutaMudaDesde, ultimo: 'a escuta do nome não dá partida' }
       }
       return { ...voz }
     },

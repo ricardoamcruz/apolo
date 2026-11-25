@@ -23,15 +23,9 @@ if ! command -v node >/dev/null; then
 fi
 
 INTERFACE="https://localhost:${PORT:-5173}"
-abrir_interface() {
-  open -na "Google Chrome" --args \
-    --user-data-dir="$HOME/.apolo/chrome" \
-    --app="$INTERFACE" \
-    --autoplay-policy=no-user-gesture-required \
-    --no-first-run --no-default-browser-check 2>/dev/null || open "$INTERFACE"
-}
+abrir_interface() { scripts/abrir-interface.command; }
 
-if pgrep -f "fenix/fenix.mjs" >/dev/null; then
+if pgrep -f "^[^ ]*node fenix/fenix[.]mjs" >/dev/null; then
   echo "O A.P.O.L.O. já está no ar. Abrindo a interface."
   abrir_interface
   exit 0

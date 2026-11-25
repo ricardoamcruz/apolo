@@ -90,6 +90,8 @@ export function criarComandos({
   repo,
   pasta,
   habilitado = false,
+  /** A opção de partida que os libera, para a recusa dizer como. */
+  opcao = null,
   bloqueio = () => null,
   prazoMs = 120_000,
   validadeMs = 300_000,
@@ -123,7 +125,7 @@ export function criarComandos({
 
     propor({ script, motivo }) {
       if (!habilitado) {
-        return { ok: false, mensagem: 'Comandos livres estão desligados nesta partida.' }
+        return { ok: false, mensagem: `Comandos livres estão desligados nesta partida${opcao ? `: só com a opção ${opcao} ao iniciar` : ''}.` }
       }
       const barrado = bloqueio()
       if (barrado) return { ok: false, mensagem: barrado }

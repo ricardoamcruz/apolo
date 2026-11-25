@@ -66,10 +66,12 @@ import { criarClienteFenix } from './fenix.mjs'
 import { criarRenascimento, lerReceita } from './renascer.mjs'
 import { criarClienteAurora } from './aurora.mjs'
 import { criarSondas } from './sondas.mjs'
-import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog, registrarBug } from './desenvolvimento.mjs'
+import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog, registrarBug, versaoNoAr } from './desenvolvimento.mjs'
 import { criarTelemetria } from './telemetria.mjs'
 import { garantirCertificado } from './tls.mjs'
 import { criarRelatoDaVoz } from './relatoDaVoz.mjs'
+import { criarDonaDaVoz } from './donaDaVoz.mjs'
+import { criarLogDaVoz } from './logDaVoz.mjs'
 import { criarCentral } from './extensoes.mjs'
 import {
   PASTA_PADRAO,
@@ -166,6 +168,9 @@ const IGNORADOS = new Set(
 
 /** A voz do PC como a interface relatou (bridge/relatoDaVoz.mjs): o que vai no /health. */
 const relatoDaVoz = criarRelatoDaVoz()
+const logDaVoz = criarLogDaVoz()
+/** Qual janela do PC tem a voz (docs/adr/0035). */
+const donaDaVoz = criarDonaDaVoz((id) => broadcast({ type: 'voz_dona', dona: id }))
 
 function configuredServers() {
   try {
@@ -687,10 +692,11 @@ const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
 
   // A chave temporária da sessão de voz. O navegador abre a conexão WebRTC
   // direto com a OpenAI usando ela; a chave permanente nunca sai daqui.
-  if (req.method === 'POST' && req.url === '/realtime/sessao') {
+  if (req.method === 'POST' && req.url?.split('?')[0] === '/realtime/sessao') {
     const inicio = Date.now()
     try {
-      const session = await createRealtimeSession()
+      const reserva = Number(new URL(req.url, 'http://x').searchParams.get('reserva') ?? 0)
+      const session = await createRealtimeSession({ reserva })
       // Sem a chave: só o que ajuda a ver por que a voz não ligou no navegador.
       const ferramentas = session.setup?.tools?.[0]?.functionDeclarations?.length ?? 0
       const tamanho = session.setup ? JSON.stringify(session.setup).length : 0
@@ -702,6 +708,7 @@ const handleRequest = async (req, res, base = `https://localhost:${PORT}`) => {
       return res.end(JSON.stringify(session))
     } catch (err) {
       console.error('[apolo] sessão de voz:', err.message)
+      logDaVoz.registrar(`a ponte não conseguiu a sessão: ${String(err.message).replace(/\p{Cc}+/gu, ' ').slice(0, 300)}`)
       res.writeHead(err.status ?? 502, { ...cors, 'content-type': 'text/plain; charset=utf-8' })
       return res.end(err.message)
     }
@@ -959,6 +966,8 @@ const fenix = criarClienteFenix({
   },
   aoReceber: (msg) => {
     if (msg.type === 'versao:resultado') return autodev.resultado(msg)
+    // A voz não voltou sozinha: a Fênix pede uma página nova (docs/adr/0035).
+    if (msg.type === 'interface:recarregar') return broadcast({ type: 'recarregar' })
     if (msg.type === 'estado') {
       estadoDaFenix = msg
       const hermes = msg.servicos?.find((s) => s.nome === 'hermes')
@@ -1078,8 +1087,8 @@ async function pedirAFenix({ acao, nome, parametros, script, motivo, proposta })
       return {
         ok: true,
         mensagem:
-          `Serviços: ${servicos.join('; ')}.\nRotinas: ${rotinas.join(' | ')}.\n` +
-          `Comandos livres: ${r.comandosLivres ? 'liberados, com confirmação' : 'desligados nesta partida'}.`,
+          `${await versaoNoAr({ repo: REPO })}\nServiços: ${servicos.join('; ')}.\nRotinas: ${rotinas.join(' | ')}.\n` +
+          `Comandos livres: ${r.comandosLivres ? 'liberados, com confirmação' : 'desligados nesta partida (só com npm start -- --writes); ler a branch, o histórico e o resto não depende disso'}.`,
       }
     }
     case 'rotina':
@@ -1600,8 +1609,19 @@ const atender = (socket, { celular = false } = {}) => {
     if (msg.type === 'voz_log' && !celular && typeof msg.texto === 'string') {
       // Sem caracteres de controle (C0, DEL e C1): uma quebra de linha forjada não cria linha falsa no log.
       const texto = msg.texto.replace(/\p{Cc}+/gu, ' ').slice(0, 300)
-      relatoDaVoz.registrar(texto)
+      // A janela sem a voz não fala pela que tem.
+      if (donaDaVoz.ehDona(socket)) relatoDaVoz.registrar(texto)
+      logDaVoz.registrar(texto)
       return console.log(`[apolo] voz: ${texto}`)
+    }
+
+    if (msg.type === 'voz_assumir' && !celular && typeof msg.janela === 'string' && Number.isFinite(msg.desde)) {
+      // Um relógio adiantado não prende a voz numa janela.
+      return donaDaVoz.assumir(socket, msg.janela.slice(0, 64), Math.min(msg.desde, Date.now()))
+    }
+    if (msg.type === 'adeus' && !celular) {
+      if (interfacesDoPc.size === 1) relatoDaVoz.despedida()
+      return
     }
 
     if (msg.type === 'preferencias') {
@@ -1625,6 +1645,8 @@ const atender = (socket, { celular = false } = {}) => {
     if (msg.type === 'autodev' && typeof msg.acao === 'string') {
       void acaoDoAutodev(msg)
         .catch((err) => ({ ok: false, mensagem: err.message }))
+        // Perguntado do desenvolvimento, ele também sabe em que branch está.
+        .then(async (r) => (msg.acao === 'estado' ? { ...r, mensagem: `${await versaoNoAr({ repo: REPO })} ${r.mensagem ?? ''}`.trim() } : r))
         .then((r) => send({ type: 'autodev', resposta: msg.id, ...r }))
     }
 
@@ -1659,6 +1681,7 @@ const atender = (socket, { celular = false } = {}) => {
       canaisMudaram()
     }
     if (interfacesDoPc.delete(socket)) relatoDaVoz.interfaceSaiu()
+    donaDaVoz.saiu(socket)
     celularesNoAr.delete(socket)
     ouvintesDosCanais.delete(reenviarCanais)
     dispositivo.sair()

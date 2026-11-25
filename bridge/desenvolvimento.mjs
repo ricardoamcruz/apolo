@@ -36,6 +36,26 @@ export function pendenciasDoRoadmap(texto, maxPorEtapa = 4) {
   return etapas
 }
 
+/**
+ * A versão em execução, numa frase: branch, último commit e se há alteração sem
+ * commit. É leitura: não depende de --writes nem do agente de tarefas.
+ */
+export async function versaoNoAr({ repo }) {
+  const git = (...args) =>
+    exec('git', args, { cwd: repo, timeout: 5000 }).then((r) => r.stdout.trim()).catch(() => null)
+  const [branch, commit, sujo] = await Promise.all([
+    git('symbolic-ref', '--short', '-q', 'HEAD'),
+    git('log', '-1', '--format=%h %s'),
+    git('status', '--porcelain'),
+  ])
+  if (!commit) return 'Não consegui ler a versão do repositório.'
+  const n = sujo ? sujo.split('\n').length : 0
+  return (
+    `Branch no ar: ${branch ?? 'nenhuma (um commit solto)'}. Último commit: ${commit}. ` +
+    (n ? `${n} ${n === 1 ? 'arquivo alterado' : 'arquivos alterados'} sem commit.` : 'Nada sem commit.')
+  )
+}
+
 /** Branch no ar, autodev e roadmap. Uma parte que falha some; nunca rejeita. */
 export async function estadoDoDesenvolvimento({ repo, autodev }) {
   const [branch, etapas] = await Promise.all([

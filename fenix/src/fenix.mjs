@@ -15,6 +15,7 @@ import { criarCanal } from './canal.mjs'
 import { criarComandos, montar, rodar } from './rotinas.mjs'
 import { criarServicos } from './servicos.mjs'
 import { criarVersoes } from './versoes.mjs'
+import { criarRecuperacaoDaVoz } from './voz.mjs'
 
 const exec = promisify(execFile)
 
@@ -99,24 +100,47 @@ export function criarFenix(
       if (acao === 'descartar_versao') void versoes.reverter({ id: versoes.estado().id })
     },
   })
-  let ultimaInterfaceAvisada = 0
+  /** O que aconteceu fica também no eventos.log, para quando o terminal já fechou. */
+  const registrarEvento = (linha) => {
+    log(linha)
+    try {
+      appendFileSync(join(config.pasta, 'eventos.log'), `${new Date().toISOString()} ${linha}\n`)
+    } catch {
+      /* o registro nunca atrapalha a guarda */
+    }
+  }
+  /** A voz que não volta sozinha (docs/adr/0035), por serviço que a relata. */
+  const recuperacoes = new Map()
+  const recuperacaoDe = (nome) => {
+    if (!recuperacoes.has(nome)) {
+      const comando = config.servicos.find((x) => x.nome === nome)?.saude?.reabrir
+      recuperacoes.set(
+        nome,
+        criarRecuperacaoDaVoz({
+          log: registrarEvento,
+          prazos: tempos.voz,
+          recarregar: () => canal?.transmitir({ type: 'interface:recarregar' }),
+          reabrir: comando
+            ? () => {
+                const [programa, ...args] = comando
+                execFile(programa, args, { cwd: config.repo, env: config.ambiente ?? process.env, timeout: 60_000 }, (err) => {
+                  if (err) registrarEvento(`[fenix] não consegui reabrir a janela: ${String(err.message).split('\n')[0]}`)
+                })
+              }
+            : null,
+          avisar: (texto) => avisos.avisar({ titulo: `${config.nome}: problema na voz`, texto, prioridade: 'alta' }),
+        }),
+      )
+    }
+    return recuperacoes.get(nome)
+  }
   const servicos = criarServicos({
     repo: config.repo,
     servicos: config.servicos,
     ambiente,
     log,
     saida,
-    aoVoz: (nome, voz) => {
-      // A página da interface morreu (bug crítico de 18/11/2026): com tudo de pé, ele
-      // não ouve nem responde, e só recarregar a janela resolve.
-      if (voz.estado !== 'sem interface' || Date.now() - ultimaInterfaceAvisada < 10 * 60_000) return
-      ultimaInterfaceAvisada = Date.now()
-      avisos.avisar({
-        titulo: `${config.nome}: a interface caiu`,
-        texto: 'A janela dele não está mais ligada à ponte, então ele não ouve nem responde. Recarregue a janela ou abra de novo.',
-        prioridade: 'alta',
-      })
-    },
+    aoVoz: (nome, voz) => recuperacaoDe(nome).ver(voz),
     aoMudar: (nome, status, motivo) => {
       if (status === 'caiu' && motivo && Date.now() - (ultimaQuedaAvisada.get(nome) ?? 0) > 10 * 60_000) {
         ultimaQuedaAvisada.set(nome, Date.now())
@@ -158,6 +182,7 @@ export function criarFenix(
     repo: config.repo,
     pasta: config.pasta,
     habilitado: ativas.some((f) => f.comandosLivres),
+    opcao: Object.keys(config.flags).find((f) => config.flags[f].comandosLivres) ?? null,
     bloqueio: () =>
       versoes.emTeste()
         ? 'Há uma alteração sem revisão no ar: aprove ou descarte antes de rodar comandos livres.'

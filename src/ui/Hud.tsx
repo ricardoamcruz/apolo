@@ -163,6 +163,7 @@ export function Hud() {
   const exibirChat = useStore((s) => s.exibicao.exibirChat)
   const activeTool = useStore((s) => s.activeTool)
   const error = useStore((s) => s.error)
+  const avisoDeVoz = useStore((s) => s.avisoDeVoz)
   // Os avisos em vermelho são para depurar: só aparecem com o diagnóstico aberto (D).
   const diagnostico = useStore((s) => s.sistemas !== 'fechado')
   const voice = useStore((s) => s.voice)
@@ -312,6 +313,8 @@ export function Hud() {
       <Fenix />
       <Tocador />
 
+      {/* Sem voz, é só por aqui que ele fica sabendo: não depende do diagnóstico. */}
+      {avisoDeVoz && <div className="aviso-de-voz" role="status">{avisoDeVoz}</div>}
       {error && diagnostico && <div className="error">{error}</div>}
 
       <footer className="hud-bottom">

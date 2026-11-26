@@ -221,6 +221,35 @@ export function decideTool(name) {
 }
 
 /**
+ * A cópia no ar é da F.Ê.N.I.X. (docs/adr/0038). Em 25/11/2026 o agente de tarefas
+ * fez um `git checkout` nela pelo Bash, por baixo da Fênix: a versão mudou sem
+ * observação nem volta, e a voz caiu junto. Nada que troque a branch, o commit ou
+ * os arquivos rastreados da cópia em execução passa por aqui; a troca de versão é
+ * a ação "trocar" da ferramenta fenix, que a voz tem.
+ *
+ * Lê o texto do comando, então é contra engano, não contra má-fé: o modelo que
+ * quiser esconder o caminho consegue. Por isso vale só para a cópia do A.P.O.L.O.
+ * e não atrapalha o Git de outros projetos.
+ */
+const REPO = decodeURIComponent(new URL('..', import.meta.url).pathname).replace(/\/$/, '')
+const MUDA_A_COPIA =
+  /\bgit\b[^\n]*?\b(checkout|switch|reset|restore|merge|rebase|pull|stash|cherry-pick|revert|am|clean|worktree|bisect|commit|push|branch|tag|update-ref|symbolic-ref)\b/
+
+/** O comando aponta para a cópia no ar, pelo caminho, por ~/ ou pelo caminho a partir de casa? */
+export function comandoMexeNaCopia(comando, repo = REPO, casa = process.env.HOME ?? '') {
+  if (typeof comando !== 'string' || !MUDA_A_COPIA.test(comando)) return false
+  const relativo = casa && repo.startsWith(`${casa}/`) ? repo.slice(casa.length + 1) : null
+  const caminhos = [repo, relativo && `~/${relativo}`, relativo && `$HOME/${relativo}`, relativo].filter(Boolean)
+  return caminhos.some((c) => comando.includes(c))
+}
+
+const NEGADO_NA_COPIA =
+  'Bloqueado: a versão do A.P.O.L.O. no ar (branch, commit e arquivos da cópia) só muda pela' +
+  ' F.Ê.N.I.X., que observa a versão nova e volta sozinha se ela quebrar. Não tente outro' +
+  ' caminho. Responda que a voz deve usar a ferramenta fenix com a ação "trocar" e a branch' +
+  ' pedida; o histórico e o estado do Git continuam livres por git_status e git_log.'
+
+/**
  * Signature is (toolName, input, options) and it must return a PermissionResult
  * object. Returning a bare boolean silently denies everything, with the tool
  * name arriving undefined.
@@ -231,7 +260,11 @@ export function decideTool(name) {
  * consequence, like a `touch`. So a deny here is reliable; an absence of a call
  * here is not proof nothing ran.
  */
-export async function podeUsarFerramenta(toolName) {
+export async function podeUsarFerramenta(toolName, input) {
+  if (toolName === 'Bash' && comandoMexeNaCopia(input?.command)) {
+    console.log('[apolo] ferramenta Bash -> negada (mexe na cópia no ar)')
+    return { behavior: 'deny', message: NEGADO_NA_COPIA }
+  }
   const ok = decideTool(toolName)
   console.log(`[apolo] ferramenta ${toolName} -> ${ok ? 'permitida' : 'negada'}`)
   return ok

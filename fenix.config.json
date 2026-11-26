@@ -107,6 +107,7 @@
       "^bridge\\/chrome\\.mjs$",
       "^src\\/ui\\/sanitise\\.ts$",
       "^src\\/lib\\/autodev\\.ts$",
+      "^src\\/lib\\/trocaDeVersao\\.ts$",
       "^index\\.html$",
       "^vite\\.config\\.ts$",
       "^vite\\.popups\\.config\\.ts$",

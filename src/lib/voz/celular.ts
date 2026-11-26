@@ -12,6 +12,7 @@ import {
   type ResumoDoBomDia,
 } from '../bomDia'
 import { lerParametros, textoDaFenix } from '../fenix'
+import { criarTrocaDeVersao, textoDoFimDaTroca, trocaParaAnunciar, type FimDaTroca } from '../trocaDeVersao'
 import { connectGemini } from './gemini'
 import type { RealtimeSession, SessionGrant, ToolResult } from './types'
 import type { Blade } from '../../store'
@@ -60,6 +61,11 @@ export type MensagemDoCore = {
   saida?: string
   proposta?: PropostaDaFenix
   estado?: unknown
+  /** A prévia de uma troca de branch (docs/adr/0038). */
+  branch?: unknown
+  sha?: unknown
+  confirmar?: unknown
+  mesma?: unknown
 }
 type PropostaDaFenix = { id: string; script: string; motivo: string }
 type RespostaDoCore = {
@@ -69,6 +75,11 @@ type RespostaDoCore = {
   proposta?: PropostaDaFenix
   /** O quadro inteiro da A.U.R.O.R.A., quando o pedido foi o bom dia. */
   bomDia?: ResumoDoBomDia
+  /** A prévia de uma troca de branch (docs/adr/0038). */
+  branch?: string
+  sha?: string
+  confirmar?: boolean
+  mesma?: boolean
 }
 
 /** Os popups do bom dia na tela do celular; quem os desenha é src/popups.tsx. */
@@ -126,6 +137,8 @@ export function criarVozDoCelular(
   let dormirAoCalar: ReturnType<typeof setTimeout> | null = null
   /** `vistaEm`: quando a proposta chegou aqui; só uma fala depois disso confirma. */
   let propostas: (PropostaDaFenix & { vistaEm: number })[] = []
+  /** A última troca de branch já contada, para não repetir a cada estado novo. */
+  let trocaAnunciada: string | null = null
   const vigia = vigiarCancelamento(() => {
     if (tarefas.size) enviar({ cancelar: true })
   })
@@ -269,9 +282,16 @@ export function criarVozDoCelular(
     return { output: r.mensagem }
   }
 
+  /** Trocar de branch pela voz, com as mesmas regras do PC (src/lib/trocaDeVersao.ts). */
+  const trocaDeVersao = criarTrocaDeVersao({
+    pedir: (acao, extra) => comCoreTrabalhando(() => pedirAoCore('fenix', acao, extra, 45_000)),
+    ouviu: (desde) => ouviuConfirmacao(desde),
+  })
+
   const fenix = async (args: Record<string, unknown>): Promise<ToolResult> => {
     const acao = String(args.acao ?? '')
     armarOcioso()
+    if (acao === 'trocar') return { output: await trocaDeVersao.pedido(String(args.branch ?? '')) }
     // Como no desenvolvimento: quem confirma um script é a fala do Ricardo.
     if (acao === 'confirmar' || acao === 'cancelar') {
       const proposta = propostas.at(-1)
@@ -538,11 +558,21 @@ export function criarVozDoCelular(
           proposta: msg.proposta,
           // O bom dia vem no próprio quadro: agenda, notícias e desenvolvimento.
           bomDia: msg.type === 'aurora' ? (msg as unknown as ResumoDoBomDia) : undefined,
+          branch: typeof msg.branch === 'string' ? msg.branch : undefined,
+          sha: typeof msg.sha === 'string' ? msg.sha : undefined,
+          confirmar: msg.confirmar === true,
+          mesma: msg.mesma === true,
         })
         return
       }
       if (msg.type === 'autodev' && msg.estado) autodevEstado = msg.estado as AutodevEstado
       if (msg.type === 'fenix' && msg.estado) {
+        // O fim de uma troca de branch: o app segue aberto, e a voz conta uma vez.
+        const fim = trocaParaAnunciar((msg.estado as { ultimaTroca?: FimDaTroca | null }).ultimaTroca, trocaAnunciada)
+        if (fim) {
+          trocaAnunciada = fim.id
+          sessao?.prompt(textoDoFimDaTroca(fim))
+        }
         const vistas = new Map(propostas.map((p) => [p.id, p.vistaEm]))
         const novas = (msg.estado as { propostas?: PropostaDaFenix[] }).propostas ?? []
         propostas = novas.map((p) => ({ ...p, vistaEm: vistas.get(p.id) ?? Date.now() }))

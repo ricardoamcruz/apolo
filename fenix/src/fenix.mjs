@@ -170,8 +170,29 @@ export function criarFenix(
     versaoSegura: config.versaoSegura,
     instalar: config.instalar,
     log,
+    // A volta sozinha à versão segura, depois de quedas seguidas numa branch de fase.
+    aoTrocar: (r) => avisarTroca(r),
     ...tempos.versoes,
   })
+
+  /**
+   * O fim de uma troca de branch (docs/adr/0038). A ponte que pediu reiniciou no
+   * meio: o resultado vai para a ponte nova, no estado (quem conectar depois também
+   * vê) e na central de notificações, só com frases.
+   */
+  function avisarTroca(r) {
+    canal?.avisar({ type: 'versao:troca', ...r, versao: versoes.estado() })
+    canal?.transmitir({ type: 'estado', ...estado() })
+    const titulo = r.automatica ? 'voltei à versão segura' : r.ok ? 'troca de branch' : 'a troca de branch falhou'
+    const texto = r.ok
+      ? r.mensagem
+      : /nem voltar/.test(r.mensagem)
+        ? 'A troca falhou e não consegui voltar para a versão de antes: confira a cópia. O motivo ficou no eventos.log da Fênix.'
+        : /Nada foi trocado/.test(r.mensagem)
+          ? 'A troca falhou antes de mexer em qualquer coisa. O motivo ficou no eventos.log da Fênix.'
+          : `A ${r.para ?? 'branch nova'} não ficou de pé; voltei para a versão de antes, que segue no ar. O motivo ficou no eventos.log da Fênix.`
+    avisos.avisar({ titulo: `${config.nome}: ${titulo}`, texto, prioridade: r.ok && !r.automatica ? 'normal' : 'alta' })
+  }
 
   servicos.definir({
     aoCair: (nome, motivo) => servicos.ehVersionado(nome) && versoes.servicoCaiu(nome, motivo),
@@ -364,6 +385,13 @@ export function criarFenix(
       case 'versao:reverter':
         void versoes.reverter(msg)
         return
+      case 'versao:previa':
+        return versoes.previa(msg)
+      case 'versao:trocar': {
+        const { concluida, ...resposta } = await versoes.trocar(msg)
+        concluida?.then((r) => avisarTroca({ ...r, para: msg.branch }))
+        return resposta
+      }
       case 'rotina':
         return rotina(String(msg.nome ?? ''), msg.parametros)
       case 'comando:propor':
@@ -416,14 +444,24 @@ export function criarFenix(
       porta = await canal.ligar()
       await servicos.liberarPortas()
       servicos.ligarTodos()
-      if (interrompida) {
+      if (interrompida?.troca) {
+        // Uma troca de branch não é do autodesenvolvimento: não passa por versao:resultado.
+        canal.avisar({
+          type: 'versao:troca',
+          id: interrompida.id,
+          ok: false,
+          branch: interrompida.de.ref,
+          para: interrompida.para.ref,
+          mensagem: `A troca para a ${interrompida.para.ref} foi interrompida; voltei para a ${interrompida.de.ref}.`,
+        })
+      } else if (interrompida) {
         canal.avisar({
           type: 'versao:resultado',
           id: interrompida.id,
           tipo: interrompida.aprovada ? 'aprovado' : 'revertido',
           mensagem: interrompida.aprovada
-            ? 'A alteração aprovada está guardada na branch e a versão segura voltou ao ar.'
-            : 'Uma alteração em teste foi interrompida; a versão segura voltou ao ar.',
+              ? 'A alteração aprovada está guardada na branch e a versão segura voltou ao ar.'
+              : 'Uma alteração em teste foi interrompida; a versão segura voltou ao ar.',
         })
       }
       return porta

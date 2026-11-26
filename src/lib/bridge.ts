@@ -217,7 +217,12 @@ export async function bomDia(): Promise<BomDiaResposta> {
 
 /** Um script bash que a F.Ê.N.I.X. só roda com a confirmação do Ricardo (ADR 0025). */
 export type PropostaDaFenix = { id: string; script: string; motivo: string }
-export type EstadoDaFenix = { conectada: boolean; propostas: PropostaDaFenix[] }
+export type EstadoDaFenix = {
+  conectada: boolean
+  propostas: PropostaDaFenix[]
+  /** O fim da última troca de branch (docs/adr/0038), para anunciar uma vez. */
+  ultimaTroca?: { id: string; ok: boolean; mensagem: string; branch?: string; em?: number; automatica?: boolean } | null
+}
 export type FenixResposta = { ok: boolean; mensagem: string; saida?: string; proposta?: PropostaDaFenix }
 
 let onFenix: ((estado: EstadoDaFenix) => void) | null = null

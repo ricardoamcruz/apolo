@@ -85,7 +85,10 @@ async function ponteSobe(pasta) {
  * ficou, depois o que o agente fez.
  */
 export function textoDaRevisao(motivo, branch, resumo) {
-  const inicio = `A alteração NÃO foi ao ar. ${motivo} Ficou guardada na branch ${branch}.`
+  // Sem isto, o caminho para testar não existia, e ele foi achado por baixo da Fênix (docs/adr/0038).
+  const inicio =
+    `A alteração NÃO foi ao ar. ${motivo} Ficou guardada na branch ${branch}. ` +
+    'Para testar, peça para pôr essa branch no ar: a Fênix mostra o que muda, espera o sim e volta sozinha se quebrar.'
   return resumo ? `${inicio}\n\nO que foi feito: ${resumo}` : inicio
 }
 
@@ -460,7 +463,9 @@ export function criarAutodev({
     // Confirmar na tela sem nada que ele pudesse fazer.
     const base = await baseAtual()
     const motivo = (await impedimento()) ||
-      ((await atrasada(base)) ? `A ${base} local está atrás do GitHub. Atualize e reinicie antes.` : '')
+      ((await atrasada(base))
+        ? `A ${base} local está atrás do GitHub. Peça para pôr a ${base} no ar de novo: a Fênix traz a mais nova, e aí o trabalho parte dela.`
+        : '')
     if (motivo) {
       terminar(estado.id, 'falhou', motivo)
       return { ok: false, mensagem: motivo }

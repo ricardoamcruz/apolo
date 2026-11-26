@@ -107,7 +107,15 @@ test('o .env.local é lido antes de tudo em quem lê configuração', () => {
 })
 
 test('comandos: só um, simples e de leitura ou conferência', () => {
-  for (const ok of ['npm run build', 'npm run lint', 'git diff --stat', 'grep -n foo src/App.tsx']) {
+  for (const ok of [
+    'npm run build',
+    'npm run lint',
+    'git diff --stat',
+    'grep -n foo src/App.tsx',
+    'npm test',
+    'npm run test:fenix',
+    'node --test scripts/autodev.test.mjs fenix/test/',
+  ]) {
     assert.equal(comandoPermitido(ok), true, ok)
   }
   for (const nao of [
@@ -120,6 +128,11 @@ test('comandos: só um, simples e de leitura ou conferência', () => {
     'echo $(cat .env.local)',
     'find . -delete',
     'git diff --output=/tmp/x',
+    'npm run test:autodev:e2e',
+    'node --test ../fora.test.mjs',
+    'node --test scripts/../../fora.test.mjs',
+    'node -e x',
+    'npm run test:fenix && rm x',
   ]) {
     assert.equal(comandoPermitido(nao), false, nao)
   }
@@ -406,7 +419,7 @@ test('o aviso de revisão vem antes do resumo do agente', () => {
   const t = textoDaRevisao('Motivo.', 'fase-3/x', 'Pronto, removi o ícone.')
   assert.ok(t.indexOf('NÃO foi ao ar') < t.indexOf('Pronto'))
   assert.match(t, /fase-3\/x/)
-  assert.equal(textoDaRevisao('Motivo.', 'fase-3/x', ''), 'A alteração NÃO foi ao ar. Motivo. Ficou guardada na branch fase-3/x.')
+  assert.match(textoDaRevisao('Motivo.', 'fase-3/x', ''), /^A alteração NÃO foi ao ar\. Motivo\. Ficou guardada na branch fase-3\/x\. Para testar, peça para pôr essa branch no ar/)
 })
 
 test('checagem reprovada não troca nada', async () => {

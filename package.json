@@ -19,6 +19,7 @@
     "setup": "node scripts/setup.mjs",
     "rollback": "node fenix/fenix.mjs rollback",
     "atualizar": "node fenix/fenix.mjs rotina atualizar",
+    "trocar": "node fenix/fenix.mjs trocar",
     "avisar": "node fenix/fenix.mjs avisar",
     "hermes": "node --env-file-if-exists=.env.local hermes/hermes.mjs",
     "aurora": "node --env-file-if-exists=.env.local modules/aurora/aurora.mjs",

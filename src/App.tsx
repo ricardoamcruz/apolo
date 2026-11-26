@@ -41,6 +41,7 @@ import { esperaDeReligar, reservaDaTentativa } from './lib/voz/surdez'
 import { startAnalyser, micLevel, retomarAnalyser } from './lib/audio'
 import { foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/autodev'
 import { lerParametros, textoDaFenix } from './lib/fenix'
+import { criarTrocaDeVersao, textoDoFimDaTroca, trocaParaAnunciar, type FimDaTroca, type RespostaDaTroca } from './lib/trocaDeVersao'
 import { agradece, pedeModoMaos, vigiarCancelamento } from './lib/comandos'
 import {
   INTERVALO_DOS_POPUPS_MS,
@@ -158,6 +159,14 @@ function clearScreenAndReport(what: 'all' | 'panels' | 'transcript'): string | n
 
 /** Religou logo depois de cair: ele ainda está ali, esperando ser ouvido. */
 const AINDA_ESPERANDO_MS = 60_000
+
+/** Trocar de branch pela voz (docs/adr/0038): a prévia, o sim falado e a troca. */
+const trocaDeVersao = criarTrocaDeVersao({
+  pedir: (acao, extra) => fenix(acao, extra, 45_000) as Promise<RespostaDaTroca>,
+  ouviu: (desde) => ouviuConfirmacao(desde),
+})
+/** A troca já anunciada sobrevive à página recarregada pela branch nova. */
+const TROCA_ANUNCIADA = 'apolo:troca-anunciada'
 
 export default function App() {
   const store = useStore
@@ -392,6 +401,7 @@ export default function App() {
         }
         return { output: await comFenixTrabalhando(() => fenix(acao, { proposta: proposta.id }, 6 * 60_000)) }
       }
+      if (acao === 'trocar') return { output: await trocaDeVersao.pedido(String(args.branch ?? '')) }
       const extra = {
         nome: String(args.nome ?? ''),
         parametros: lerParametros(String(args.parametros ?? '')),
@@ -815,7 +825,23 @@ export default function App() {
 
     // O trabalho leva minutos, então o resultado é anunciado quando chega. Só
     // o que começou com esta página aberta: o estado salvo não é notícia.
-    watchFenix((estado) => store.getState().setFenix(estado))
+    // O fim de uma troca de branch chega à página nova, depois do reinício: espera a
+    // voz voltar para contar, e conta uma vez só (docs/adr/0038).
+    let anunciarTroca: number | undefined
+    watchFenix((estado) => {
+      store.getState().setFenix(estado)
+      const fim = trocaParaAnunciar(estado.ultimaTroca as FimDaTroca | null, localStorage.getItem(TROCA_ANUNCIADA))
+      if (!fim) return
+      clearInterval(anunciarTroca)
+      let tentativas = 0
+      anunciarTroca = window.setInterval(() => {
+        if (++tentativas > 90) return clearInterval(anunciarTroca)
+        if (!session.current) return
+        clearInterval(anunciarTroca)
+        localStorage.setItem(TROCA_ANUNCIADA, fim.id)
+        session.current.prompt(textoDoFimDaTroca(fim))
+      }, 1000)
+    })
     watchExtensoes((lista) => void aplicarExtensoes(lista as ExtensaoNaPonte[]))
     let acompanhando = false
     let testeAvisado = false

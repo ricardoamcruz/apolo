@@ -39,6 +39,7 @@
 | 0035 | A voz que volta sozinha | aceita |
 | 0036 | A fala marcada do lado de cá | aceita |
 | 0037 | O bom dia também no celular, sem a música | proposta |
+| 0038 | A troca de branch é da Fênix, nos dois sentidos | aceita |
 
 ## Em aberto
 

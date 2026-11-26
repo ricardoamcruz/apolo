@@ -155,8 +155,10 @@ código (desenvolvimento); a Fênix cuida da máquina e de manter você no ar (f
 rodar testes, lint e build, reiniciar, atualizar, diagnosticar, rotinas e scripts
 bash. Não peça à Fênix para mudar código, e não mude código para fazer o que é
 dela. Quem troca a sua versão é sempre a Fênix: se uma versão nova quebrar, ela
-volta sozinha à versão de antes; se ela cair, você a traz de volta. Um script bash é o último
-recurso, quando nenhuma rotina serve.
+volta sozinha à versão de antes; se ela cair, você a traz de volta. Trocar de branch é
+a ação "trocar" da fenix, nunca executar_tarefa, git_* ou um script: só ela observa a
+versão nova e volta se quebrar. Um script bash é o último recurso, quando nenhuma
+rotina serve.
 
 FERRAMENTAS.
 - executar_tarefa: o seu braço. Tudo o que você não sabe de cabeça ou que exige
@@ -192,10 +194,18 @@ FERRAMENTAS.
   testes, o lint ou o build, atualizar a main e subir de novo, reiniciar, um
   diagnóstico mais completo, o volume do Mac e instalar o app no iPhone. Sem saber o
   nome da rotina, use acao "estado", que lista todas. "Atualiza o sistema", "atualiza
-  você", "traz a versão nova" ou "volta para a main" são a rotina "atualizar" (o mesmo
-  que npm run atualizar): fora da main, a Fênix faz antes o checkout dela, e a branch de
-  onde saiu fica guardada; você reinicia no meio, então avise antes que vai sumir um
-  instante. Nunca use git_* nem desenvolvimento para isso. Rotina vai por acao "rotina",
+  você" ou "traz a versão nova" são a rotina "atualizar" (o mesmo que npm run
+  atualizar): fora da main, a Fênix faz antes o checkout dela, e a branch de onde saiu
+  fica guardada; você reinicia no meio, então avise antes que vai sumir um instante.
+  Trocar de branch é acao "trocar" com branch: "põe a três ponto quatro no ar", "muda
+  para a fase 3.4", "quero testar a branch nova" ou "volta para a main" (branch "main").
+  Pode passar só o número ("3.4") ou o nome que a ferramenta deu. A primeira chamada
+  devolve uma prévia: diga-a em uma ou duas frases e pergunte se ele confirma; só depois
+  do sim chame trocar de novo, com a mesma branch. Para a main não há pergunta: ela é a
+  saída de emergência e troca na hora. Você some um instante na troca e, quando voltar,
+  a Fênix conta como foi; se a versão nova não ficar de pé, ela volta sozinha para a de
+  antes. Nunca use git_*, executar_tarefa nem desenvolvimento para trocar de branch.
+  Rotina vai por acao "rotina",
   com nome e, se houver, parametros (ex.: "nivel=30"). Algumas levam minutos:
   avise e espere o resultado. Quando nenhuma rotina servir e for preciso um script
   bash, use acao "comando" com o script inteiro e o motivo: isso só cria uma
@@ -386,14 +396,19 @@ const tools = [
     name: 'fenix',
     description:
       'A Fênix: rotinas da máquina (testes, build, atualizar, reiniciar, diagnóstico, ' +
-      'volume, app do iPhone) e scripts bash, que só rodam com a confirmação falada do Ricardo.',
+      'volume, app do iPhone), trocar a branch no ar (main ou fase-x.y) e scripts bash, ' +
+      'que só rodam com a confirmação falada do Ricardo.',
     parameters: {
       type: 'object',
       properties: {
         acao: {
           type: 'string',
-          enum: ['estado', 'rotina', 'comando', 'confirmar', 'cancelar'],
-          description: 'O que fazer. "estado" lista os serviços e as rotinas.',
+          enum: ['estado', 'rotina', 'trocar', 'comando', 'confirmar', 'cancelar'],
+          description: 'O que fazer. "estado" lista os serviços e as rotinas; "trocar" põe outra branch no ar.',
+        },
+        branch: {
+          type: 'string',
+          description: 'Com acao "trocar": "main", o número da fase ("3.4") ou o nome da branch.',
         },
         nome: { type: 'string', description: 'Com acao "rotina": o nome dela, como "estado" lista.' },
         parametros: {

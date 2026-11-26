@@ -193,7 +193,8 @@ detalhe está em `docs/`.
   de teste. A `main` nunca recebe commit direto: só pull request. `autodev/<id>` só existe durante o
   teste. O VS Code é opcional (`APOLO_AUTODEV_VSCODE=1`) e fecha sozinho. Arquivos
   sensíveis (`bridge/autodev/politica.mjs`) nunca entram em teste sem revisão.
-  A conferência roda lint, tipos, build e `npm test`; ao aprovar, ele oferece o PR
+  O agente pode rodar os testes na cópia (ADR 0038), e a conferência roda lint, tipos,
+  build e `npm test`; ao aprovar, ele oferece o PR
   para a `main`, que só sai com o sim falado e `--writes` (revisão da ADR 0015).
   `desenvolvimento` com acao `backlog` lista "Pendências em etapas" numeradas
   (`etapa.posição`, contando os feitos); `propor` com `tarefa: "1.3"` faz o item
@@ -202,6 +203,14 @@ detalhe está em `docs/`.
   só do roadmap na branch no ar; na `main`, ou com teste no ar, ele espera em
   `~/.apolo/bugs-pendentes.md` (`registrarBug`).
   Motivos de rollback ficam em `~/.apolo/fenix/eventos.log`.
+- **Troca de branch (ADR 0038, RF-72):** só a Fênix troca a versão no ar, nos dois
+  sentidos: `previa` e `trocar` (`fenix/src/versoes.mjs`), pela voz (`fenix`, acao
+  `trocar`, com a lógica do sim em `src/lib/trocaDeVersao.ts`, sensível) ou por
+  `npm run trocar -- 3.4`. Para uma `fase-x.y` há prévia e o sim falado; para a `main`,
+  não. Ela observa e volta sozinha se quebrar, nunca apaga branch, e volta à `main`
+  depois de 3 quedas da ponte em 5 min numa branch de fase. O gate nega ao agente de
+  tarefas o Git que muda a cópia do A.P.O.L.O. (`comandoMexeNaCopia`): nunca troque
+  de branch por `executar_tarefa`, `git_*` ou script.
 - **A voz que volta (ADR 0035, RF-71):** a interface religa a voz sempre, e percebe a
   sessão surda (`src/lib/voz/surdez.ts`): outra conexão, modelos de
   `APOLO_GEMINI_RESERVAS` e, por fim, a transcrição do navegador indo como texto
@@ -297,6 +306,7 @@ npm run logs:celular # resume as medições do app (-- 7 para sete dias, --event
 npm run popups       # compila os popups da web para o app do iPhone
 npm run rollback     # descarta a alteração em teste e volta à main (com tudo parado)
 npm run atualizar    # pede à F.Ê.N.I.X. no ar que volte para a main (se estiver fora) e traga a mais nova; sai com 1 e o motivo se não der
+npm run trocar -- 3.4 # pede à F.Ê.N.I.X. no ar que ponha a branch no ar (main, o número da fase ou o nome), com prévia; volta sozinha se quebrar (ADR 0038)
 npm run avisar -- "título" "texto"  # a F.Ê.N.I.X. no ar manda o aviso pelo H.E.R.M.E.S. (Mac e iPhone)
 npm run hermes       # só o H.E.R.M.E.S., sem a Fênix (a F.Ê.N.I.X. já o sobe)
 npm run aurora       # só a A.U.R.O.R.A., sem a Fênix (a F.Ê.N.I.X. já a sobe)
@@ -306,7 +316,7 @@ npm run test:autodev # testes da política e do rollback
 npm run test:autodev:e2e # ciclo real com Chrome headless mudo (leva minutos, fora do npm test)
 npm run test:git     # testes do sub-módulo git (commit e pull request)
 npm run test:gateway # testes do canal do app e do H.E.R.M.E.S.
-npm run test:fenix   # testes da F.Ê.N.I.X. e do lado dela no A.P.O.L.O.
+npm run test:fenix   # testes da F.Ê.N.I.X. e do lado dela no A.P.O.L.O. (inclui a troca de branch, fenix/test/trocar.test.mjs)
 npm run test:hermes  # testes do H.E.R.M.E.S.
 npm run test:aurora  # testes da A.U.R.O.R.A.
 npm run test:comandos # testes dos comandos por voz (RF-20)

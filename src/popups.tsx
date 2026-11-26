@@ -3,6 +3,7 @@ import { useStore, type Blade, type Panel } from './store'
 import { Panels } from './ui/Panels'
 import { Blades, BladeTray } from './ui/Blades'
 import { comandarPopup } from './lib/comandosDePopup'
+import { INTERVALO_DOS_POPUPS_MS, PREFIXO_DO_BOM_DIA } from './lib/bomDia'
 import { criarVozDoCelular } from './lib/voz/celular'
 import './index.css'
 import './popups.css'
@@ -44,6 +45,18 @@ window.apoloVoz = criarVozDoCelular(
     return abertos
   },
   comandarPopup,
+  {
+    // A diagonal do bom dia, um popup de cada vez, como na web (docs/adr/0037).
+    abrir: (popups) => {
+      const s = useStore.getState()
+      for (const b of s.blades) if (b.id.startsWith(PREFIXO_DO_BOM_DIA)) s.closeBlade(b.id)
+      popups.forEach((b, i) => setTimeout(() => useStore.getState().pushBlade(b), i * INTERVALO_DOS_POPUPS_MS))
+    },
+    minimizar: () => {
+      const s = useStore.getState()
+      if (s.blades.some((b) => b.id.startsWith(PREFIXO_DO_BOM_DIA) && !b.minimized)) s.minimizeBlades()
+    },
+  },
 )
 
 // O toque precisa nascer aqui: só um gesto dentro da página destrava o áudio no iOS.

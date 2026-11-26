@@ -65,8 +65,13 @@ before(async () => {
 })
 after(() => gateway.fechar())
 
-test('o celular conversa, manda medições e pede ao core como o PC (ADR 0030)', () => {
-  assert.deepEqual([...MENSAGENS_DO_CELULAR].sort(), ['ask', 'autodev', 'extensao', 'fenix', 'interrupt', 'telemetria', 'voz_sessao'])
+test('o celular conversa, manda medições e pede ao core como o PC (ADR 0030 e 0037)', () => {
+  assert.deepEqual(
+    [...MENSAGENS_DO_CELULAR].sort(),
+    ['ask', 'aurora', 'autodev', 'extensao', 'fenix', 'interrupt', 'telemetria', 'voz_sessao'],
+  )
+  // Preferências de exibição seguem só no PC: a tela do celular é outra.
+  assert.equal(MENSAGENS_DO_CELULAR.has('preferencias'), false)
 })
 
 test('o H.E.R.M.E.S. e o lado dele na ponte são sensíveis: não entram em teste sem revisão', () => {

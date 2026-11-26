@@ -41,10 +41,20 @@ test('no celular, o desenvolvimento e a Fênix valem como no PC, confirmados pel
   for (const nome of ['executar_tarefa', 'desenvolvimento', 'fenix', 'ajustar_interface', 'ignorar_fala', 'dormir']) {
     assert.ok(declaracoes.includes(nome), nome)
   }
-  for (const nome of ['olhar_camera', 'diagnostico', 'bom_dia', 'musica']) assert.equal(declaracoes.includes(nome), false, nome)
+  for (const nome of ['olhar_camera', 'diagnostico']) assert.equal(declaracoes.includes(nome), false, nome)
   const texto = geminiSetup({ celular: true }).systemInstruction.parts[0].text
   assert.match(texto, /no celular não há botões de Confirmar ou\s+Aprovar/)
   assert.match(texto, /diga "confirmo"/)
+})
+
+test('o bom dia vai ao celular; a música, não (ADR 0037)', () => {
+  const declaracoes = geminiSetup({ celular: true }).tools[0].functionDeclarations.map((f) => f.name)
+  assert.ok(declaracoes.includes('bom_dia'))
+  // Sem tocador no celular, uma ferramenta de música só geraria promessa vazia.
+  assert.equal(declaracoes.includes('musica'), false)
+  const texto = geminiSetup({ celular: true }).systemInstruction.parts[0].text
+  assert.match(texto, /sem a música/)
+  assert.match(texto, /rock toca só no\s+computador/)
 })
 
 test('cancelar exige que a frase inteira seja a ordem', () => {

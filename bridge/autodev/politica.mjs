@@ -75,6 +75,8 @@ export const SENSIVEIS = [
   /^bridge\/chrome\.mjs$/,
   /^src\/ui\/sanitise\.ts$/,
   /^src\/lib\/autodev\.ts$/,
+  // O sim falado que põe uma branch de fase no ar (docs/adr/0038).
+  /^src\/lib\/trocaDeVersao\.ts$/,
   // CSP e o que roda como código de configuração, fora do navegador.
   /^index\.html$/,
   /^vite\.config\.ts$/,
@@ -156,6 +158,12 @@ export function leituraPermitida(raiz, repo, caminho) {
 const SHELL_ESPECIAL = /[;&|`$<>\n\\]/
 const COMANDOS = [
   /^npm run (lint|build)$/,
+  // Os testes também (docs/adr/0038): o agente que não confere o que fez gasta a
+  // conferência do A.P.O.L.O. descobrindo o erro. Rodam no mesmo sandbox, escrevendo
+  // só na cópia. O ciclo de ponta a ponta abre o Chrome e fica de fora.
+  /^npm test$/,
+  /^npm run test:(?!autodev:e2e$)[a-z]+(:[a-z]+)?$/,
+  /^node --test(?!.*\.\.)( [\w./-]+)+$/,
   /^npx (tsc|oxlint)( |$)/,
   /^git (status|diff|log|show)( |$)/,
   /^(ls|pwd|wc|head|tail|cat|grep|rg|find)( |$)/,

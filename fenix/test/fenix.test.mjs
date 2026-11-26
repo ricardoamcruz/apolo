@@ -357,6 +357,74 @@ test('a Fênix sobe os serviços, roda rotinas pelo canal e passa o endereço ao
   await fenix.encerrar()
 })
 
+test('trocar de branch pelo canal: a resposta sai na hora e o fim chega a quem está ligado (docs/adr/0038)', async (t) => {
+  const { execFileSync } = await import('node:child_process')
+  const pasta = temp()
+  const git = (...a) => execFileSync('git', a, { cwd: pasta, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  git('init', '-q', '-b', 'main')
+  git('config', 'user.email', 'teste@apolo.local')
+  git('config', 'user.name', 'Teste')
+  writeFileSync(join(pasta, '.gitignore'), 'dados/\nvisto-*.txt\n')
+  writeFileSync(join(pasta, 'versao.txt'), 'main\n')
+  writeFileSync(
+    join(pasta, 'app.mjs'),
+    `import { readFileSync, writeFileSync } from 'node:fs'
+     writeFileSync('visto-' + process.pid + '.txt', readFileSync('versao.txt', 'utf8'))
+     setInterval(() => {}, 1000)`,
+  )
+  writeFileSync(
+    join(pasta, 'fenix.config.json'),
+    JSON.stringify({
+      nome: 'teste',
+      pasta: join(pasta, 'dados'),
+      escuta: { porta: 0 },
+      servicos: [{ nome: 'app', comando: ['node', 'app.mjs'], versionado: true }],
+      protecao: { revisao: ['^fenix\\.config\\.json$'], branch: '^fase-\\d+(\\.\\d+)*\\/[a-z0-9]+(-[a-z0-9]+)*$' },
+    }),
+  )
+  git('add', '-A')
+  git('commit', '-qm', 'main')
+  git('switch', '-qc', 'fase-3.4/aurora-no-bolso')
+  writeFileSync(join(pasta, 'versao.txt'), 'fase\n')
+  git('commit', '-qam', 'fase')
+  git('switch', '-q', 'main')
+
+  const config = lerConfig(join(pasta, 'fenix.config.json'), {})
+  const tempos = { versoes: { subidaMs: 2000, estabilidadeMs: 200, intervaloMs: 20 } }
+  const fenix = criarFenix(config, { token: TOKEN, log() {}, saida: mudo, tempos })
+  limparDepois(t, fenix)
+  const porta = await fenix.iniciar()
+  const { ws, recebidas } = await conectar(porta)
+  await esperar(() => recebidas.some((m) => m.type === 'estado' && m.inicial))
+  const pedir = async (msg) => {
+    const id = Math.random()
+    ws.send(JSON.stringify({ ...msg, id }))
+    await esperar(() => recebidas.some((m) => m.resposta === id), 8000)
+    return recebidas.find((m) => m.resposta === id)
+  }
+  const previa = await pedir({ type: 'versao:previa', branch: '3.4' })
+  assert.equal(previa.ok, true, previa.mensagem)
+  assert.equal(previa.confirmar, true)
+  const inicio = await pedir({ type: 'versao:trocar', branch: previa.branch, sha: previa.sha })
+  assert.equal(inicio.ok, true, inicio.mensagem)
+  assert.equal('concluida' in inicio, false)
+  await esperar(() => recebidas.some((m) => m.type === 'versao:troca'), 8000)
+  const fim = recebidas.find((m) => m.type === 'versao:troca')
+  assert.equal(fim.ok, true, fim.mensagem)
+  assert.equal(git('branch', '--show-current'), 'fase-3.4/aurora-no-bolso')
+  // O serviço versionado subiu de novo, já lendo a branch nova.
+  await esperar(() => readdirSync(pasta).filter((f) => f.startsWith('visto-')).some((f) => readFileSync(join(pasta, f), 'utf8') === 'fase\n'))
+  const estado = await pedir({ type: 'estado' })
+  assert.equal(estado.versao.ultimaTroca.id, fim.id)
+  // E de volta para a main, sem prévia: a saída de emergência.
+  const volta = await pedir({ type: 'versao:trocar', branch: 'main' })
+  assert.equal(volta.ok, true, volta.mensagem)
+  await esperar(() => recebidas.filter((m) => m.type === 'versao:troca').length === 2, 8000)
+  assert.equal(git('branch', '--show-current'), 'main')
+  ws.close()
+  await fenix.encerrar()
+})
+
 test('os tempos do config valem só como números positivos e só os que existem', () => {
   const pasta = temp()
   writeFileSync(

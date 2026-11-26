@@ -7,6 +7,7 @@
  *   node fenix/fenix.mjs rollback [--config arquivo]
  *   node fenix/fenix.mjs rotina <nome> [parametro=valor...] [--config arquivo]
  *   node fenix/fenix.mjs avisar <título> <texto> [--alta] [--config arquivo]
+ *   node fenix/fenix.mjs trocar <branch> [--config arquivo]
  *
  * Sem `--config`, lê fenix.config.json da pasta atual. As opções (no A.P.O.L.O.,
  * --writes e --autodev) são as que o arquivo declara em "flags".
@@ -15,7 +16,9 @@
  * rollback manual, com tudo parado: volta à versão segura e descarta a alteração
  * em teste. `rotina` e `avisar` falam com a Fênix que já está no ar, pelo canal:
  * rodam uma rotina (`rotina atualizar`) ou mandam um aviso à central de
- * notificações. Todas saem com 0 quando deu certo e com 1, e o motivo, quando não.
+ * notificações. `trocar` põe no ar uma branch que já existe (a main, "3.4" ou o
+ * nome inteiro), com a mesma prévia e a mesma volta da voz (docs/adr/0038), e
+ * espera o fim. Todas saem com 0 quando deu certo e com 1, e o motivo, quando não.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
@@ -67,7 +70,7 @@ if (subcomando === 'rollback') {
       console.error(`Há alterações não commitadas (${sujos.split('\n').map((l) => l.trim().replace(/^\S{1,2}\s+/, '')).slice(0, 5).join(', ')}); guarde-as antes do rollback. Nada foi trocado.`)
       process.exit(1)
     }
-    const { de, para, aprovada } = JSON.parse(readFileSync(arqTransicao, 'utf8'))
+    const { de, para, aprovada, troca } = JSON.parse(readFileSync(arqTransicao, 'utf8'))
     if (de.ref === de.sha) gitManual('switch', '--quiet', '--detach', de.sha)
     else {
       let existe = true
@@ -81,7 +84,8 @@ if (subcomando === 'rollback') {
     }
     const agora = gitManual('rev-parse', '--abbrev-ref', 'HEAD')
     if (de.ref !== de.sha && agora !== de.ref) throw new Error(`pedi ${de.ref}, mas a cópia ficou em ${agora}`)
-    if (!aprovada) {
+    // Uma troca de branch interrompida só volta: a branch de destino é do Ricardo e fica.
+    if (!aprovada && !troca) {
       try {
         gitManual('branch', '-D', para.ref)
         console.log(`Descartei ${para.ref}. Para recuperar: git branch recuperada ${para.sha}`)
@@ -98,7 +102,7 @@ if (subcomando === 'rollback') {
   }
 }
 
-if (subcomando === 'rotina' || subcomando === 'avisar') {
+if (subcomando === 'rotina' || subcomando === 'avisar' || subcomando === 'trocar') {
   const alta = args.includes('--alta')
   const posicionais = args.filter((a) => !a.startsWith('--'))
   const token = process.env.FENIX_TOKEN?.trim() || (() => {
@@ -120,6 +124,12 @@ if (subcomando === 'rotina' || subcomando === 'avisar') {
       process.exit(1)
     }
     msg = { type: 'rotina', nome, parametros: Object.fromEntries(pares.map((p) => p.split(/=(.*)/s).slice(0, 2))) }
+  } else if (subcomando === 'trocar') {
+    if (!posicionais[0]) {
+      console.error('[fenix] diga para qual branch: node fenix/fenix.mjs trocar main (ou 3.4, ou o nome inteiro)')
+      process.exit(1)
+    }
+    msg = { type: 'versao:previa', branch: posicionais[0] }
   } else {
     const [titulo, ...resto] = posicionais
     if (!titulo || !resto.length) {
@@ -133,6 +143,33 @@ if (subcomando === 'rotina' || subcomando === 'avisar') {
   const ca = config.tls ? readFileSync(config.tls.cert) : undefined
   // Rotinas longas (o app do iPhone) levam até 45 minutos.
   const prazoMs = subcomando === 'rotina' ? (config.rotinas.find((r) => r.nome === msg.nome)?.prazoMs ?? 15 * 60_000) + 60_000 : 20_000
+  if (subcomando === 'trocar') {
+    // Quem digita o comando é o Ricardo: a prévia é lida aqui, e o comando é o sim.
+    const previa = await pedirAFenix({ url, token, ca, msg, prazoMs: 30_000 })
+    if (!previa.ok || previa.mesma) {
+      ;(previa.ok ? console.log : console.error)(`[fenix] ${previa.mensagem}`)
+      process.exit(previa.ok ? 0 : 1)
+    }
+    console.log(`[fenix] ${previa.mensagem}`)
+    const pedido = await pedirAFenix({ url, token, ca, msg: { type: 'versao:trocar', branch: previa.branch, sha: previa.sha } })
+    if (!pedido.ok || pedido.mesma) {
+      ;(pedido.ok ? console.log : console.error)(`[fenix] ${pedido.mensagem}`)
+      process.exit(pedido.ok ? 0 : 1)
+    }
+    console.log(`[fenix] ${pedido.mensagem}`)
+    // A resposta é só o começo: o fim aparece no estado, em ultimaTroca.
+    const limite = Date.now() + 15 * 60_000
+    while (Date.now() < limite) {
+      await new Promise((ok) => setTimeout(ok, 2000))
+      const e = await pedirAFenix({ url, token, ca, msg: { type: 'estado' } })
+      const fim = e.ok && e.versao?.ultimaTroca?.id === pedido.id ? e.versao.ultimaTroca : null
+      if (!fim) continue
+      ;(fim.ok ? console.log : console.error)(`[fenix] ${fim.mensagem}`)
+      process.exit(fim.ok ? 0 : 1)
+    }
+    console.error('[fenix] a troca não terminou em 15 min; confira o eventos.log da Fênix.')
+    process.exit(1)
+  }
   const r = await pedirAFenix({ url, token, ca, msg, prazoMs })
   ;(r.ok ? console.log : console.error)(`[fenix] ${r.mensagem ?? (r.ok ? 'feito.' : 'falhou, sem detalhe.')}`)
   if (r.saida) console.log(r.saida)
@@ -140,7 +177,7 @@ if (subcomando === 'rotina' || subcomando === 'avisar') {
 }
 
 if (subcomando !== 'iniciar') {
-  console.error(`[fenix] não conheço "${subcomando}". Use: iniciar (padrão), rollback, rotina ou avisar.`)
+  console.error(`[fenix] não conheço "${subcomando}". Use: iniciar (padrão), rollback, rotina, avisar ou trocar.`)
   process.exit(1)
 }
 

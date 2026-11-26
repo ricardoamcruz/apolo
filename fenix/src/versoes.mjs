@@ -40,6 +40,7 @@ const FALHAS_SEGUIDAS = 3
 /** Um `git fetch` preso num pedido de senha ou numa rede lenta não segura a Fênix. */
 export const PRAZO_GIT_MS = 30_000
 export const PRAZO_REDE_MS = 120_000
+export const PRAZO_BUSCA_MS = 15_000
 
 /** O que o Git deixa em disco quando uma operação ficou pela metade. */
 const PENDENTES = [
@@ -115,6 +116,9 @@ export function criarVersoes({
   estabilidadeMs = 30_000,
   intervaloMs = 1000,
   vigiaMs = 5000,
+  aoTrocar = () => {},
+  quedasParaVoltar = 3,
+  janelaDeQuedasMs = 5 * 60_000,
 }) {
   mkdirSync(pasta, { recursive: true })
   const arqTransicao = join(pasta, 'transicao.json')
@@ -152,6 +156,8 @@ export function criarVersoes({
   }
   const git = gitCom(PRAZO_GIT_MS)
   const gitRede = gitCom(PRAZO_REDE_MS)
+  /** A prévia de uma troca é pergunta falada: sem rede, segue com o que tem, sem esperar dois minutos. */
+  const gitBusca = gitCom(PRAZO_BUSCA_MS)
   const sim = (p) => p.then(() => true, () => false)
 
   const versaoAtual = async () => {
@@ -383,7 +389,296 @@ export function criarVersoes({
     }
   }
 
+  /** A última troca de branch (docs/adr/0038): quem chega depois do reinício fica sabendo. */
+  let ultimaTroca = null
+  /** Quando a ponte caiu fora de uma troca: muitas seguidas numa branch de fase voltam à segura. */
+  let quedasForaDaTroca = []
+
+  /** As branches que dá para pôr no ar: as locais e as do remoto, sem repetir. */
+  async function branchesConhecidas(remoto) {
+    const locais = (await git('for-each-ref', '--format=%(refname:short)', 'refs/heads').catch(() => '')).split('\n')
+    const remotas = (await git('for-each-ref', '--format=%(refname:short)', `refs/remotes/${remoto}`).catch(() => ''))
+      .split('\n')
+      .map((r) => r.slice(remoto.length + 1))
+    return [...new Set([...locais, ...remotas])].filter((b) => b && b !== 'HEAD' && (b === versaoSegura || branchValida(b)))
+  }
+
+  /** As de fase mais recentes, para dizer o que existe quando o pedido não bate. */
+  async function recentes(remoto, n = 4) {
+    const linhas = await git(
+      'for-each-ref',
+      '--sort=-committerdate',
+      '--format=%(refname:short)',
+      'refs/heads',
+      `refs/remotes/${remoto}`,
+    ).catch(() => '')
+    const nomes = linhas.split('\n').map((r) => (r.startsWith(`${remoto}/`) ? r.slice(remoto.length + 1) : r))
+    return [...new Set(nomes)].filter((b) => branchValida(b)).slice(0, n)
+  }
+
+  /**
+   * O que foi pedido, falado como sai da boca: "main", "3.4", "fase-3.4", o nome
+   * inteiro ou só a parte criativa ("aurora-no-bolso"). Devolve a branch ou o motivo.
+   */
+  async function resolverBranch(pedido, remoto) {
+    const p = String(pedido ?? '').trim().toLowerCase().replace(/^origin\//, '').replace(/^refs\/heads\//, '')
+    if (!p) return { motivo: 'Diga para qual branch trocar.' }
+    if (p === versaoSegura) return { branch: versaoSegura }
+    const todas = await branchesConhecidas(remoto)
+    if (todas.includes(p)) return { branch: p }
+    const numero = p.match(/^(?:fase[-\s]?)?(\d+(?:\.\d+)*)$/)?.[1]
+    const achadas = numero
+      ? todas.filter((b) => b.startsWith(`fase-${numero}/`))
+      : todas.filter((b) => b !== versaoSegura && (b.endsWith(`/${p}`) || b.startsWith(`${p}/`)))
+    if (achadas.length === 1) return { branch: achadas[0] }
+    if (achadas.length > 1) return { motivo: `Há mais de uma branch para "${pedido}": ${achadas.join(', ')}. Diga qual.` }
+    const existem = await recentes(remoto)
+    return {
+      motivo: `Não há branch "${pedido}" nesta cópia nem no ${remoto}.${existem.length ? ` As mais recentes: ${existem.join(', ')}.` : ''} Nada foi trocado.`,
+    }
+  }
+
+  /**
+   * O plano de uma troca de branch, antes de mexer em qualquer coisa: para onde
+   * vai, em que commit, o que muda e o que ninguém revisou. A branch local que
+   * está atrás da do remoto avança junto, só se der sem merge.
+   */
+  async function planejarTroca(pedido, { buscar = true } = {}) {
+    if (ocupado || emTeste) {
+      return { motivo: emTeste ? 'Há uma alteração em teste no ar: aprove ou descarte antes de trocar de branch.' : 'Já há uma troca em andamento.' }
+    }
+    const copia = await conferirCopia()
+    if (copia) return { motivo: copia }
+    const remoto = await remotoDe(versaoSegura)
+    let semRede = false
+    if (buscar && (await git('remote').catch(() => '')).split('\n').includes(remoto)) {
+      await gitBusca('fetch', '--prune', '--quiet', remoto).catch(() => (semRede = true))
+    }
+    const { branch, motivo } = await resolverBranch(pedido, remoto)
+    if (!branch) return { motivo }
+    const atual = await versaoAtual()
+    const sha = async (ref) => git('rev-parse', '--verify', '--quiet', `${ref}^{commit}`).catch(() => '')
+    const local = await sha(`refs/heads/${branch}`)
+    const doRemoto = await sha(`refs/remotes/${remoto}/${branch}`)
+    let alvo = local || doRemoto
+    let avancar = false
+    if (local && doRemoto && local !== doRemoto && (await sim(git('merge-base', '--is-ancestor', local, doRemoto)))) {
+      alvo = doRemoto
+      avancar = true
+    }
+    const plano = { branch, sha: alvo, de: atual, remoto, avancar, criar: !local, semRede }
+    if (atual.ref === branch && atual.sha === alvo) return { ...plano, mesma: true }
+    if (atual.ref === branch) {
+      // Já no ar, só atrás do remoto: avança no lugar, como numa atualização.
+      plano.avancar = true
+    }
+    const colisao = await conferirCopia(alvo)
+    if (colisao) return { motivo: colisao }
+    const nomes = (await git('diff', '--name-only', atual.sha, alvo)).split('\n').filter(Boolean)
+    plano.mudados = nomes
+    // O que a versão segura não tem e ninguém revisou: é o que ele precisa ouvir antes do sim.
+    const base = await sha(`refs/heads/${versaoSegura}`) || await sha(`refs/remotes/${remoto}/${versaoSegura}`)
+    const desdeASegura = base && branch !== versaoSegura
+      ? (await git('diff', '--name-only', `${base}...${alvo}`).catch(() => '')).split('\n').filter(Boolean)
+      : []
+    const { revisao, quebrados } = await barrados(protecao, desdeASegura, (f) => git('show', `${alvo}:${f}`))
+    plano.sensiveis = [...new Set([...revisao, ...quebrados])]
+    plano.aFrente = base && branch !== versaoSegura ? Number(await git('rev-list', '--count', `${base}..${alvo}`).catch(() => 0)) : 0
+    plano.ultimo = await git('log', '-1', '--format=%s', alvo).catch(() => '')
+    return plano
+  }
+
+  /** O plano em frases, para a voz ler antes de pedir o sim. */
+  function textoDoPlano(p) {
+    const onde = (o) => (o.ref === o.sha ? `um commit solto (${curto(o.sha)})` : `a ${o.ref}`)
+    const de = p.de.ref === p.de.sha ? `de um commit solto (${curto(p.de.sha)})` : `da ${p.de.ref}`
+    // A mesma branch, só atrás do remoto: é trazer a mais nova, não trocar.
+    if (p.de.ref === p.branch) {
+      return (
+        `Trazer a ${p.branch}, que já está no ar, para o commit mais novo do ${p.remoto}${p.ultimo ? ` (último: "${p.ultimo}")` : ''}. ` +
+        `A ponte reinicia; se não ficar de pé, volto para o commit de agora.`
+      )
+    }
+    const partes = [`Trocar ${de} para a ${p.branch}`]
+    if (p.branch !== versaoSegura) {
+      partes[0] += p.aFrente ? `, ${p.aFrente} ${p.aFrente === 1 ? 'commit' : 'commits'} à frente da ${versaoSegura}` : ''
+      if (p.ultimo) partes[0] += ` (último: "${p.ultimo}")`
+    }
+    partes[0] += '.'
+    if (p.criar) partes.push(`Ela só existe no ${p.remoto}; trago de lá.`)
+    else if (p.avancar) partes.push(`A cópia local estava atrás do ${p.remoto} e avança junto.`)
+    if (p.semRede) partes.push(`Não alcancei o ${p.remoto}: vou com o que há nesta máquina.`)
+    if (p.sensiveis?.length) {
+      partes.push(`Ela muda arquivos sensíveis que não entraram na ${versaoSegura}: ${p.sensiveis.slice(0, 6).join(', ')}${p.sensiveis.length > 6 ? '...' : ''}.`)
+    }
+    partes.push(`A ponte reinicia na troca; se a ${p.branch} não ficar de pé, volto sozinha para ${onde(p.de)}.`)
+    return partes.join(' ')
+  }
+
+  /** Volta para onde a troca partiu, e reinstala se ela tinha reinstalado. */
+  async function voltarDaTroca(de, reinstalou) {
+    await desligar()
+    const agora = await versaoAtual()
+    // A mesma branch, que avançou no lugar: voltar pelo nome a deixaria no commit novo.
+    if (de.ref !== de.sha && agora.ref === de.ref) {
+      await git('reset', '--hard', '--quiet', de.sha)
+      await atualizarSubmodulos()
+    } else {
+      await trocarPara(de, { conferirSha: false })
+    }
+    if (reinstalou) await rodarInstalar().catch((err) => anotar(`[fenix] ATENÇÃO: a reinstalação da versão anterior falhou: ${err.message}`))
+  }
+
+  /** A troca em si: chamada com `ocupado` já marcado, nunca deixa os serviços desligados. */
+  async function executarTroca(id, plano, motivoDaTroca) {
+    const { branch, sha, de } = plano
+    const onde = (o) => (o.ref === o.sha ? `o commit solto ${curto(o.sha)}` : `a ${o.ref}`)
+    const transicao = { id, troca: true, de, para: { ref: branch, sha } }
+    let desligados = false
+    let mexeu = false
+    let reinstalar = false
+    const fim = (ok, mensagem) => {
+      ultimaTroca = { id, ok, mensagem, branch: ok ? branch : de.ref, de: de.ref, para: branch, em: Date.now() }
+      return { id, ok, mensagem, branch: ultimaTroca.branch }
+    }
+    try {
+      writeFileSync(arqTransicao, JSON.stringify(transicao, null, 2))
+      anotar(`[fenix] trocando ${onde(de)} pela ${branch} (${curto(sha)})${motivoDaTroca ? `: ${motivoDaTroca}` : ''}`)
+      await desligar()
+      desligados = true
+      mexeu = true
+      if (de.ref === branch) {
+        await git('merge', '--ff-only', '--quiet', sha)
+      } else {
+        // A branch local atrás do remoto avança antes, sem merge: não é a que está no ar.
+        if (plano.avancar && !plano.criar) await git('branch', '--force', branch, sha)
+        await trocarPara({ ref: branch, sha })
+      }
+      await atualizarSubmodulos()
+      const agora = await versaoAtual()
+      if (agora.ref !== branch || agora.sha !== sha) {
+        throw new Error(`a cópia ficou em ${agora.ref} (${curto(agora.sha)}), e não em ${branch} (${curto(sha)})`)
+      }
+      reinstalar = Boolean(instalar && (plano.mudados ?? []).some((f) => instalar.quando.some((re) => re.test(f))))
+      if (reinstalar) await rodarInstalar()
+      queda = null
+      ligar()
+      desligados = false
+      const motivo = await observar(plano.interfaces > 0)
+      if (!motivo) {
+        rmSync(arqTransicao, { force: true })
+        quedasForaDaTroca = []
+        anotar(`[fenix] ${branch} no ar (${curto(sha)}); antes estava ${onde(de)}`)
+        const guardada = de.ref !== de.sha && de.ref !== branch ? ` A ${de.ref} continua guardada.` : ''
+        return fim(true, `A ${branch} está no ar.${guardada}`)
+      }
+      anotar(`[fenix] a ${branch} não ficou de pé (${motivo}); voltando para ${onde(de)}`)
+      await voltarDaTroca(de, reinstalar)
+      queda = null
+      ligar()
+      rmSync(arqTransicao, { force: true })
+      const naoSubiu = await esperarSubida()
+      if (naoSubiu) anotar(`[fenix] ATENÇÃO: a versão anterior também falhou: ${naoSubiu}`)
+      return fim(false, `${motivo} Voltei para ${onde(de)}, que segue no ar; a ${branch} continua guardada.`)
+    } catch (err) {
+      anotar(`[fenix] falha na troca para ${branch}: ${err.message}`)
+      if (!mexeu) {
+        rmSync(arqTransicao, { force: true })
+        return fim(false, `Não consegui trocar para a ${branch}: ${err.message}. Nada foi trocado.`)
+      }
+      try {
+        await voltarDaTroca(de, reinstalar)
+        rmSync(arqTransicao, { force: true })
+        anotar(`[fenix] de volta para ${onde(de)} depois da falha`)
+        return fim(false, `Não consegui trocar para a ${branch}: ${err.message}. Voltei para ${onde(de)}.`)
+      } catch (falha) {
+        // transicao.json fica: a próxima partida tenta voltar de novo.
+        anotar(`[fenix] ATENÇÃO: não consegui voltar para ${onde(de)}: ${falha.message}`)
+        return fim(false, `Não consegui trocar para a ${branch} (${err.message}) nem voltar para ${onde(de)} (${falha.message}). Confira a cópia com git status.`)
+      }
+    } finally {
+      queda = null
+      if (desligados) ligar()
+    }
+  }
+
+  /**
+   * Muitas quedas da ponte numa branch de fase, fora de qualquer troca: a versão
+   * está quebrada e a voz, muda, então ninguém consegue pedir a volta. A Fênix
+   * volta sozinha à versão segura (docs/adr/0038).
+   */
+  function quedaForaDaTroca(nome, motivo) {
+    const agora = Date.now()
+    quedasForaDaTroca = [...quedasForaDaTroca.filter((t) => agora - t < janelaDeQuedasMs), agora]
+    if (quedasForaDaTroca.length < quedasParaVoltar) return
+    quedasForaDaTroca = []
+    void (async () => {
+      const { ref } = await versaoAtual().catch(() => ({ ref: versaoSegura }))
+      if (ref === versaoSegura || ocupado || emTeste) return
+      // A frase vai ao aviso; o motivo técnico (o código de saída) fica só no log.
+      const porque = `O serviço ${nome} caiu ${quedasParaVoltar} vezes em ${Math.round(janelaDeQuedasMs / 60_000)} min na ${ref}.`
+      const plano = await planejarTroca(versaoSegura, { buscar: false }).catch((err) => ({ motivo: err.message }))
+      if (!plano.branch || plano.mesma || ocupado || emTeste) {
+        if (plano.motivo) anotar(`[fenix] ATENÇÃO: ${porque} Não consegui voltar à ${versaoSegura}: ${plano.motivo}`)
+        return
+      }
+      ocupado = true
+      try {
+        const r = await executarTroca(`queda-${agora}`, plano, `${porque} Último motivo: ${motivo}`)
+        aoTrocar({ ...r, automatica: true, mensagem: r.ok ? `${porque} Voltei para a ${versaoSegura}; a ${ref} continua guardada.` : r.mensagem })
+      } finally {
+        ocupado = false
+      }
+    })()
+  }
+
   return {
+    /**
+     * O que uma troca de branch faria, sem fazer (docs/adr/0038). `confirmar` diz
+     * se ela precisa do sim falado do Ricardo: só voltar à versão segura não precisa.
+     */
+    async previa({ branch } = {}) {
+      try {
+        const p = await planejarTroca(branch)
+        if (!p.branch) return { ok: false, mensagem: p.motivo }
+        if (p.mesma) return { ok: true, mesma: true, branch: p.branch, sha: p.sha, mensagem: `Já estou na ${p.branch}, no commit mais novo que conheço.` }
+        return {
+          ok: true,
+          branch: p.branch,
+          sha: p.sha,
+          sensiveis: p.sensiveis,
+          confirmar: p.branch !== versaoSegura,
+          mensagem: textoDoPlano(p),
+        }
+      } catch (err) {
+        return { ok: false, mensagem: `Não consegui preparar a troca: ${err.message}. Nada foi trocado.` }
+      }
+    },
+
+    /**
+     * Põe no ar uma branch que já existe (a segura ou uma de fase). Responde já, com
+     * a troca começando ou o motivo de não começar; o fim chega em `concluida`,
+     * porque a ponte que pediu reinicia no meio. `sha` é o da prévia: se a branch
+     * andou depois dela, a troca não acontece sem uma prévia nova.
+     */
+    async trocar({ id = `troca-${Date.now()}`, branch, sha, interfaces = 0 } = {}) {
+      let plano
+      try {
+        plano = await planejarTroca(branch, { buscar: false })
+      } catch (err) {
+        return { ok: false, mensagem: `Não consegui preparar a troca: ${err.message}. Nada foi trocado.` }
+      }
+      if (!plano.branch) return { ok: false, mensagem: plano.motivo }
+      if (sha && plano.sha !== sha) {
+        return { ok: false, mensagem: `A ${plano.branch} mudou desde a prévia (agora em ${curto(plano.sha)}); peça a troca de novo. Nada foi trocado.` }
+      }
+      if (plano.mesma) return { ok: true, mesma: true, mensagem: `Já estou na ${plano.branch}.` }
+      if (ocupado || emTeste) return { ok: false, mensagem: 'Já há uma troca em andamento.' }
+      ocupado = true
+      const concluida = executarTroca(id, { ...plano, interfaces }).finally(() => (ocupado = false))
+      return { ok: true, id, mensagem: `Trocando para a ${plano.branch}; a ponte reinicia e eu volto em instantes.`, concluida }
+    },
+
     /** Troca para o commit verificado, confere que subiu e deixa em teste. */
     async aplicar({ id, sha, branch, interfaces = 0 }) {
       if (ocupado || emTeste) return notificar({ id, tipo: 'recusado', mensagem: 'Já há uma troca em andamento.' })
@@ -519,11 +814,16 @@ export function criarVersoes({
     async recuperar() {
       const transicao = lerJson(arqTransicao, null)
       if (!transicao) return null
-      anotar(`[fenix] troca sem aprovação encontrada; voltando para ${transicao.de.ref}`)
+      anotar(
+        transicao.troca
+          ? `[fenix] troca para a ${transicao.para.ref} interrompida; voltando para ${transicao.de.ref}`
+          : `[fenix] troca sem aprovação encontrada; voltando para ${transicao.de.ref}`,
+      )
       const copia = await conferirCopia(transicao.de.sha)
       if (copia) throw new Error(`não consegui voltar para ${transicao.de.ref}: ${copia}`)
       await trocarPara(transicao.de, { conferirSha: false })
-      if (!transicao.aprovada) {
+      // Uma troca de branch não cria nada: a branch de destino é do Ricardo e fica.
+      if (!transicao.aprovada && !transicao.troca) {
         await apagarBranch(transicao.para.ref)
         anotar(`[fenix] ${transicao.para.ref} descartada (${transicao.para.sha})`)
       }
@@ -533,7 +833,10 @@ export function criarVersoes({
 
     /** Um serviço versionado caiu. Devolve true se quem cuida disso é a troca. */
     servicoCaiu(nome, motivo) {
-      if (!ocupado && !emTeste) return false
+      if (!ocupado && !emTeste) {
+        quedaForaDaTroca(nome, motivo)
+        return false
+      }
       queda = `O serviço ${nome} caiu: ${motivo}.`
       return true
     },
@@ -550,6 +853,7 @@ export function criarVersoes({
         troca: emTeste ? 'testando' : ocupado ? 'aplicando' : null,
         id: t?.id ?? null,
         branch: t?.para?.ref ?? null,
+        ultimaTroca,
       }
     },
 

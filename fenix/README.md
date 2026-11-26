@@ -26,6 +26,12 @@ npm test   # dentro desta pasta: node --test test/
   `index.lock`, alterações e não rastreados que o alvo sobrescreveria) e, no fim,
   que HEAD está na branch e no commit pedidos (docs/adr/0029). O Git roda com
   prazo e sem pedir senha; a falha chega em uma linha, com o motivo.
+- **Troca de branch** (docs/adr/0038). `versao:previa` diz o que a troca faria (a
+  branch achada pelo nome falado, o commit, os sensíveis sem revisão);
+  `versao:trocar` põe no ar uma branch que já existe (a segura ou uma de fase, local
+  ou só no remoto), observa e volta sozinha se ela não ficar de pé. Nunca apaga
+  branch. Fora de troca, 3 quedas de um serviço versionado em 5 min numa branch que
+  não é a segura voltam à segura (`quedasParaVoltar`, `janelaDeQuedasMs`).
 - **Rotinas.** As do config (sem shell, parâmetros por formato) e três próprias:
   `reiniciar`, `atualizar` (`fetch` do remoto da versão segura, `merge --ff-only`
   conferido, reinstala se preciso, sobe, volta ao commit de antes se quebrar; local
@@ -65,16 +71,20 @@ WebSocket em `/fenix`, com `Authorization: Bearer <token>`. O token vem de
 | `versao:aplicar` | `id`, `sha`, `branch`, `interfaces` | depois, aviso `versao:resultado` |
 | `versao:aprovar` | `id`, `branch` | depois, aviso `versao:resultado` |
 | `versao:reverter` | `id` | depois, aviso `versao:resultado` |
+| `versao:previa` | `branch` (nome, "3.4" ou "main") | `ok`, `branch`, `sha`, `confirmar`, `sensiveis`, `mensagem` |
+| `versao:trocar` | `branch`, `sha` (o da prévia), `interfaces` | `ok`, `id`, `mensagem` já; depois, aviso `versao:troca` |
 | `avisar` | `titulo`, `texto`, `prioridade` | `ok`, `mensagem`, `entrega` (o que a central respondeu) |
 
 Pedido com `id` recebe `{ type: '<pedido>:resposta', resposta: id, ... }`. Avisos:
 `versao:resultado` (`tipo`: `em_teste`, `aprovado`, `revertido`, `recusado`,
-`falhou`, com `versao` junto) e `estado` (a cada mudança de serviço; o primeiro de
+`falhou`, com `versao` junto), `versao:troca` (`id`, `ok`, `mensagem`, `branch` no ar,
+também em `estado().versao.ultimaTroca`) e `estado` (a cada mudança de serviço; o primeiro de
 cada conexão traz `inicial: true`). Aviso sem ninguém conectado espera o próximo.
 Um cliente com o cabeçalho `x-fenix-cliente: avulso` (a linha de comando) só faz
 os próprios pedidos: não recebe a fila nem os avisos.
 
-Da linha de comando, com a Fênix no ar: `node fenix/fenix.mjs rotina atualizar`
+Da linha de comando, com a Fênix no ar: `node fenix/fenix.mjs rotina atualizar`,
+`node fenix/fenix.mjs trocar <branch>` (mostra a prévia e espera o fim)
 e `node fenix/fenix.mjs avisar "título" "texto" [--alta]`. Saem com 0 quando deu
 certo e com 1, e o motivo, quando não.
 

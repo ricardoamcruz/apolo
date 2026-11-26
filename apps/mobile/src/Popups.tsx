@@ -29,8 +29,11 @@ export type ControleDePopups = {
   doCore: (mensagem: unknown) => void
 }
 
-/** Um pedido da voz ao core: autodesenvolvimento ou Fênix. Veja src/lib/voz/celular.ts. */
-export type PedidoAoCore = { id: string; tipo: 'autodev' | 'fenix'; acao: string } & Record<string, unknown>
+/**
+ * Um pedido da voz ao core: autodesenvolvimento, Fênix ou o bom dia da A.U.R.O.R.A.
+ * Veja src/lib/voz/celular.ts.
+ */
+export type PedidoAoCore = { id: string; tipo: 'autodev' | 'fenix' | 'aurora'; acao: string } & Record<string, unknown>
 
 /** O que a página manda ao app. Veja src/lib/voz/celular.ts. */
 export type MensagemDaPagina = {

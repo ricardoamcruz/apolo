@@ -18,12 +18,16 @@ export type EventosDoCanal = {
   aoMedir?: (nome: string, ms?: number, info?: string) => void
   /** Mensagem de uma extensão entre dispositivos (docs/adr/0022). Nada usa ainda. */
   aoExtensao?: (extensao: string, dados: unknown) => void
-  /** Resposta ou estado do autodesenvolvimento e da Fênix, para a voz (docs/adr/0030). */
+  /** Resposta ou estado do autodesenvolvimento, da Fênix e do bom dia (docs/adr/0030 e 0037). */
   aoCore?: (quadro: Record<string, unknown>) => void
 }
 
-/** Os pedidos ao core que o celular pode fazer, como a interface do PC (docs/adr/0030). */
-export const TIPOS_DO_CORE = new Set(['autodev', 'fenix'])
+/**
+ * Os pedidos ao core que o celular pode fazer, como a interface do PC (docs/adr/0030).
+ * `aurora` é o bom dia (docs/adr/0037). Quem decide de verdade é a ponte
+ * (`MENSAGENS_DO_CELULAR`, em bridge/hermes.mjs): aqui é só o que o app repassa.
+ */
+export const TIPOS_DO_CORE = new Set(['autodev', 'fenix', 'aurora'])
 
 /** O pedaço do WebSocket que o canal usa. Nos testes, entra o pacote `ws`. */
 export type SocketDoCanal = {
@@ -174,8 +178,8 @@ export class Canal {
   }
 
   /**
-   * Um pedido ao core (`autodev` ou `fenix`), com o id da voz. A resposta volta por
-   * `aoCore`, com `resposta` igual a esse id. Quem decide se pode é a ponte.
+   * Um pedido ao core (`autodev`, `fenix` ou `aurora`), com o id da voz. A resposta
+   * volta por `aoCore`, com `resposta` igual a esse id. Quem decide se pode é a ponte.
    */
   pedirAoCore({ tipo, ...pedido }: { tipo: string; id: string; acao: string } & Record<string, unknown>) {
     if (this.socket?.readyState !== ABERTO || !TIPOS_DO_CORE.has(tipo)) return false

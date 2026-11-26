@@ -64,7 +64,7 @@ import {
 } from './hermes.mjs'
 import { criarClienteFenix } from './fenix.mjs'
 import { criarRenascimento, lerReceita } from './renascer.mjs'
-import { criarClienteAurora } from './aurora.mjs'
+import { criarClienteAurora, semAMusica } from './aurora.mjs'
 import { criarSondas } from './sondas.mjs'
 import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog, registrarBug, versaoNoAr } from './desenvolvimento.mjs'
 import { criarTelemetria } from './telemetria.mjs'
@@ -966,6 +966,12 @@ const fenix = criarClienteFenix({
   },
   aoReceber: (msg) => {
     if (msg.type === 'versao:resultado') return autodev.resultado(msg)
+    // O fim de uma troca de branch (docs/adr/0038): esta ponte já é a da versão nova.
+    if (msg.type === 'versao:troca') {
+      const { type: _t, versao, ...troca } = msg
+      estadoDaFenix = { ...(estadoDaFenix ?? {}), versao: { ...(versao ?? estadoDaFenix?.versao ?? {}), ultimaTroca: { ...troca, em: troca.em ?? Date.now() } } }
+      return avisarTodos({ type: 'fenix', estado: resumoDaFenix() })
+    }
     // A voz não voltou sozinha: a Fênix pede uma página nova (docs/adr/0035).
     if (msg.type === 'interface:recarregar') return broadcast({ type: 'recarregar' })
     if (msg.type === 'estado') {
@@ -993,6 +999,8 @@ const renascimento = fenix ? criarRenascimento({ receita: lerReceita(), conectad
 const resumoDaFenix = () => ({
   conectada: Boolean(fenix?.conectado()),
   propostas: estadoDaFenix?.propostas ?? [],
+  // A interface anuncia o fim de uma troca de branch uma vez, mesmo depois de recarregar.
+  ultimaTroca: estadoDaFenix?.versao?.ultimaTroca ?? null,
 })
 
 const autodev = criarAutodev({
@@ -1064,7 +1072,7 @@ const PRAZO_DA_ROTINA_MS = 50 * 60_000
  * --writes, como o resto do gate, e a confirmação do Ricardo, conferida na
  * interface; a Fênix ainda recusa se houver uma versão sem revisão no ar.
  */
-async function pedirAFenix({ acao, nome, parametros, script, motivo, proposta }) {
+async function pedirAFenix({ acao, nome, parametros, script, motivo, proposta, branch, sha }) {
   if (!fenix) return { ok: false, mensagem: 'A Fênix não está rodando: suba o Apolo com npm start.' }
   if (!fenix.conectado()) return { ok: false, mensagem: 'A Fênix está fora do ar agora.' }
   const atualizar = async (r) => {
@@ -1087,12 +1095,19 @@ async function pedirAFenix({ acao, nome, parametros, script, motivo, proposta })
       return {
         ok: true,
         mensagem:
-          `${await versaoNoAr({ repo: REPO })}\nServiços: ${servicos.join('; ')}.\nRotinas: ${rotinas.join(' | ')}.\n` +
+          `${await versaoNoAr({ repo: REPO })}${r.versao?.ultimaTroca ? ` Última troca de branch: ${r.versao.ultimaTroca.mensagem}` : ''}\nServiços: ${servicos.join('; ')}.\nRotinas: ${rotinas.join(' | ')}.\n` +
+          'Trocar de branch não é rotina: é a acao "trocar", com a branch (main, o número da fase ou o nome).\n' +
           `Comandos livres: ${r.comandosLivres ? 'liberados, com confirmação' : 'desligados nesta partida (só com npm start -- --writes); ler a branch, o histórico e o resto não depende disso'}.`,
       }
     }
     case 'rotina':
       return fenix.pedir({ type: 'rotina', nome, parametros }, PRAZO_DA_ROTINA_MS)
+    // Trocar de branch (docs/adr/0038): primeiro a prévia, que a voz lê; depois a
+    // troca, com o commit da prévia. Quem confere o sim falado é a interface.
+    case 'previa':
+      return fenix.pedir({ type: 'versao:previa', branch: String(branch ?? '') }, 30_000)
+    case 'trocar':
+      return fenix.pedir({ type: 'versao:trocar', branch: String(branch ?? ''), sha: String(sha ?? ''), interfaces: interfacesDoPc.size })
     case 'comando':
       if (!ALLOW_WRITES) {
         return { ok: false, mensagem: 'Comandos livres exigem o A.P.O.L.O. iniciado com npm start -- --writes.' }
@@ -1628,11 +1643,14 @@ const atender = (socket, { celular = false } = {}) => {
       broadcast({ type: 'preferencias', valores: preferencias.gravar(msg.valores) })
     }
 
-    if (msg.type === 'aurora' && !celular) {
+    // O bom dia, no PC e no celular (docs/adr/0026 e 0037). Lá vai sem a música.
+    if (msg.type === 'aurora') {
       void Promise.all([
         aurora ? aurora.bomDia() : Promise.resolve({ ok: false, mensagem: 'falta APOLO_AURORA_TOKEN no .env.local' }),
         estadoDoDesenvolvimento({ repo: REPO, autodev: autodev.estado() }),
-      ]).then(([r, desenvolvimento]) => send({ ...r, desenvolvimento, type: 'aurora', resposta: msg.id }))
+      ]).then(([r, desenvolvimento]) =>
+        send({ ...(celular ? semAMusica(r) : r), desenvolvimento, type: 'aurora', resposta: msg.id }),
+      )
     }
 
     if (msg.type === 'fenix' && typeof msg.acao === 'string') {

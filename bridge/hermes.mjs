@@ -28,9 +28,20 @@ export const ROTAS_DE_MIDIA = /^\/(img|media|file|page)\?/
  * bash). As mesmas travas valem: scripts só com --writes, autodev só com --autodev,
  * e confirmar, aprovar e abrir o PR só com o sim falado do Ricardo, conferido na
  * transcrição do microfone do celular (src/lib/voz/celular.ts), como no PC.
- * Preferências e o bom dia continuam só no PC.
+ *
+ * Desde a ADR 0037, `aurora` também: é o bom dia, só leitura (um GET à A.U.R.O.R.A.,
+ * bridge/aurora.mjs), e o celular o recebe sem a música. Preferências seguem só no PC.
  */
-export const MENSAGENS_DO_CELULAR = new Set(['ask', 'interrupt', 'voz_sessao', 'telemetria', 'extensao', 'autodev', 'fenix'])
+export const MENSAGENS_DO_CELULAR = new Set([
+  'ask',
+  'interrupt',
+  'voz_sessao',
+  'telemetria',
+  'extensao',
+  'autodev',
+  'fenix',
+  'aurora',
+])
 
 export const TOKEN_MINIMO = 32
 

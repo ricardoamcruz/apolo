@@ -33,7 +33,6 @@ import {
   assumirVoz,
   watchDona,
   watchRecarregar,
-  type BomDiaResposta,
   type FenixResposta,
 } from './lib/bridge'
 import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/realtime'
@@ -42,8 +41,16 @@ import { esperaDeReligar, reservaDaTentativa } from './lib/voz/surdez'
 import { startAnalyser, micLevel, retomarAnalyser } from './lib/audio'
 import { foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/autodev'
 import { lerParametros, textoDaFenix } from './lib/fenix'
+import { criarTrocaDeVersao, textoDoFimDaTroca, trocaParaAnunciar, type FimDaTroca, type RespostaDaTroca } from './lib/trocaDeVersao'
 import { agradece, pedeModoMaos, vigiarCancelamento } from './lib/comandos'
-import { INTERVALO_DOS_POPUPS_MS, PREFIXO_DO_BOM_DIA, descreverPopups, popupsDoBomDia } from './lib/bomDia'
+import {
+  INTERVALO_DOS_POPUPS_MS,
+  LEITURA_DO_BOM_DIA_MS,
+  PREFIXO_DO_BOM_DIA,
+  instrucaoDoBomDia,
+  popupsDoBomDia,
+  semOBomDia,
+} from './lib/bomDia'
 import { criarJanela } from './lib/conversa'
 import { comandarPopup, telaAgora, type AcaoDePopup } from './lib/comandosDePopup'
 import { abrirNoYoutube } from './lib/musica'
@@ -150,25 +157,16 @@ function clearScreenAndReport(what: 'all' | 'panels' | 'transcript'): string | n
   return saiu.length ? saiu.join(' e ') : null
 }
 
-/**
- * O que a voz sabe da música. Sem ela, o motivo vai junto: calado, ele não saberia
- * explicar depois por que o bom dia veio sem rock.
- */
-function sobreAMusica(r: BomDiaResposta): string {
-  if (r.musica) return 'A música já está tocando baixinho por baixo: não a anuncie, a não ser que ele pergunte. '
-  if (r.avisoDaMusica) {
-    return (
-      `A música não tocou hoje: ${r.avisoDaMusica}. No fim do resumo, diga isso em uma frase simples, ` +
-      'com o que resolve, sem ler comandos letra por letra. Se ele perguntar, explique esse motivo. '
-    )
-  }
-  return ''
-}
-
-/** Quanto tempo a conversa fica aberta, em silêncio, com os popups do bom dia na tela. */
-const LEITURA_DO_BOM_DIA_MS = 3 * 60_000
 /** Religou logo depois de cair: ele ainda está ali, esperando ser ouvido. */
 const AINDA_ESPERANDO_MS = 60_000
+
+/** Trocar de branch pela voz (docs/adr/0038): a prévia, o sim falado e a troca. */
+const trocaDeVersao = criarTrocaDeVersao({
+  pedir: (acao, extra) => fenix(acao, extra, 45_000) as Promise<RespostaDaTroca>,
+  ouviu: (desde) => ouviuConfirmacao(desde),
+})
+/** A troca já anunciada sobrevive à página recarregada pela branch nova. */
+const TROCA_ANUNCIADA = 'apolo:troca-anunciada'
 
 export default function App() {
   const store = useStore
@@ -356,7 +354,7 @@ export default function App() {
     if (name === 'bom_dia') {
       armIdle()
       const r = await bomDia()
-      if (!r.ok) return { output: `O resumo do dia não veio (${r.mensagem}). Dê bom dia normalmente, sem resumo.` }
+      if (!r.ok) return { output: semOBomDia(r.mensagem) }
       if (r.musica) s.setMusica({ ...r.musica, tocando: true, posicao: r.musica.inicio })
       // Notícias, compromissos e desenvolvimento, em diagonal, um de cada vez.
       const popups = popupsDoBomDia(r)
@@ -364,19 +362,7 @@ export default function App() {
       popups.forEach((b, i) => setTimeout(() => store.getState().pushBlade(b), i * INTERVALO_DOS_POPUPS_MS))
       bomDiaNaTela.current = popups.length > 0
       bomDiaDesde.current = Date.now()
-      return {
-        output:
-          `${r.texto}\n${descreverPopups(popups)}\n\nDê bom dia ao Ricardo e resuma isso em até 30 segundos, ` +
-          'como um assistente que conhece a rotina dele: compromissos primeiro, um destaque por tema ' +
-          'de notícia, o GitHub numa frase. Os detalhes já estão nos popups: não leia listas. ' +
-          sobreAMusica(r) +
-          'Se ele agradecer, despeça-se em poucas palavras: a tela fecha os popups e entra em espera ' +
-          'sozinha. Se ele mudar de assunto, chame ajustar_interface com popups "minimizar" antes ' +
-          'de responder; se ele perguntar de uma notícia ou de um compromisso, os popups ficam. ' +
-          'Termine o resumo com uma pergunta curta, como se quer detalhar alguma notícia, e ' +
-          'espere: a conversa continua. A voz dele por cima da música é para você: não use ' +
-          'ignorar_fala por causa da música.',
-      }
+      return { output: instrucaoDoBomDia(r, popups, 'pc') }
     }
 
     if (name === 'musica') {
@@ -415,6 +401,7 @@ export default function App() {
         }
         return { output: await comFenixTrabalhando(() => fenix(acao, { proposta: proposta.id }, 6 * 60_000)) }
       }
+      if (acao === 'trocar') return { output: await trocaDeVersao.pedido(String(args.branch ?? '')) }
       const extra = {
         nome: String(args.nome ?? ''),
         parametros: lerParametros(String(args.parametros ?? '')),
@@ -838,7 +825,23 @@ export default function App() {
 
     // O trabalho leva minutos, então o resultado é anunciado quando chega. Só
     // o que começou com esta página aberta: o estado salvo não é notícia.
-    watchFenix((estado) => store.getState().setFenix(estado))
+    // O fim de uma troca de branch chega à página nova, depois do reinício: espera a
+    // voz voltar para contar, e conta uma vez só (docs/adr/0038).
+    let anunciarTroca: number | undefined
+    watchFenix((estado) => {
+      store.getState().setFenix(estado)
+      const fim = trocaParaAnunciar(estado.ultimaTroca as FimDaTroca | null, localStorage.getItem(TROCA_ANUNCIADA))
+      if (!fim) return
+      clearInterval(anunciarTroca)
+      let tentativas = 0
+      anunciarTroca = window.setInterval(() => {
+        if (++tentativas > 90) return clearInterval(anunciarTroca)
+        if (!session.current) return
+        clearInterval(anunciarTroca)
+        localStorage.setItem(TROCA_ANUNCIADA, fim.id)
+        session.current.prompt(textoDoFimDaTroca(fim))
+      }, 1000)
+    })
     watchExtensoes((lista) => void aplicarExtensoes(lista as ExtensaoNaPonte[]))
     let acompanhando = false
     let testeAvisado = false

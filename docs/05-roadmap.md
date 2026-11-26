@@ -33,7 +33,7 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [ ] **Contexto compartilhado (RF-18):** decidir entre branch local e arquivo de contexto (ADR nova); é o único item do backlog que não começou
 - [ ] O A.P.O.L.O. e a A.U.R.O.R.A. pedindo notificações ao H.E.R.M.E.S. (hoje só a Fênix pede)
 - [ ] Aviso ditado por voz no app do iPhone indo para a central do Mac
-- [ ] Bom dia também no celular
+- [x] **Bom dia também no celular (25/11/2026, ADR 0037):** pelo app, "bom dia" traz o resumo da A.U.R.O.R.A. narrado (agenda, notícias por tema, GitHub e as pendências do roadmap) e os três popups em diagonal, com a conversa aberta por até 3 minutos, os popups minimizados quando o assunto muda e o "obrigado" fechando tudo e pondo em espera. A ponte aceita `aurora` do celular (`bridge/hermes.mjs`, sensível: entra por revisão) e tira a música da resposta (`semAMusica`). **Sem a música, e isso é decisão do Ricardo:** o player oficial do YouTube tem de ficar visível em 200×200 (ADR 0026), e onde ele entra na tela do iPhone — e se o alto-falante atrapalha o microfone aberto — só ele decide, de preferência com protótipo. Falta validar no aparelho
 - [ ] Temas de notícia editáveis por voz ("tira games do bom dia")
 - [ ] Servidor ntfy próprio, para o texto das notificações não passar por terceiros
 
@@ -47,6 +47,7 @@ vira uma branch nova a partir da `main` (ADR 0016).
 - [ ] Ver a seção "Fase 1 — Core" abaixo: `core/` em TypeScript, `Provider`, host de módulos (com a fachada MCP da A.U.R.O.R.A.)
 
 ### Etapa 6 — Bugs para corrigir
+- [x] **CRÍTICO — Não sai da `main` para a branch que acabou de criar, e a volta depende de sorte (25/11/2026):** o autodesenvolvimento guardou o item 3.4 na `fase-3.4/aurora-no-bolso` (arquivos sensíveis), e pedido para pô-la no ar, o A.P.O.L.O. não tinha como: a Fênix só aplicava uma alteração recém-feita e voltava à `main`. A voz recorreu a `executar_tarefa`, cujo agente fez `git checkout` na cópia em execução, por baixo da Fênix, e a voz caiu. Corrigido em 26/11/2026 na própria `fase-3.4/aurora-no-bolso` (RF-72, ADR 0038): a Fênix troca de branch nos dois sentidos, com prévia, o sim falado para a de fase, observação e volta sozinha; quedas seguidas numa branch de fase voltam à `main`; o gate nega ao agente de tarefas o Git que muda a cópia no ar; `npm run trocar -- 3.4` faz o mesmo pelo terminal; e o agente do autodesenvolvimento passa a rodar os testes. Falta validar por voz no Mac: "põe a três ponto quatro no ar", testar, "volta para a main"
 - [x] **CRÍTICO — Não responde com tudo de pé, e não se recupera (24/11/2026):** o Google abria a sessão e não processava o áudio, e depois não confirmou a abertura; nada tentava de novo. Corrigido na `fase-3.3/eco-que-volta` (RF-71, ADR 0035), com testes em `scripts/voz.test.mjs` e `fenix/test/voz.test.mjs`
 - [x] **Não dizia em que branch está (24/11/2026):** a voz tentava um script da Fênix, recusado sem `--writes`. Agora `fenix` e `desenvolvimento` com acao `estado` trazem branch e último commit, a recusa diz a opção que falta, e o log da voz guarda o nome da ferramenta chamada
 - [x] **O atalho achava que já estava no ar (24/11/2026):** `subir-apolo.command` aceitava qualquer processo que citasse `fenix/fenix.mjs`; agora só o da Fênix

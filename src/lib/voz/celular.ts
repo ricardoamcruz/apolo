@@ -1,12 +1,21 @@
 import { soltarMic } from '../audio'
 import { chamouPeloNome } from '../chamada'
 import { criarJanela } from '../conversa'
-import { vigiarCancelamento } from '../comandos'
+import { agradece, vigiarCancelamento } from '../comandos'
 import type { AcaoDePopup } from '../comandosDePopup'
 import { foraDeHora, ouviuConfirmacao, registrarFala, type AutodevEstado } from '../autodev'
+import {
+  LEITURA_DO_BOM_DIA_MS,
+  instrucaoDoBomDia,
+  popupsDoBomDia,
+  semOBomDia,
+  type ResumoDoBomDia,
+} from '../bomDia'
 import { lerParametros, textoDaFenix } from '../fenix'
+import { criarTrocaDeVersao, textoDoFimDaTroca, trocaParaAnunciar, type FimDaTroca } from '../trocaDeVersao'
 import { connectGemini } from './gemini'
 import type { RealtimeSession, SessionGrant, ToolResult } from './types'
+import type { Blade } from '../../store'
 
 /**
  * A voz do browser, comandada pelo app do iPhone (docs/adr/0019).
@@ -19,6 +28,10 @@ import type { RealtimeSession, SessionGrant, ToolResult } from './types'
  * pedidos vão ao core pelo app (`core`), e o estado volta por `doCore`. Quem
  * confirma, aprova ou abre o PR é a fala do Ricardo, conferida aqui contra a
  * transcrição do microfone do celular, e não contra o que o modelo afirma.
+ *
+ * O bom dia também vem por aí (docs/adr/0037): o resumo da A.U.R.O.R.A. chega pelo
+ * core, os popups abrem em diagonal como na web e "obrigado" fecha tudo. O que não
+ * existe aqui é a música: o tocador do YouTube é só do PC.
  */
 
 export type FaseDaVoz = 'desligada' | 'espera' | 'ouvindo' | 'pensando' | 'ferramenta' | 'falando'
@@ -38,7 +51,7 @@ export type MensagemDaVoz =
   | { core: PedidoAoCore }
 
 /** O que a voz pede ao core, como a interface do PC pede à ponte. */
-export type PedidoAoCore = { id: string; tipo: 'autodev' | 'fenix'; acao: string } & Record<string, unknown>
+export type PedidoAoCore = { id: string; tipo: 'autodev' | 'fenix' | 'aurora'; acao: string } & Record<string, unknown>
 /** O que o core manda de volta: a resposta de um pedido (`resposta`) ou o estado. */
 export type MensagemDoCore = {
   type?: string
@@ -48,9 +61,34 @@ export type MensagemDoCore = {
   saida?: string
   proposta?: PropostaDaFenix
   estado?: unknown
+  /** A prévia de uma troca de branch (docs/adr/0038). */
+  branch?: unknown
+  sha?: unknown
+  confirmar?: unknown
+  mesma?: unknown
 }
 type PropostaDaFenix = { id: string; script: string; motivo: string }
-type RespostaDoCore = { ok: boolean; mensagem: string; saida?: string; proposta?: PropostaDaFenix }
+type RespostaDoCore = {
+  ok: boolean
+  mensagem: string
+  saida?: string
+  proposta?: PropostaDaFenix
+  /** O quadro inteiro da A.U.R.O.R.A., quando o pedido foi o bom dia. */
+  bomDia?: ResumoDoBomDia
+  /** A prévia de uma troca de branch (docs/adr/0038). */
+  branch?: string
+  sha?: string
+  confirmar?: boolean
+  mesma?: boolean
+}
+
+/** Os popups do bom dia na tela do celular; quem os desenha é src/popups.tsx. */
+export type TelaDoBomDia = {
+  /** Abre a diagonal, fechando uma anterior se houver. */
+  abrir: (popups: Blade[]) => void
+  /** Outro assunto: eles vão para a bandeja, sem fechar. */
+  minimizar: () => void
+}
 
 type Grant = Extract<SessionGrant, { provider: 'gemini' }>
 
@@ -62,12 +100,15 @@ const PRAZO_DA_DESPEDIDA_MS = 2_500
 const PRAZO_DA_CREDENCIAL_MS = 20_000
 /** Nível do microfone que conta como você falando, para medir a resposta. */
 const NIVEL_DE_FALA = 0.3
+/** Agradecido o bom dia, a despedida toca e ele entra em espera. */
+const PRAZO_DO_OBRIGADO_MS = 6_000
 
 export function criarVozDoCelular(
   enviar: (mensagem: MensagemDaVoz) => void,
   /** Fecha os popups e diz quantos saíram: a voz precisa saber se havia algum. */
   fecharPopups: () => number,
   comandarPopup: (acao: AcaoDePopup, titulo?: string) => string,
+  tela: TelaDoBomDia,
 ) {
   let sessao: RealtimeSession | null = null
   let abrindo = false
@@ -88,8 +129,16 @@ export function criarVozDoCelular(
   /** Pedidos ao core esperando resposta. Enquanto houver um, a conversa não fecha. */
   const pedidosAoCore = new Map<string, (r: RespostaDoCore) => void>()
   let autodevEstado: AutodevEstado | null = null
+  /** Os popups do bom dia estão na tela, esperando um "obrigado" ou outro assunto. */
+  let bomDiaNaTela = false
+  /** Quando eles abriram: enquanto ele os lê, a conversa não fecha. */
+  let bomDiaDesde = 0
+  /** Ele agradeceu: a despedida termina e ele entra em espera. */
+  let dormirAoCalar: ReturnType<typeof setTimeout> | null = null
   /** `vistaEm`: quando a proposta chegou aqui; só uma fala depois disso confirma. */
   let propostas: (PropostaDaFenix & { vistaEm: number })[] = []
+  /** A última troca de branch já contada, para não repetir a cada estado novo. */
+  let trocaAnunciada: string | null = null
   const vigia = vigiarCancelamento(() => {
     if (tarefas.size) enviar({ cancelar: true })
   })
@@ -116,6 +165,8 @@ export function criarVozDoCelular(
     () => dormir(),
     () => {
       if (falando || tarefas.size || pedidosAoCore.size) return 'sim'
+      // Lendo os popups do bom dia, o silêncio dele não é fim de conversa (docs/adr/0037).
+      if (bomDiaNaTela && Date.now() - bomDiaDesde < LEITURA_DO_BOM_DIA_MS) return 'sim'
       // A fala só se encerra quando o modelo responde: em espera, a resposta sairia muda.
       if (falaPendente) return 'decidindo'
       return Date.now() - ultimoSom < FALA_RECENTE_MS ? 'talvez' : 'nao'
@@ -231,9 +282,16 @@ export function criarVozDoCelular(
     return { output: r.mensagem }
   }
 
+  /** Trocar de branch pela voz, com as mesmas regras do PC (src/lib/trocaDeVersao.ts). */
+  const trocaDeVersao = criarTrocaDeVersao({
+    pedir: (acao, extra) => comCoreTrabalhando(() => pedirAoCore('fenix', acao, extra, 45_000)),
+    ouviu: (desde) => ouviuConfirmacao(desde),
+  })
+
   const fenix = async (args: Record<string, unknown>): Promise<ToolResult> => {
     const acao = String(args.acao ?? '')
     armarOcioso()
+    if (acao === 'trocar') return { output: await trocaDeVersao.pedido(String(args.branch ?? '')) }
     // Como no desenvolvimento: quem confirma um script é a fala do Ricardo.
     if (acao === 'confirmar' || acao === 'cancelar') {
       const proposta = propostas.at(-1)
@@ -269,6 +327,41 @@ export function criarVozDoCelular(
     return { output: textoDaFenix(await pedirAoCore('fenix', acao, extra)) }
   }
 
+  /**
+   * O bom dia do celular (docs/adr/0037): o resumo vem da A.U.R.O.R.A. pelo core e
+   * os popups abrem em diagonal, como na web. Sem tocador: a música é só do PC.
+   */
+  const bomDia = async (): Promise<ToolResult> => {
+    armarOcioso()
+    const r = await comCoreTrabalhando(() => pedirAoCore('aurora', 'bom_dia', {}, 35_000))
+    const resumo = r.bomDia
+    if (!r.ok || !resumo) return { output: semOBomDia(r.mensagem) }
+    const popups = popupsDoBomDia(resumo)
+    tela.abrir(popups)
+    bomDiaNaTela = popups.length > 0
+    bomDiaDesde = Date.now()
+    return { output: instrucaoDoBomDia(resumo, popups, 'celular') }
+  }
+
+  /** Outro assunto: os popups do bom dia vão para a bandeja, sem fechar. */
+  const minimizarBomDia = () => {
+    if (!bomDiaNaTela) return
+    bomDiaNaTela = false
+    tela.minimizar()
+  }
+
+  /** "Obrigado" com o bom dia na tela: fecha tudo e, depois da despedida, espera. */
+  const encerrarBomDia = () => {
+    bomDiaNaTela = false
+    fecharPopups()
+    if (dormirAoCalar) clearTimeout(dormirAoCalar)
+    // Se ele não chegar a responder, dorme assim mesmo.
+    dormirAoCalar = setTimeout(() => {
+      dormirAoCalar = null
+      dormir()
+    }, PRAZO_DO_OBRIGADO_MS)
+  }
+
   const usarFerramenta = async (
     nome: string,
     args: Record<string, unknown>,
@@ -279,6 +372,7 @@ export function criarVozDoCelular(
     if (nome === 'executar_tarefa') {
       const pedido = String(args.pedido ?? '').trim()
       if (!pedido) return { output: 'Pedido vazio.' }
+      minimizarBomDia()
       fase('ferramenta')
       const texto = await executar(pedido)
       vigia.parar()
@@ -288,8 +382,13 @@ export function criarVozDoCelular(
     }
     if (nome === 'desenvolvimento') return desenvolvimento(args)
     if (nome === 'fenix') return fenix(args)
+    if (nome === 'bom_dia') return bomDia()
+    // O tocador do canto não existe no celular, e o modelo precisa saber dizer por quê.
+    if (nome === 'musica') return { output: 'A música do bom dia toca só no computador: aqui não há tocador.' }
     if (nome === 'ajustar_interface') {
       armarOcioso()
+      // Minimizados ou fechados por ele, os popups do bom dia não seguram mais a conversa.
+      if (args.limpar_tela || args.popups === 'minimizar' || args.popups === 'fechar') bomDiaNaTela = false
       if (typeof args.popups === 'string') {
         const titulo = typeof args.popup === 'string' ? args.popup : undefined
         return { output: comandarPopup(args.popups as AcaoDePopup, titulo) }
@@ -317,6 +416,8 @@ export function criarVozDoCelular(
     limparOcioso()
     if (nivel) clearInterval(nivel)
     nivel = null
+    if (dormirAoCalar) clearTimeout(dormirAoCalar)
+    dormirAoCalar = null
     falando = false
     const aberta = sessao
     sessao = null
@@ -350,6 +451,7 @@ export function criarVozDoCelular(
           enviar({ ouviu: texto })
           // A transcrição é o que confere o "confirmo": nunca o que o modelo diz.
           registrarFala(texto)
+          if (bomDiaNaTela && agradece(texto)) encerrarBomDia()
           if (tarefas.size) vigia.ouvir(texto)
         },
         onUserText: (texto) => {
@@ -357,6 +459,7 @@ export function criarVozDoCelular(
           if (emEspera && chamouPeloNome(texto).chamou) sairDaEspera()
           if (!emEspera) {
             registrarFala(texto)
+            if (bomDiaNaTela && agradece(texto)) encerrarBomDia()
             enviar({ ouviu: texto, fim: true })
           }
         },
@@ -371,6 +474,12 @@ export function criarVozDoCelular(
         },
         onSpeakingStop: () => {
           falando = false
+          // A despedida do bom dia acabou de tocar: agora sim a espera.
+          if (dormirAoCalar) {
+            clearTimeout(dormirAoCalar)
+            dormirAoCalar = null
+            return dormir()
+          }
           if (emEspera) return
           fase('ouvindo')
           armarOcioso()
@@ -447,11 +556,23 @@ export function criarVozDoCelular(
           mensagem: msg.mensagem ?? (msg.ok ? 'Feito.' : 'O computador não disse o motivo.'),
           saida: msg.saida,
           proposta: msg.proposta,
+          // O bom dia vem no próprio quadro: agenda, notícias e desenvolvimento.
+          bomDia: msg.type === 'aurora' ? (msg as unknown as ResumoDoBomDia) : undefined,
+          branch: typeof msg.branch === 'string' ? msg.branch : undefined,
+          sha: typeof msg.sha === 'string' ? msg.sha : undefined,
+          confirmar: msg.confirmar === true,
+          mesma: msg.mesma === true,
         })
         return
       }
       if (msg.type === 'autodev' && msg.estado) autodevEstado = msg.estado as AutodevEstado
       if (msg.type === 'fenix' && msg.estado) {
+        // O fim de uma troca de branch: o app segue aberto, e a voz conta uma vez.
+        const fim = trocaParaAnunciar((msg.estado as { ultimaTroca?: FimDaTroca | null }).ultimaTroca, trocaAnunciada)
+        if (fim) {
+          trocaAnunciada = fim.id
+          sessao?.prompt(textoDoFimDaTroca(fim))
+        }
         const vistas = new Map(propostas.map((p) => [p.id, p.vistaEm]))
         const novas = (msg.estado as { propostas?: PropostaDaFenix[] }).propostas ?? []
         propostas = novas.map((p) => ({ ...p, vistaEm: vistas.get(p.id) ?? Date.now() }))

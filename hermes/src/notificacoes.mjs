@@ -9,6 +9,10 @@
  * prazo, no endereço público do H.E.R.M.E.S. (pelo Tailscale): o toque no iPhone
  * chama esse endereço, e a resposta volta só para quem pediu a notificação.
  *
+ * Quem só quer avisar, sem botão e sem esperar resposta, tem um caminho mais curto:
+ * `POST /notificar`, na mesma porta e com o mesmo token (docs/adr/0039). É o que o
+ * A.P.O.L.O. e a A.U.R.O.R.A. usam: um aviso de ida, sem conexão para manter.
+ *
  * No sentido contrário, o que o Ricardo publicar no tópico de entrada do ntfy
  * aparece na central do macOS.
  */
@@ -19,6 +23,10 @@ import { createServer as createHttpsServer } from 'node:https'
 import { WebSocketServer } from 'ws'
 
 export const CAMINHO_DAS_NOTIFICACOES = '/notificacoes'
+/** O aviso de ida, sem botões, para quem não mantém conexão (docs/adr/0039). */
+export const CAMINHO_DE_UM_AVISO = '/notificar'
+/** Um aviso é um título e duas frases: mais do que isto não é aviso. */
+const CORPO_MAX = 8 * 1024
 const TITULO_MAX = 80
 const TEXTO_MAX = 600
 const BOTOES_MAX = 3
@@ -174,18 +182,59 @@ export function criarCentral({ entregar, urlPublica, agora = Date.now, log = con
  * `{ type: 'notificar:resposta', resposta: id, ok }`; um botão tocado chega como
  * `{ type: 'notificacao:acao', notificacao, acao }`, só para quem pediu.
  *
+ * `POST /notificar` é o mesmo aviso, de ida só: o mesmo token, o corpo em JSON
+ * (`{ titulo, texto, prioridade? }`) e a resposta `{ ok, id, mac, ntfy }`. Botões
+ * pedidos aqui são ignorados: não há conexão para onde devolver o toque.
+ *
  * `GET /saude` responde sem token, com o que `saude()` devolver (docs/adr/0029):
  * é o contrato pelo qual quem vigia o H.E.R.M.E.S. (a Fênix, a ponte) sabe se ele
  * está de pé, sem depender de quem o subiu. Sem token das notificações, a porta
- * abre só para a saúde e recusa o WebSocket.
+ * abre só para a saúde, recusa o WebSocket e recusa os avisos.
  */
 export function criarPortaDosServicos({ token, central, host = '127.0.0.1', porta = 8792, tls, saude = () => ({ ok: true }), log = console.log }) {
   if (token && token.length < 32) throw new Error('o token das notificações precisa de pelo menos 32 caracteres')
-  const http = (req, res) => {
-    if (req.method === 'GET' && (req.url ?? '').split('?')[0] === '/saude') {
-      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
-      return res.end(JSON.stringify({ servico: 'hermes', ...saude() }))
+  const responder = (res, status, corpo) => {
+    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+    res.end(JSON.stringify(corpo))
+  }
+
+  /** Um aviso de ida (docs/adr/0039): token, corpo pequeno e nada de botões. */
+  const receberAviso = (req, res) => {
+    if (!token) return responder(res, 503, { ok: false, mensagem: 'as notificações não estão configuradas' })
+    if (!tokenConfere(req.headers.authorization, token)) {
+      log('[hermes] aviso recusado: token inválido')
+      return responder(res, 401, { ok: false })
     }
+    let corpo = ''
+    let demais = false
+    req.setEncoding('utf8')
+    req.on('data', (pedaco) => {
+      corpo += pedaco
+      if (corpo.length > CORPO_MAX) {
+        demais = true
+        responder(res, 413, { ok: false, mensagem: 'aviso grande demais' })
+        req.destroy()
+      }
+    })
+    req.on('end', async () => {
+      if (demais) return
+      let pedido
+      try {
+        pedido = JSON.parse(corpo)
+      } catch {
+        return responder(res, 400, { ok: false, mensagem: 'o corpo não é JSON' })
+      }
+      const r = await central.notificar({ ...pedido, botoes: [] })
+      responder(res, r.ok ? 200 : 400, r)
+    })
+  }
+
+  const http = (req, res) => {
+    const caminho = (req.url ?? '').split('?')[0]
+    if (req.method === 'GET' && caminho === '/saude') {
+      return responder(res, 200, { servico: 'hermes', ...saude() })
+    }
+    if (req.method === 'POST' && caminho === CAMINHO_DE_UM_AVISO) return receberAviso(req, res)
     res.writeHead(404)
     res.end()
   }

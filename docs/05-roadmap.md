@@ -31,10 +31,10 @@ vira uma branch nova a partir da `main` (ADR 0016).
 
 ### Etapa 3 — Contexto e comunicação
 - [ ] **Contexto compartilhado (RF-18):** decidir entre branch local e arquivo de contexto (ADR nova); é o único item do backlog que não começou
-- [ ] O A.P.O.L.O. e a A.U.R.O.R.A. pedindo notificações ao H.E.R.M.E.S. (hoje só a Fênix pede)
+- [x] **O A.P.O.L.O. e a A.U.R.O.R.A. pedindo notificações ao H.E.R.M.E.S. (27/11/2026, ADR 0039):** a central ganhou um caminho de ida só, `POST /notificar`, com o mesmo token e sem botões, porque nenhum dos dois precisa receber o toque num botão (e a A.U.R.O.R.A. não pode nem importar a `ws`, pela independência da ADR 0029). O A.P.O.L.O. avisa o que termina sozinho no autodesenvolvimento — em teste, para revisão, ou sem terminar — e a A.U.R.O.R.A. avisa quando a música do bom dia quebra e quando volta, só na mudança. Falta validar no iPhone
 - [ ] Aviso ditado por voz no app do iPhone indo para a central do Mac
 - [x] **Bom dia também no celular (25/11/2026, ADR 0037):** pelo app, "bom dia" traz o resumo da A.U.R.O.R.A. narrado (agenda, notícias por tema, GitHub e as pendências do roadmap) e os três popups em diagonal, com a conversa aberta por até 3 minutos, os popups minimizados quando o assunto muda e o "obrigado" fechando tudo e pondo em espera. A ponte aceita `aurora` do celular (`bridge/hermes.mjs`, sensível: entra por revisão) e tira a música da resposta (`semAMusica`). **Sem a música, e isso é decisão do Ricardo:** o player oficial do YouTube tem de ficar visível em 200×200 (ADR 0026), e onde ele entra na tela do iPhone — e se o alto-falante atrapalha o microfone aberto — só ele decide, de preferência com protótipo. Falta validar no aparelho
-- [ ] Temas de notícia editáveis por voz ("tira games do bom dia")
+- [x] **Temas de notícia editáveis por voz (27/11/2026, ADR 0039):** a ferramenta `noticias` lista, tira, inclui, muda quantas notícias por tema e volta ao padrão, no PC e no celular. A escolha fica em `~/.apolo/aurora/noticias.json`, nunca no `aurora.config.json`: escrever no repositório deixaria a cópia em execução suja, e cópia suja barra troca de branch e autodesenvolvimento. Falta validar por voz
 - [ ] Servidor ntfy próprio, para o texto das notificações não passar por terceiros
 
 ### Etapa 4 — Bloqueada por decisão do Ricardo

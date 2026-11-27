@@ -166,12 +166,25 @@ detalhe está em `docs/`.
   (`~/.apolo/fenix/rotinas/<rotina>.log`, `eventos.log`), e `textoDoAviso`
   (`fenix/src/avisos.mjs`) barra o que escapar. Uma rotina explica a própria falha
   numa última linha que começa com "✖", e é essa linha que vai no aviso. A Fênix avisa versões, quedas e rotinas.
+- **Avisos de ida (ADR 0039):** quem só avisa, sem botão e sem conexão para manter,
+  usa `POST /notificar`, na mesma porta e com o mesmo token (`CAMINHO_DE_UM_AVISO`,
+  em `hermes/src/notificacoes.mjs`). É assim que o A.P.O.L.O. (`bridge/avisos.mjs`)
+  avisa o fim do autodesenvolvimento — em teste, para revisão ou sem terminar, nunca
+  o que parte dele na frente da tela — e a A.U.R.O.R.A.
+  (`modules/aurora/src/avisos.mjs`) avisa a música do bom dia que quebrou ou voltou.
+  Cada um tem o seu cliente: nenhum importa o do outro. Avisa-se a **mudança** de
+  estado, nunca o estado, e o `textoDoAviso` de cada lado segue valendo.
 - **A.U.R.O.R.A., o bom dia (ADR 0026, RF-55):** `modules/aurora/`, serviço à parte
   (porta 8791, token `APOLO_AURORA_TOKEN`) que a Fênix sobe. A cada "bom dia", a voz
   chama `bom_dia`: um trecho de rock das playlists do YouTube toca baixinho no tocador
   do canto (`src/ui/Tocador.tsx`, player oficial visível em 200×200, nunca baixar nem
   esconder; `musica` pausa ou abre a playlist no YouTube Music) e ela narra agenda (.ics),
-  notícias por tema e GitHub. Temas e playlists em `modules/aurora/aurora.config.json`.
+  notícias por tema e GitHub. Playlists e os temas **padrão** em
+  `modules/aurora/aurora.config.json`; os temas que valem hoje vêm dela (`GET
+  /noticias`), porque o Ricardo os muda por voz (ferramenta `noticias`, ADR 0039:
+  listar, tirar, incluir, quantas por tema e voltar ao padrão) e a escolha fica em
+  `~/.apolo/aurora/noticias.json` (`modules/aurora/src/temas.mjs`) — nunca no arquivo
+  do repositório, que sujaria a cópia no ar e barraria troca de branch e autodev.
   E-mail e To Do esperam um app registrado na Microsoft. Nada fora de `modules/aurora`
   importa o módulo. O bom dia abre em diagonal os popups de notícias, compromissos e
   desenvolvimento (`src/lib/bomDia.ts`, ids `bomdia-*`; o desenvolvimento vem de

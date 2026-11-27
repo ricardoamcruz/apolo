@@ -3,7 +3,8 @@
  * A.U.R.O.R.A. — Agenda, Últimas notícias, Recados, Obrigações, Rock e Alvorada
  * (docs/adr/0026). O bom dia do A.P.O.L.O.
  *
- *   node modules/aurora/aurora.mjs            serve o bom dia (GET /bom-dia)
+ *   node modules/aurora/aurora.mjs            serve o bom dia (GET /bom-dia) e os
+ *                                            temas de notícia (GET/POST /noticias)
  *   node modules/aurora/aurora.mjs autorizar  autoriza a leitura das playlists do YouTube
  *   node modules/aurora/aurora.mjs resumo     mostra o texto do bom dia, para conferir
  *
@@ -15,8 +16,12 @@
  *   AURORA_GOOGLE_CLIENT_ID   cliente OAuth "TVs e dispositivos de entrada limitados"
  *   AURORA_GOOGLE_CLIENT_SECRET
  *   AURORA_AGENDA_ICS         link .ics da agenda
- *   AURORA_PASTA              token do YouTube e cache (padrão ~/.apolo/aurora)
+ *   AURORA_PASTA              token do YouTube, cache e os temas que ele mudou por voz
+ *                             (padrão ~/.apolo/aurora)
  *   AURORA_CONFIG             temas, playlists e repositório (padrão aurora.config.json ao lado)
+ *   AURORA_NOTIFICAR_URL      a central de notificações (padrão https://localhost:8792/notificar)
+ *   AURORA_NOTIFICAR_TOKEN    o token dela (ou APOLO_NOTIFICAR_TOKEN); sem ele, nenhum aviso
+ *   AURORA_NOTIFICAR_CA       a autoridade do certificado dela (padrão: o próprio certificado)
  *
  * Nada aqui depende de quem a subiu (docs/adr/0029): os padrões são dela, `npm run
  * aurora` lê o .env.local sozinho, e se a F.Ê.N.I.X. cair ela continua servindo,
@@ -29,8 +34,10 @@ import { createServer as createHttpsServer } from 'node:https'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import { avisoDaMusica, criarAvisos } from './src/avisos.mjs'
 import { bomDia, textoParaVoz } from './src/resumo.mjs'
 import { protegerSaidas } from './src/saidas.mjs'
+import { criarTemas } from './src/temas.mjs'
 import { criarYoutube } from './src/youtube.mjs'
 
 const env = process.env
@@ -41,19 +48,38 @@ const config = JSON.parse(readFileSync(valor('CONFIG') ?? new URL('./aurora.conf
 const pasta = valor('PASTA') ?? join(homedir(), '.apolo', 'aurora')
 /** O padrão do projeto (docs/adr/0021), só quando o arquivo existe. */
 const seExistir = (arquivo) => (existsSync(arquivo) ? arquivo : undefined)
+const certificado = valor('TLS_CERT') ?? seExistir(join(homedir(), '.apolo', 'tls', 'apolo.pem'))
+const chave = valor('TLS_KEY') ?? seExistir(join(homedir(), '.apolo', 'tls', 'apolo-chave.pem'))
 const youtube = criarYoutube({ clienteId: valor('GOOGLE_CLIENT_ID'), segredo: valor('GOOGLE_CLIENT_SECRET'), pasta })
+/** Os temas de notícia, com o que ele mudou por voz por cima do aurora.config.json. */
+const temas = criarTemas({ pasta, config })
+/** A central de notificações, para o que ele precisa saber sem perguntar (docs/adr/0039). */
+const avisos = criarAvisos({
+  url: valor('NOTIFICAR_URL') ?? `https://localhost:${valor('NOTIFICAR_PORTA') ?? 8792}/notificar`,
+  token: valor('NOTIFICAR_TOKEN'),
+  ca: ler(valor('NOTIFICAR_CA') ?? certificado),
+})
 /**
  * O que está quebrado na música, para o `/saude`: o processo de pé não quer dizer
  * que o bom dia tem rock. Conferido de tempos em tempos e a cada bom dia.
  */
 let problemaDaMusica = null
+/** A primeira conferência só registra: o aviso é para a mudança, não para a partida. */
+let conferiuUmaVez = false
 const CONFERENCIA_MS = 10 * 60_000
+/** Quebrou ou voltou: é a mudança que vira aviso, nunca o mesmo problema de novo. */
+const anotarMusica = (problema) => {
+  const aviso = conferiuUmaVez ? avisoDaMusica(problemaDaMusica, problema ?? null) : null
+  problemaDaMusica = problema ?? null
+  conferiuUmaVez = true
+  if (aviso) void avisos.avisar(aviso)
+}
 const conferirMusica = async () => {
-  problemaDaMusica = await youtube.conferir()
+  anotarMusica(await youtube.conferir())
 }
 const montar = async () => {
-  const r = await bomDia({ config, youtube, agendaIcs: valor('AGENDA_ICS') })
-  problemaDaMusica = r.avisoDaMusica ?? null
+  const r = await bomDia({ config, youtube, agendaIcs: valor('AGENDA_ICS'), noticias: temas.estado() })
+  anotarMusica(r.avisoDaMusica)
   return r
 }
 
@@ -100,13 +126,36 @@ const autorizado = (cabecalho) => {
   return esquema === 'Bearer' && Boolean(recebido) && timingSafeEqual(resumo(recebido), resumo(token))
 }
 
+/** O corpo de um pedido, em JSON e pequeno: daqui não entra nada grande. */
+const CORPO_MAX = 4 * 1024
+const corpoEmJson = (req) =>
+  new Promise((resolve) => {
+    let texto = ''
+    req.setEncoding('utf8')
+    req.on('data', (p) => {
+      texto += p
+      if (texto.length > CORPO_MAX) {
+        resolve(null)
+        req.destroy()
+      }
+    })
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(texto || '{}'))
+      } catch {
+        resolve(null)
+      }
+    })
+    req.on('error', () => resolve(null))
+  })
+
 const responder = async (req, res) => {
   const json = (status, corpo) => {
     res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' })
     res.end(JSON.stringify(corpo))
   }
-  if (req.method !== 'GET') return json(404, {})
-  if (req.url === '/saude') {
+  if (req.method !== 'GET' && req.method !== 'POST') return json(404, {})
+  if (req.method === 'GET' && req.url === '/saude') {
     // `degradado`: de pé, mas com uma parte quebrada (docs/adr/0029).
     return json(200, {
       ok: true,
@@ -116,7 +165,16 @@ const responder = async (req, res) => {
     })
   }
   if (!autorizado(req.headers.authorization)) return json(401, { ok: false })
-  if (req.url !== '/bom-dia') return json(404, {})
+  // Os temas de notícia: ler e mudar por voz (docs/adr/0039). A escolha fica na
+  // pasta da A.U.R.O.R.A., nunca no arquivo do repositório.
+  if (req.url === '/noticias') {
+    if (req.method === 'GET') return json(200, { ok: true, ...temas.estado() })
+    const pedido = await corpoEmJson(req)
+    if (!pedido) return json(400, { ok: false, mensagem: 'não entendi o pedido' })
+    const r = temas.editar(pedido)
+    return json(r.ok ? 200 : 400, r)
+  }
+  if (req.method !== 'GET' || req.url !== '/bom-dia') return json(404, {})
   try {
     const r = await montar()
     // Os dados vão junto do texto: a interface monta com eles os popups do bom dia.
@@ -135,8 +193,6 @@ const responder = async (req, res) => {
   }
 }
 
-const certificado = valor('TLS_CERT') ?? seExistir(join(homedir(), '.apolo', 'tls', 'apolo.pem'))
-const chave = valor('TLS_KEY') ?? seExistir(join(homedir(), '.apolo', 'tls', 'apolo-chave.pem'))
 const tls = certificado && chave ? { cert: ler(certificado), key: ler(chave) } : null
 const servidor = tls ? createHttpsServer(tls, responder) : createServer(responder)
 const porta = Number(valor('PORTA') ?? env.APOLO_AURORA_PORTA?.trim() ?? 8791)

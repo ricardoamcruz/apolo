@@ -2,6 +2,7 @@ import type { Blade, Exibicao, Panel } from '../store'
 import { BRIDGE_WS_URL } from '../config'
 import type { AutodevEstado } from './autodev'
 import type { ResumoDoBomDia } from './bomDia'
+import type { PedidoDosTemas } from './noticias'
 import type { Servidor } from './sistemas'
 import type { BrowserReply, BrowserRequest } from './navegador'
 
@@ -212,6 +213,26 @@ export async function bomDia(): Promise<BomDiaResposta> {
       resolve(r)
     })
     ws.send(JSON.stringify({ type: 'aurora', id }))
+  })
+}
+
+/**
+ * Os temas de notícia do bom dia: listar ou mudar (docs/adr/0039). Vai pela mesma
+ * porta do bom dia, porque quem guarda a escolha é a A.U.R.O.R.A.
+ */
+export async function noticias(pedido: PedidoDosTemas): Promise<AutodevResposta> {
+  const ws = await connect()
+  const id = `a${++askSeq}`
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      respostasDaAurora.delete(id)
+      resolve({ ok: false, mensagem: 'A ponte não respondeu a tempo.' })
+    }, 15_000)
+    respostasDaAurora.set(id, (r) => {
+      clearTimeout(timer)
+      resolve({ ok: r.ok === true, mensagem: r.mensagem ?? '' })
+    })
+    ws.send(JSON.stringify({ type: 'aurora', acao: 'noticias', id, ...pedido }))
   })
 }
 

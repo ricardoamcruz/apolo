@@ -12,6 +12,7 @@ import {
   type ResumoDoBomDia,
 } from '../bomDia'
 import { lerParametros, textoDaFenix } from '../fenix'
+import { pedidoDosTemas } from '../noticias'
 import { criarTrocaDeVersao, textoDoFimDaTroca, trocaParaAnunciar, type FimDaTroca } from '../trocaDeVersao'
 import { connectGemini } from './gemini'
 import type { RealtimeSession, SessionGrant, ToolResult } from './types'
@@ -383,6 +384,14 @@ export function criarVozDoCelular(
     if (nome === 'desenvolvimento') return desenvolvimento(args)
     if (nome === 'fenix') return fenix(args)
     if (nome === 'bom_dia') return bomDia()
+    // Os temas do bom dia valem nos dois canais: o resumo é o mesmo (docs/adr/0039).
+    if (nome === 'noticias') {
+      armarOcioso()
+      const pedido = pedidoDosTemas(args)
+      if (typeof pedido === 'string') return { output: pedido }
+      const r = await pedirAoCore('aurora', 'noticias', pedido, 15_000)
+      return { output: r.mensagem ?? 'A Aurora não respondeu.' }
+    }
     // O tocador do canto não existe no celular, e o modelo precisa saber dizer por quê.
     if (nome === 'musica') return { output: 'A música do bom dia toca só no computador: aqui não há tocador.' }
     if (nome === 'ajustar_interface') {

@@ -64,7 +64,8 @@ import {
 } from './hermes.mjs'
 import { criarClienteFenix } from './fenix.mjs'
 import { criarRenascimento, lerReceita } from './renascer.mjs'
-import { criarClienteAurora, semAMusica } from './aurora.mjs'
+import { criarClienteAurora, semAMusica, textoDosTemas } from './aurora.mjs'
+import { avisoDoAutodev, criarAvisos } from './avisos.mjs'
 import { criarSondas } from './sondas.mjs'
 import { backlogDoRoadmap, estadoDoDesenvolvimento, pedidoDaTarefa, textoDoBacklog, registrarBug, versaoNoAr } from './desenvolvimento.mjs'
 import { criarTelemetria } from './telemetria.mjs'
@@ -1003,11 +1004,34 @@ const resumoDaFenix = () => ({
   ultimaTroca: estadoDaFenix?.versao?.ultimaTroca ?? null,
 })
 
+/**
+ * O A.P.O.L.O. pedindo notificações ao H.E.R.M.E.S. (docs/adr/0027 e 0039). Serve
+ * para o que termina sem ele por perto: o trabalho do autodesenvolvimento, que leva
+ * minutos. A central é a mesma da Fênix, e o token também.
+ */
+const portaDoHermes = process.env.APOLO_NOTIFICAR_PORTA?.trim() || '8792'
+const avisos = criarAvisos({
+  url: process.env.APOLO_NOTIFICAR_URL?.trim() || `https://localhost:${portaDoHermes}/notificar`,
+  token: process.env.APOLO_NOTIFICAR_TOKEN?.trim(),
+  ca: tls.cert,
+})
+
+/** O estado anterior do autodesenvolvimento: é a mudança que vira aviso, não o estado. */
+let autodevAntes = null
+const avisarDoAutodev = (estado) => {
+  const aviso = avisoDoAutodev(autodevAntes, estado)
+  autodevAntes = estado
+  if (aviso) void avisos.avisar(aviso)
+}
+
 const autodev = criarAutodev({
   repo: REPO,
   ligado: process.env.APOLO_AUTODEV === '1',
   supervisor: fenix ? (msg) => fenix.enviar(msg) : null,
-  avisar: (estado) => avisarTodos({ type: 'autodev', estado }),
+  avisar: (estado) => {
+    avisarDoAutodev(estado)
+    avisarTodos({ type: 'autodev', estado })
+  },
   interfaces: () => interfacesDoPc.size,
   // Abrir o PR de uma alteração aprovada é efeito no mundo: só com --writes (ADR 0014).
   abrirPr: ALLOW_WRITES ? (pedido) => criarGit({ repo: REPO }).pullRequest(pedido) : null,
@@ -1041,7 +1065,6 @@ async function acaoDoAutodev({ acao, pedido, tarefa, titulo, detalhe }) {
  * A saúde do H.E.R.M.E.S. e da A.U.R.O.R.A., medida daqui (docs/adr/0029). Só os
  * que este .env.local configura: sem token, o serviço sai sozinho e não é queda.
  */
-const portaDoHermes = process.env.APOLO_NOTIFICAR_PORTA?.trim() || '8792'
 sondas = criarSondas({
   alvos: [
     (process.env.APOLO_GATEWAY_TOKEN?.trim() || process.env.APOLO_NOTIFICAR_TOKEN?.trim()) && {
@@ -1063,6 +1086,18 @@ const aurora = criarClienteAurora({
   token: process.env.APOLO_AURORA_TOKEN?.trim(),
   ca: tls.cert,
 })
+
+/**
+ * Os temas de notícia do bom dia, lidos ou mudados por voz (docs/adr/0039). A ponte
+ * só repassa: a escolha fica com a A.U.R.O.R.A., fora do repositório. Vale no PC e
+ * no celular, porque é o mesmo bom dia nos dois.
+ */
+async function temasDasNoticias({ listar, tirar, incluir, porTema, restaurar }) {
+  if (!aurora) return { ok: false, mensagem: 'A Aurora não está configurada: falta APOLO_AURORA_TOKEN no .env.local.' }
+  const r = listar ? await aurora.temas() : await aurora.editarTemas({ tirar, incluir, porTema, restaurar })
+  if (!r.ok) return { ok: false, mensagem: r.mensagem ?? 'Não consegui falar com a Aurora.' }
+  return { ok: true, mensagem: listar ? textoDosTemas(r) : `${r.mensagem} A mudança vale a partir do próximo bom dia.` }
+}
 
 /** Rotinas longas (o app do iPhone) levam até 45 minutos. */
 const PRAZO_DA_ROTINA_MS = 50 * 60_000
@@ -1641,6 +1676,12 @@ const atender = (socket, { celular = false } = {}) => {
 
     if (msg.type === 'preferencias') {
       broadcast({ type: 'preferencias', valores: preferencias.gravar(msg.valores) })
+    }
+
+    // Os temas de notícia do bom dia, que ele muda falando (docs/adr/0039).
+    if (msg.type === 'aurora' && msg.acao === 'noticias') {
+      void temasDasNoticias(msg).then((r) => send({ ...r, type: 'aurora', resposta: msg.id }))
+      return
     }
 
     // O bom dia, no PC e no celular (docs/adr/0026 e 0037). Lá vai sem a música.

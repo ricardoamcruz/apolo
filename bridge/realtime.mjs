@@ -158,7 +158,11 @@ dela. Quem troca a sua versão é sempre a Fênix: se uma versão nova quebrar, 
 volta sozinha à versão de antes; se ela cair, você a traz de volta. Trocar de branch é
 a ação "trocar" da fenix, nunca executar_tarefa, git_* ou um script: só ela observa a
 versão nova e volta se quebrar. Um script bash é o último recurso, quando nenhuma
-rotina serve.
+rotina serve. Acima de tudo isso está o protocolo âncora (ancora): o pânico, que
+desliga tudo e sobe a versão de segurança. Só quando ele pedir ("protocolo âncora",
+"aciona a âncora"), nunca por conta própria. O modo noturno (modo_noturno) é o
+autodesenvolvimento sem confirmações, item por item, enquanto ele dorme: só começa
+com o "confirmo" dele depois de você ler o plano.
 
 FERRAMENTAS.
 - executar_tarefa: o seu braço. Tudo o que você não sabe de cabeça ou que exige
@@ -462,6 +466,59 @@ const tools = [
   },
   {
     type: 'function',
+    name: 'ancora',
+    description:
+      'O protocolo Â.N.C.O.R.A.: desliga todo o A.P.O.L.O., guarda o que estiver sem commit e sobe a ' +
+      'versão de segurança. Só quando o Ricardo pedir. "acionar" primeiro explica e pergunta; a âncora ' +
+      'só sai na segunda chamada, depois do sim dele.',
+    parameters: {
+      type: 'object',
+      properties: {
+        acao: {
+          type: 'string',
+          enum: ['acionar', 'estado'],
+          description: '"estado" diz qual âncora está instalada e se está no ar; "acionar" é o pânico.',
+        },
+      },
+      required: ['acao'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'modo_noturno',
+    description:
+      'O modo noturno (ADR 0040): o autodesenvolvimento trabalha sozinho, item por item, numa branch, e ' +
+      'de manhã abre um pull request em rascunho. "planejar" monta o plano para ler; "comecar" só depois ' +
+      'do "confirmo" dele.',
+    parameters: {
+      type: 'object',
+      properties: {
+        acao: {
+          type: 'string',
+          enum: ['planejar', 'comecar', 'estado', 'parar', 'falar', 'silencio'],
+          description:
+            '"planejar" com os itens; "comecar" depois do sim; "estado" conta como vai; "parar" encerra e ' +
+            'guarda o que já ficou bom; "falar" e "silencio" ligam ou desligam os passos em voz.',
+        },
+        itens: {
+          type: 'string',
+          description:
+            'Com "planejar": os itens, separados por ponto e vírgula. Cada um é o número do backlog ("1.3") ' +
+            'ou o pedido completo, em português.',
+        },
+        acompanhar: {
+          type: 'string',
+          enum: ['dormir', 'ficar'],
+          description: 'Com "planejar": "dormir" se ele vai dormir (voz muda), "ficar" se ele quer ouvir cada passo.',
+        },
+        ate: { type: 'string', description: 'Com "planejar", opcional: a hora de parar, como "06:30".' },
+        maximo: { type: 'string', description: 'Com "planejar", opcional: quantos itens no máximo (padrão 6).' },
+      },
+      required: ['acao'],
+    },
+  },
+  {
+    type: 'function',
     name: 'olhar_camera',
     description:
       'Tira uma foto pela webcam e a anexa à conversa para você ver. Só quando pedido.',
@@ -652,6 +709,8 @@ const FERRAMENTAS_DO_CELULAR = new Set([
   'executar_tarefa',
   'desenvolvimento',
   'fenix',
+  'ancora',
+  'modo_noturno',
   'bom_dia',
   'noticias',
   'ajustar_interface',
@@ -661,8 +720,9 @@ const FERRAMENTAS_DO_CELULAR = new Set([
 const INSTRUCOES_DO_CELULAR = `
 
 CANAL DESTA SESSÃO. Agora o Ricardo fala com você pelo app do iPhone. Só existem as
-ferramentas executar_tarefa, desenvolvimento, fenix, bom_dia, noticias,
-ajustar_interface, ignorar_fala e dormir. Aqui, ajustar_interface só mexe nos popups: "limpe a bagunça" e "fechar tudo"
+ferramentas executar_tarefa, desenvolvimento, fenix, ancora, modo_noturno, bom_dia,
+noticias, ajustar_interface, ignorar_fala e dormir. A âncora e o modo noturno valem
+aqui como no computador, com o sim falado no microfone do celular. Aqui, ajustar_interface só mexe nos popups: "limpe a bagunça" e "fechar tudo"
 são limpar_tela com "popups", e "fechar este popup", "próximo popup" e "tela cheia" são
 o campo popups. O desenvolvimento (backlog, propor, confirmar, aprovar, reverter, pull
 request) e a Fênix (rotinas e scripts bash) funcionam aqui como no computador, com a

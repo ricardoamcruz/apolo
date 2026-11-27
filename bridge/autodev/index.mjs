@@ -22,7 +22,7 @@ import { createServer } from 'node:net'
 import { obterLocal } from '../tls.mjs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { BASE, PASTA_AUTODEV, classificar, gateIntacto } from './politica.mjs'
+import { BASE, PASTA_AUTODEV, classificar, gateIntacto, travasTocadas } from './politica.mjs'
 import { PARADAS, PEDIDO_DE_CONTINUAR, rodarAgente } from './agente.mjs'
 import { abrirEditor as abrirEditorPadrao, fecharEditor as fecharEditorPadrao } from './editor.mjs'
 import { historicoDeBranches, proximaFase } from '../branches.mjs'
@@ -174,6 +174,8 @@ export function criarAutodev({
   abrirPr = null,
   abrirEditor = abrirEditorPadrao,
   fecharEditor = fecharEditorPadrao,
+  // O modo noturno (docs/adr/0040): o item em curso é da noite? E a voz está muda?
+  noite = { deNoite: () => false, silencio: () => false, observarMs: 3 * 60_000 },
 }) {
   mkdirSync(pasta, { recursive: true })
   const arqEstado = join(pasta, 'estado.json')
@@ -241,6 +243,7 @@ export function criarAutodev({
       etapa: undefined,
       entrega: undefined,
       testeDesde: undefined,
+      sensiveis: undefined,
       resultado: { id, tipo, mensagem, ...extra },
     })
   }
@@ -365,6 +368,12 @@ export function criarAutodev({
     if (proibidos.length) {
       return ['falhou', `A alteração tocou em ${proibidos.join(', ')} e foi descartada.`]
     }
+    // De noite, o sensível vai ao ar e é marcado; as travas da noite, nunca (docs/adr/0040).
+    const deNoite = noite.deNoite()
+    const travas = deNoite ? travasTocadas(nomes) : []
+    if (travas.length) {
+      return ['falhou', `Precisa de você: a alteração toca ${travas.join(', ')}, que nem o modo noturno muda. Ela foi descartada.`]
+    }
 
     const titulo = parada ? `Incompleto: ${entrega.titulo}`.slice(0, 72) : entrega.titulo
     await git(copia, 'commit', '-m', titulo, '-m', `${entrega.resumo}\n\nPedido: ${pedido}`)
@@ -379,7 +388,12 @@ export function criarAutodev({
       await git(repo, 'branch', final, sha)
       return ['revisao', textoDaRevisao(motivo, final, entrega.resumo), { branch: final, ...extra }]
     }
-    // Trabalho pela metade não vai ao ar, mas também não se perde.
+    // Trabalho pela metade não vai ao ar, mas também não se perde. De noite, nenhuma
+    // branch nova nasce sozinha: o commit fica numa referência que o relatório cita.
+    if (parada && deNoite) {
+      await git(repo, 'update-ref', `refs/noite/${id}`, sha)
+      return ['falhou', `O agente ${parada} antes de terminar; o que ele fez ficou em refs/noite/${id}.`]
+    }
     if (parada) {
       return guardar(
         `O agente ${parada} antes de terminar (${r.voltas ?? 0} voltas no total). O que ele fez está ` +
@@ -387,7 +401,7 @@ export function criarAutodev({
         { incompleto: true },
       )
     }
-    if (sensiveis.length) {
+    if (sensiveis.length && !deNoite) {
       return guardar(`Ela toca arquivos sensíveis (${sensiveis.join(', ')}) e precisa da revisão do Ricardo.`, { sensiveis })
     }
 
@@ -400,9 +414,16 @@ export function criarAutodev({
     await encerrarCopia()
     await git(repo, 'branch', branch, sha)
     controle = null
-    mudar({ fase: 'aplicando', etapa: 'reiniciando', branch, resumo: entrega.resumo, entrega })
+    mudar({ fase: 'aplicando', etapa: 'reiniciando', branch, resumo: entrega.resumo, entrega, ...(deNoite && { sensiveis }) })
     vigiarTroca()
-    supervisor({ type: 'versao:aplicar', id, sha, branch, interfaces: interfaces() })
+    supervisor({
+      type: 'versao:aplicar',
+      id,
+      sha,
+      branch,
+      interfaces: interfaces(),
+      ...(deNoite && { noturno: true, observarMs: noite.observarMs, silencioso: noite.silencio() }),
+    })
   }
 
   async function trabalhar(id, pedido) {
@@ -477,8 +498,28 @@ export function criarAutodev({
     return { ok: true, mensagem: 'Trabalho iniciado. Você pode continuar usando o assistente.' }
   }
 
+  /**
+   * A conferência completa de uma branch, numa cópia à parte: é a última coisa que
+   * o modo noturno faz antes de enviar a branch (docs/adr/0040).
+   */
+  async function conferir(ref) {
+    if (EM_CURSO.has(estado.fase)) return { ok: false, motivo: 'Há um trabalho em andamento.' }
+    const copia = join(pasta, 'worktrees', `conferencia-${Date.now()}`)
+    try {
+      await git(repo, 'worktree', 'add', '--detach', copia, ref)
+      symlinkSync(join(repo, 'node_modules'), join(copia, 'node_modules'))
+      return await verificar(copia)
+    } catch (err) {
+      return { ok: false, motivo: err.message }
+    } finally {
+      await git(repo, 'worktree', 'remove', '--force', copia).catch(() => {})
+      rmSync(copia, { recursive: true, force: true })
+    }
+  }
+
   return {
     estado: () => estado,
+    conferir,
     /** Resolve quando a limpeza da partida terminar. */
     pronto,
 

@@ -137,6 +137,8 @@ export function lerConfig(arquivo, envDoTerminal = process.env) {
       revisao: (p.revisao ?? []).map(padrao),
       liberados: new Set(p.liberados ?? []),
       invariantes: (p.invariantes ?? []).map((i) => ({ arquivo: i.arquivo, contem: i.contem.map(padrao) })),
+      // O que nem o modo noturno pode mudar, mesmo com os sensíveis liberados (docs/adr/0040).
+      nuncaDeNoite: (p.nuncaDeNoite ?? []).map(padrao),
       branch: p.branch ? padrao(p.branch) : /^[\w./-]+$/,
     },
     instalar: bruto.instalar
@@ -152,6 +154,12 @@ export function lerConfig(arquivo, envDoTerminal = process.env) {
           }
         : null,
     tempos: tempos(bruto.tempos),
+    // O comando de pânico (no A.P.O.L.O., a âncora, docs/adr/0041): quando a Fênix
+    // nova não fica de pé, ou quando ela morre demais, é ele quem põe a versão segura no ar.
+    ultimoRecurso:
+      Array.isArray(bruto.ultimoRecurso) && bruto.ultimoRecurso.length && bruto.ultimoRecurso.every((p) => typeof p === 'string' && p)
+        ? bruto.ultimoRecurso.map(casa)
+        : null,
     comandos: {
       prazoMs: Number(bruto.comandos?.prazoMs ?? 120_000),
       validadeMs: Number(bruto.comandos?.validadeMs ?? 300_000),
@@ -168,6 +176,7 @@ const TEMPOS = {
   servicos: ['estavelMs', 'intervaloMs', 'subidaMs'],
   versoes: ['subidaMs', 'estabilidadeMs', 'intervaloMs', 'vigiaMs'],
   rotinas: ['avisoMs'],
+  renovar: ['prazoMs', 'intervaloMs'],
   voz: ['ruimMs', 'degrauMs', 'rearmarMs'],
 }
 function tempos(bruto) {

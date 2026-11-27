@@ -27,7 +27,8 @@ detalhe está em `docs/`.
   Próxima: **Fase 1 — Core**. Ver `docs/05-roadmap.md`.
 - **Fase 2 encerrada (17/11/2026, decisão do Ricardo):** a última branch dela foi
   `fase-2.10/lapidacao`. A Fase 3 começou com `fase-3.1/terra-a-vista` (a pedido
-  dele, já em 3.1); a próxima é `fase-3.4/<nome-criativo>` (ADR 0016).
+  dele, já em 3.1); a atual é `fase-3.6/vigilia-e-ancora`, e a próxima,
+  `fase-3.7/<nome-criativo>` (ADR 0016).
 - **Pendências em etapas:** o que está aberto fica em "Pendências em etapas", no
   topo de `docs/05-roadmap.md` (08/11/2026): validar, Horizon, contexto e
   comunicação, o que está bloqueado e a Fase 1. Comece por lá.
@@ -237,6 +238,27 @@ detalhe está em `docs/`.
 - **A fala é marcada aqui (ADR 0036):** `src/lib/voz/detectorDeFala.ts` manda
   `activityStart`/`activityEnd`; o detector do Gemini fica desligado, porque deixava o 3.8
   surdo. Não volte a ligá-lo sem medir de novo.
+- **Modo noturno (ADR 0040, RF-73):** `bridge/autodev/noite.mjs` conduz o autodev
+  item por item, sem confirmações, depois de um "confirmo" falado no começo
+  (`modo_noturno`, com o sim em `criarModoNoturnoPelaVoz`, `src/lib/autodev.ts`). Cada
+  item vai ao ar com `noturno` (a Fênix observa 3 min e aceita sensível só com a noite
+  autorizada, `versao:noite`) e é aprovado sozinho; de manhã, PR em rascunho
+  (`pullRequest` com `rascunho`). `TRAVAS_DA_NOITE` (`politica.mjs`) e `nuncaDeNoite`
+  (`fenix.config.json`) têm de bater, e nunca mudam de noite. Não começa com a âncora
+  no ar. "vou dormir" deixa a voz e os avisos quietos até de manhã.
+- **Protocolo Â.N.C.O.R.A. (ADR 0041, RF-74):** `scripts/ancora/ancora.mjs` é o
+  pânico, sem dependências e sem importar o projeto: desliga tudo, guarda o que estava
+  sem commit em `panico/<data>`, sobe a âncora (o repositório no commit dela ou, se ele
+  estiver quebrado, a cópia congelada com `FENIX_VERSAO_FIXA=1`) e confere os
+  serviços. Instalado, é do root (`/usr/local/bin/ancora`, `/usr/local/ancora/`): mudar
+  `scripts/ancora/` não muda o instalado; só `sudo ancora --atualizar <commit da main>`.
+  A voz (`ancora`, `src/lib/ancora.ts`) passa por `fenix` com acao `ancora-*`, que a
+  ponte atende sem a Fênix (`bridge/ancora.mjs`). O vigia do iPhone escuta
+  `<tópico>-ancora` e só aceita o código de um minuto da palavra-senha.
+- **A Fênix renasce no código novo (ADR 0041):** depois de uma troca, aprovação ou
+  atualização que muda `fenix/` ou `fenix.config.json`, `fenix/src/renovar.mjs` sobe
+  uma Fênix nova e sai; se a nova não ficar de pé, chama o `ultimoRecurso` (a âncora).
+  A ponte, no laço de renascimentos, também.
 - **Extensões plugáveis (ADR 0033, RF-68):** uma pasta em `extensoes/<id>/`
   (`apolo.extensao.json`, um `interface.js` de arquivo só e os dados) liga, troca ou
   sai no ar, sem recompilar: a ponte lê e serve (`bridge/plugaveis.mjs`, sensível, que
@@ -339,6 +361,10 @@ npm run test:conversa # testes da janela de conversa (ADR 0024)
 npm run test:resiliencia # o pacto (ADR 0028): branch que mata a ponte volta à main; a Fênix morta é revivida
 npm run test:extensoes # testes das extensões plugáveis (ADR 0033)
 npm run test:atlas   # testes do A.T.L.A.S.: blocos vetoriais, terceira cor, pedido da localização (ADR 0034)
+npm run test:noite   # testes do modo noturno e do autodev (ADR 0040)
+npm run test:ancora  # o pânico inteiro numa pasta temporária, a voz e a ponte da âncora (ADR 0041)
+bash scripts/ancora/instalar.command # instala a âncora (sudo) e congela a primeira a partir da main
+ancora               # o protocolo Â.N.C.O.R.A. (também --estado, --sair, --testar-atalho; sudo ancora --atualizar main)
 npm test             # todos os testes (scripts/, fenix/test/, hermes/test/, modules/aurora/test/)
 ```
 

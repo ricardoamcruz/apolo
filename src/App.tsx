@@ -40,7 +40,8 @@ import { connectRealtime, type RealtimeSession, type ToolResult } from './lib/re
 import { registrarDestinoDaVoz } from './lib/voz/types'
 import { esperaDeReligar, reservaDaTentativa } from './lib/voz/surdez'
 import { startAnalyser, micLevel, retomarAnalyser } from './lib/audio'
-import { foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/autodev'
+import { criarModoNoturnoPelaVoz, foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/autodev'
+import { criarAncoraPelaVoz, type RespostaDaAncora } from './lib/ancora'
 import { lerParametros, textoDaFenix } from './lib/fenix'
 import { criarTrocaDeVersao, textoDoFimDaTroca, trocaParaAnunciar, type FimDaTroca, type RespostaDaTroca } from './lib/trocaDeVersao'
 import { agradece, pedeModoMaos, vigiarCancelamento } from './lib/comandos'
@@ -169,6 +170,18 @@ const trocaDeVersao = criarTrocaDeVersao({
 })
 /** A troca já anunciada sobrevive à página recarregada pela branch nova. */
 const TROCA_ANUNCIADA = 'apolo:troca-anunciada'
+/** O protocolo âncora pela voz (docs/adr/0041): a explicação, o sim falado e o pânico. */
+const ancoraPelaVoz = criarAncoraPelaVoz({
+  pedir: (acao) => fenix(acao, {}, 20_000) as Promise<RespostaDaAncora>,
+  ouviu: (desde) => ouviuConfirmacao(desde),
+})
+/** O modo noturno pela voz (docs/adr/0040): o plano lido e o "confirmo" dele. */
+const modoNoturno = criarModoNoturnoPelaVoz({
+  pedir: (etapa, extra) => autodev('noite', { etapa, ...extra }),
+  ouviu: (desde) => ouviuConfirmacao(desde),
+})
+/** O último passo da noite já contado, para não repetir depois de a página recarregar. */
+const NOITE_CONTADA = 'apolo:noite-contada'
 
 export default function App() {
   const store = useStore
@@ -394,6 +407,16 @@ export default function App() {
         }
       }
       return { output: `Ação desconhecida: ${acao}.` }
+    }
+
+    if (name === 'ancora') {
+      armIdle()
+      return { output: await ancoraPelaVoz.pedido(String(args.acao ?? '')) }
+    }
+
+    if (name === 'modo_noturno') {
+      armIdle()
+      return { output: await modoNoturno.pedido(args) }
     }
 
     if (name === 'fenix') {
@@ -859,6 +882,18 @@ export default function App() {
     let continuacaoAvisada = false
     watchAutodev((estado) => {
       store.getState().setAutodev(estado)
+      // De noite (docs/adr/0040), a noite conta os passos dela, e só se ele quis ouvir.
+      const n = estado.noite
+      // Velho demais não é notícia: de manhã, quem conta a noite é o bom dia.
+      if (n?.evento && n.evento.id !== localStorage.getItem(NOITE_CONTADA) && Date.now() - n.evento.em < 10 * 60_000) {
+        localStorage.setItem(NOITE_CONTADA, n.evento.id)
+        if (!n.silencio) {
+          session.current?.prompt(
+            `Modo noturno: ${n.evento.texto} Conte isso ao Ricardo em uma frase, sem ler nomes de branch nem de arquivo.`,
+          )
+        }
+      }
+      if (n?.ativa) return
       if (estado.fase !== 'ocioso' && estado.fase !== 'proposto') acompanhando = true
       // Um trabalho em dificuldade é notícia na hora, não só quando ele perguntar.
       if (estado.continuando && !continuacaoAvisada && acompanhando) {

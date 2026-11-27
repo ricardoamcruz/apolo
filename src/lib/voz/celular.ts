@@ -3,7 +3,8 @@ import { chamouPeloNome } from '../chamada'
 import { criarJanela } from '../conversa'
 import { agradece, vigiarCancelamento } from '../comandos'
 import type { AcaoDePopup } from '../comandosDePopup'
-import { foraDeHora, ouviuConfirmacao, registrarFala, type AutodevEstado } from '../autodev'
+import { criarModoNoturnoPelaVoz, foraDeHora, ouviuConfirmacao, registrarFala, type AutodevEstado } from '../autodev'
+import { criarAncoraPelaVoz } from '../ancora'
 import {
   LEITURA_DO_BOM_DIA_MS,
   instrucaoDoBomDia,
@@ -67,6 +68,7 @@ export type MensagemDoCore = {
   sha?: unknown
   confirmar?: unknown
   mesma?: unknown
+  instalada?: unknown
 }
 type PropostaDaFenix = { id: string; script: string; motivo: string }
 type RespostaDoCore = {
@@ -74,6 +76,8 @@ type RespostaDoCore = {
   mensagem: string
   saida?: string
   proposta?: PropostaDaFenix
+  /** A âncora está instalada neste Mac (docs/adr/0041)? */
+  instalada?: boolean
   /** O quadro inteiro da A.U.R.O.R.A., quando o pedido foi o bom dia. */
   bomDia?: ResumoDoBomDia
   /** A prévia de uma troca de branch (docs/adr/0038). */
@@ -283,6 +287,16 @@ export function criarVozDoCelular(
     return { output: r.mensagem }
   }
 
+  /** A âncora e o modo noturno, com as mesmas regras do PC (docs/adr/0040 e 0041). */
+  const ancoraPelaVoz = criarAncoraPelaVoz({
+    pedir: (acao) => comCoreTrabalhando(() => pedirAoCore('fenix', acao, {}, 20_000)),
+    ouviu: (desde) => ouviuConfirmacao(desde),
+  })
+  const modoNoturno = criarModoNoturnoPelaVoz({
+    pedir: (etapa, extra) => comCoreTrabalhando(() => pedirAoCore('autodev', 'noite', { etapa, ...extra }, 30_000)),
+    ouviu: (desde) => ouviuConfirmacao(desde),
+  })
+
   /** Trocar de branch pela voz, com as mesmas regras do PC (src/lib/trocaDeVersao.ts). */
   const trocaDeVersao = criarTrocaDeVersao({
     pedir: (acao, extra) => comCoreTrabalhando(() => pedirAoCore('fenix', acao, extra, 45_000)),
@@ -383,6 +397,8 @@ export function criarVozDoCelular(
     }
     if (nome === 'desenvolvimento') return desenvolvimento(args)
     if (nome === 'fenix') return fenix(args)
+    if (nome === 'ancora') return { output: await ancoraPelaVoz.pedido(String(args.acao ?? '')) }
+    if (nome === 'modo_noturno') return { output: await modoNoturno.pedido(args) }
     if (nome === 'bom_dia') return bomDia()
     // Os temas do bom dia valem nos dois canais: o resumo é o mesmo (docs/adr/0039).
     if (nome === 'noticias') {
@@ -565,6 +581,7 @@ export function criarVozDoCelular(
           mensagem: msg.mensagem ?? (msg.ok ? 'Feito.' : 'O computador não disse o motivo.'),
           saida: msg.saida,
           proposta: msg.proposta,
+          instalada: msg.instalada === true,
           // O bom dia vem no próprio quadro: agenda, notícias e desenvolvimento.
           bomDia: msg.type === 'aurora' ? (msg as unknown as ResumoDoBomDia) : undefined,
           branch: typeof msg.branch === 'string' ? msg.branch : undefined,

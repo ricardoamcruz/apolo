@@ -645,3 +645,42 @@ test('a ponte que reinicia no meio do trabalho deixa o rastro no eventos.log', a
   assert.equal(a.estado().ultimoPedido, 'algo')
   assert.match(readFileSync(join(pasta, 'eventos.log'), 'utf8'), /\[autodev\] 42: falhou — A ponte reiniciou/)
 })
+
+test('de noite, o arquivo sensível passa nas checagens e vai ao ar marcado, com 3 min de observação (ADR 0040)', async () => {
+  const r = repositorio()
+  let checou = false
+  const g = gerente(r, {
+    agente: edita('package.json'),
+    verificar: async () => ((checou = true), { ok: true }),
+    noite: { deNoite: () => true, silencio: () => true, observarMs: 180_000 },
+  })
+  await g.a.acao('propor', { pedido: 'dependência' })
+  await g.a.acao('confirmar')
+  const e = await g.fim()
+  assert.equal(e.fase, 'aplicando')
+  assert.equal(checou, true)
+  assert.deepEqual(e.sensiveis, ['package.json'])
+  assert.equal(g.pedidos[0].type, 'versao:aplicar')
+  assert.equal(g.pedidos[0].noturno, true)
+  assert.equal(g.pedidos[0].observarMs, 180_000)
+  assert.equal(g.pedidos[0].silencioso, true)
+})
+
+test('nem de noite: a alteração que toca uma trava da noite é descartada como "precisa de você"', async () => {
+  const r = repositorio()
+  mkdirSync(join(r.repo, 'bridge'), { recursive: true })
+  const g = gerente(r, {
+    agente: async ({ pasta }) => {
+      mkdirSync(join(pasta, 'bridge'), { recursive: true })
+      writeFileSync(join(pasta, 'bridge', 'gate.mjs'), 'export const tudo = true\n')
+      return { ok: true, texto: 'Feito.' }
+    },
+    noite: { deNoite: () => true, silencio: () => true, observarMs: 180_000 },
+  })
+  await g.a.acao('propor', { pedido: 'afrouxar o gate' })
+  await g.a.acao('confirmar')
+  const e = await g.fim()
+  assert.equal(e.resultado.tipo, 'falhou')
+  assert.match(e.resultado.mensagem, /^Precisa de você: a alteração toca bridge\/gate\.mjs/)
+  assert.equal(g.pedidos.length, 0)
+})

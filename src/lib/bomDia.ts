@@ -22,6 +22,8 @@ export type DadosDoBomDia = {
     branch: string | null
     autodev: { fase: string; pedido: string | null; resultado: string | null } | null
     etapas: { etapa: string; total: number; itens: string[] }[]
+    /** O que o sistema avisa além do dia: o relatório da noite, a âncora velha. */
+    avisos?: string[]
   }
 }
 
@@ -78,6 +80,9 @@ function desenvolvimento(d: DadosDoBomDia): string | null {
   const partes: string[] = []
   const dev = d.desenvolvimento
   const a = dev?.autodev
+  if (dev?.avisos?.length) {
+    partes.push(titulo('Avisos') + `<div class="hud-rows">${dev.avisos.map((t) => linha('!', t)).join('')}</div>`)
+  }
   if (a && a.fase !== 'ocioso') {
     partes.push(titulo('Em andamento') + `<div class="hud-rows">${linha('▸', a.pedido ?? 'alteração', FASES_DO_AUTODEV[a.fase] ?? a.fase)}</div>`)
   }
@@ -154,13 +159,20 @@ function sobreAMusica(r: ResumoDoBomDia, onde: OndeEhOBomDia): string {
   return ''
 }
 
+/** O que o sistema avisa (a noite de trabalho, a âncora velha), dito depois dos compromissos. */
+function avisosDoSistema(r: ResumoDoBomDia): string {
+  const avisos = r.desenvolvimento?.avisos ?? []
+  if (!avisos.length) return ''
+  return `Avisos do sistema, para dizer depois dos compromissos, uma frase cada: ${avisos.join(' ')}\n`
+}
+
 /**
  * A narração do bom dia, com o resumo da A.U.R.O.R.A. e o que fazer depois dele.
  * É a mesma no PC e no celular, tirando a música e os botões que só o PC tem.
  */
 export function instrucaoDoBomDia(r: ResumoDoBomDia, popups: Blade[], onde: OndeEhOBomDia): string {
   return (
-    `${r.texto ?? ''}\n${descreverPopups(popups)}\n\nDê bom dia ao Ricardo e resuma isso em até 30 segundos, ` +
+    `${r.texto ?? ''}\n${descreverPopups(popups)}\n${avisosDoSistema(r)}\nDê bom dia ao Ricardo e resuma isso em até 30 segundos, ` +
     'como um assistente que conhece a rotina dele: compromissos primeiro, um destaque por tema ' +
     'de notícia, o GitHub numa frase. Os detalhes já estão nos popups: não leia listas. ' +
     sobreAMusica(r, onde) +

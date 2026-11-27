@@ -1,6 +1,6 @@
 # ADR 0040 — O modo noturno
 
-- **Status:** proposta
+- **Status:** aceita
 - **Data:** 2026-11-27
 
 ## Contexto
@@ -39,6 +39,10 @@ lista de itens e o modo de acompanhar:
   chega ao iPhone na hora.
 - **"eu fico":** a mesma autonomia, mas a voz conta cada passo, como numa troca de
   branch. Dá para mudar no meio da noite ("pode falar", "silêncio").
+
+O modo noturno não começa com a âncora no ar (ADR 0041): se houve um pânico, a
+noite não começa em cima dele. Também exige `--writes` (o envio e o PR da manhã),
+`--autodev` e a Fênix conectada.
 
 O A.P.O.L.O. lê o plano em voz alta: os itens, a hora de parar e os limites. Só o
 "confirmo" ouvido no microfone (`ouviuConfirmacao`) começa a noite. O que o modelo

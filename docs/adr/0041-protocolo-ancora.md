@@ -1,6 +1,6 @@
 # ADR 0041 — Protocolo Â.N.C.O.R.A., e a Fênix que renasce no código novo
 
-- **Status:** proposta
+- **Status:** aceita
 - **Data:** 2026-11-27
 - **Revisa:** ADR 0028 (o pacto)
 
@@ -43,31 +43,33 @@ Assim, ela já inclui o próprio protocolo.
 
 ### "Só o Ricardo muda" — a garantia técnica
 
-O A.P.O.L.O., o autodev, o modo noturno e qualquer agente rodam como o usuário
-do Ricardo. Por isso, três coisas pertencem ao `root`, com permissão `755`:
+O A.P.O.L.O., o autodev, o modo noturno e qualquer agente rodam como o usuário do
+Ricardo. Por isso, três coisas pertencem ao `root`:
 
-- o script (`/usr/local/bin/ancora`);
-- a cópia congelada;
+- o script (`/usr/local/bin/ancora` e `/usr/local/ancora/bin/ancora.mjs`);
+- as cópias congeladas;
 - a configuração (`/usr/local/ancora/ancora.conf`).
 
 Nenhum deles consegue alterá-los. Instalar e trocar a âncora pedem `sudo`, ou
 seja, a senha dele:
 
 ```bash
-sudo scripts/ancora/instalar.command        # uma vez: instala o script e o vigia
-sudo ancora --atualizar <commit>            # congela uma nova âncora
+sudo node scripts/ancora/ancora.mjs instalar   # uma vez (ou scripts/ancora/instalar.command)
+sudo ancora --atualizar <commit>               # congela uma nova âncora
 ```
 
-`--atualizar` faz quatro coisas:
+`--atualizar` faz cinco coisas:
 
 1. confere que o commit está na `main` do GitHub;
-2. clona e instala as dependências;
-3. gera o manifesto;
-4. guarda a âncora anterior (`N-1`), para voltar a ela se a nova falhar.
+2. clona e instala as dependências, como o usuário do Ricardo, numa pasta
+   temporária;
+3. passa a pasta para o `root` e gera o manifesto;
+4. troca o script instalado pelo daquele commit;
+5. guarda a âncora anterior (`N-1`), para voltar a ela se a nova não conferir.
 
 No repositório, `scripts/ancora/` é a fonte do que se instala, e é sensível
-(`bridge/autodev/politica.mjs`). Mudar o arquivo do repositório não muda o que
-está instalado: só um novo `sudo` o faz.
+(`bridge/autodev/politica.mjs`) e uma das travas da noite (ADR 0040). Mudar o
+arquivo do repositório não muda o que está instalado: só um novo `sudo` o faz.
 
 ### `ancora`, o pânico
 
@@ -75,93 +77,112 @@ O pânico não pergunta nada à Fênix nem à ponte. Pode ser justamente uma del
 quebrou.
 
 1. **Desligar tudo.**
-   - Encerra, pelas portas configuradas e pelos processos que rodam das pastas do
-     A.P.O.L.O. (o repositório, `~/.apolo/autodev`, a cópia ativa da âncora): a
-     Fênix, a ponte, a interface, o H.E.R.M.E.S., a A.U.R.O.R.A. e as extensões.
-   - Fecha o Chrome do perfil `~/.apolo/chrome` e o `caffeinate` da noite.
+   - Encerra o que escuta nas portas do A.P.O.L.O., os processos dos serviços
+     (Fênix, ponte, interface, H.E.R.M.E.S., A.U.R.O.R.A.) que rodam das pastas do
+     A.P.O.L.O. (o repositório, a cópia ativa da âncora) e tudo o que eles
+     abriram (o agente do autodev, o `caffeinate` da noite).
+   - Fecha o Chrome do perfil `~/.apolo/chrome`.
    - Primeiro pede com `SIGTERM`; depois de 5 s, força com `SIGKILL`.
+   - Nunca mata outros programas que só estejam na pasta do repositório (o VS
+     Code, um terminal).
 2. **Guardar e limpar, sem apagar o trabalho.**
    - O que estava sem commit no repositório vai para uma branch
      `panico/<data-hora>`.
-   - A worktree do autodev, a transição pela metade da Fênix e o teste em aberto
-     são arquivados em `~/.apolo/ancora/arquivo/<data-hora>/`.
+   - A worktree do autodev, a transição pela metade da Fênix, o teste e a noite em
+     aberto são movidos para `~/.apolo/ancora/arquivo/<data-hora>/`.
    - Nada é apagado de vez.
-3. **Subir da âncora, sempre.**
+3. **Subir da âncora, sempre** (decisão do Ricardo: num pânico não se sabe o que
+   quebrou, e a `main` pode ser o problema).
    - O script confere o manifesto da cópia congelada. Se não bater, usa a âncora
      anterior e diz isso.
-   - Copia a âncora para `~/.apolo/ancora/ativa/`: a cópia congelada nunca roda
-     direto, porque o Vite e a Fênix escrevem na pasta.
-   - Sobe a Fênix de lá, em **modo âncora**: um sistema completo, com troca de
-     versão, autodev e extensões (decisão do Ricardo). Só o modo noturno fica de
-     fora enquanto a âncora estiver no ar.
+   - **Modo repositório** (o normal): põe o repositório no commit da âncora
+     (`git switch --detach <sha>`, pelo sha do manifesto, nunca pela tag, que
+     alguém pode mover), confere que a cópia ficou limpa nesse commit e copia as
+     dependências da cópia congelada. Sobe a Fênix do repositório, com as mesmas
+     opções que ela tinha (`--writes`, `--autodev`).
+   - **Modo cópia** (o repositório não está utilizável: Git quebrado, commit
+     sumido, ou o modo repositório não ficou de pé): copia a âncora para
+     `~/.apolo/ancora/ativa/`, com o `.env.local` do repositório, e sobe a Fênix
+     de lá. A cópia congelada nunca roda direto, porque o Vite e a Fênix escrevem
+     na pasta.
 4. **Fresh start conferido.**
-   - Confere o `/saude` de cada serviço e a interface conectada.
+   - Confere a saúde de cada serviço e a interface conectada.
    - Mostra no terminal uma lista com ✔ ou ✖.
-   - Avisa o iPhone "a âncora está no ar" ou "a âncora não subiu", sem detalhe
-     técnico (ADR 0027).
+   - Avisa o iPhone e o Mac, direto pelo ntfy e pelo macOS, porque o H.E.R.M.E.S.
+     pode estar desligado: "a âncora está no ar" ou "a âncora não subiu", sem
+     detalhe técnico (ADR 0027). O detalhe fica em `~/.apolo/ancora/registro.log`.
 
-O pânico sempre leva à âncora, decisão do Ricardo: num pânico não se sabe o que
-quebrou, e a `main` pode ser o problema.
+### O modo âncora
 
-**Trocar de versão a partir da âncora é sair dela.** A cópia ativa nunca muda de
-branch: pedir a `main` ou uma `fase-x.y` (voz, `npm run trocar`, `ancora --sair`)
-desliga a cópia da âncora e sobe a Fênix do repositório na versão pedida, com a
-prévia e o sim de sempre (ADR 0038). Se essa versão não ficar de pé, a volta é
-para a âncora, e não para a `main`.
+Com a âncora no ar, o A.P.O.L.O. é um sistema completo, decisão do Ricardo:
 
-**O autodev a partir da âncora** trabalha no repositório, numa worktree no commit
-da âncora, como na ADR 0031. Pôr a alteração em teste é a mesma saída: a Fênix do
-repositório sobe a branch de teste, e descartar ou quebrar volta à âncora.
+- **Troca de versão:** pedir a `main` ou uma `fase-x.y` (voz, `npm run trocar`) é
+  a troca de sempre, com a prévia e o sim (ADR 0038). Se a versão pedida não ficar
+  de pé, a volta é para a âncora, que é a versão de onde a troca partiu.
+- **Autodev:** parte do commit da âncora, como de qualquer versão no ar (ADR 0031).
+- **Extensões:** carregam de `extensoes/`, como sempre (ADR 0033).
+- **Modo noturno:** bloqueado enquanto a âncora estiver no ar. Se um pânico
+  aconteceu, a noite não começa em cima dele.
 
-**As extensões** (ADR 0033) carregam de `extensoes/` do repositório, como sempre.
-Uma extensão quebrada já não derruba a ponte, porque ela não executa nada delas.
+No modo cópia não há repositório para trocar: a Fênix recusa troca, atualização e
+autodev (`FENIX_VERSAO_FIXA=1`) e diz que é preciso consertar o repositório e
+rodar `ancora --sair`. `ancora --sair` desliga tudo e faz um `npm start` normal
+do repositório, na `main`.
+
+A âncora fica marcada em `~/.apolo/ancora/no-ar.json` enquanto o commit no ar for
+o dela.
 
 ### Como acionar
 
 - **No terminal:** `ancora`.
 - **Na Área de Trabalho:** dois cliques em `Âncora.command`.
-- **Pela voz:** "protocolo âncora", confirmado pela transcrição.
-- **Pelo iPhone, num canal que não passa pelo A.P.O.L.O.:**
-  - Um vigia (`launchd`, do `root`, instalado junto) escuta o tópico do ntfy
-    `<tópico>-ancora`.
-  - Ele só aciona com a palavra-senha do Ricardo. A palavra fica com hash em
-    `ancora.conf`, e o tópico sozinho não basta.
-  - Uma vez a cada 10 minutos, no máximo; cada pedido, aceito ou recusado, vai ao
-    registro (`/usr/local/ancora/registro.log`).
-  - Um Atalho do iPhone ("Âncora") manda a mensagem.
-  - O vigia avisa no tópico do Ricardo quando começa e quando termina.
-  - Ele fala direto com o ntfy, porque o H.E.R.M.E.S. pode estar desligado.
+- **Pela voz, no PC e no app do iPhone:** "protocolo âncora". A ferramenta `ancora`
+  explica o que vai acontecer e pergunta; o sim é conferido na transcrição do
+  microfone (do PC ou do celular), como na troca de branch (`src/lib/ancora.ts`).
+  A ponte chama `ancora` e sai do caminho junto com todo o resto.
+- **Pelo Atalho do iPhone, num canal que não passa pelo A.P.O.L.O.:**
+  - Um vigia (`/Library/LaunchAgents`, do `root`, rodando como o usuário dele)
+    escuta o tópico do ntfy `<tópico>-ancora`.
+  - O tópico sozinho não basta, e a palavra-senha nunca passa pelo ntfy. O Atalho
+    manda um código que vale um minuto: o SHA-256 de `<palavra>:<AAAAMMDDhhmm>`. A
+    palavra fica em `ancora.conf`, que só o `root` altera. Um código já usado não
+    vale de novo.
+  - Uma vez a cada 10 minutos, no máximo. Cada pedido, aceito ou recusado, vai ao
+    registro.
+  - O vigia avisa no tópico do Ricardo quando começa, e o pânico, quando termina.
 
 O pior que um tópico vazado faz, sem a palavra, é encher o registro. Com a palavra,
-é pôr o sistema na versão segura, nada mais.
+é pôr o sistema na versão segura, nada mais. Quem já roda como o usuário do
+Ricardo pode chamar `ancora` direto: é o mesmo efeito, por isso não é uma ameaça
+nova.
 
 ### A Fênix renasce de propósito (revisão do pacto)
 
-- **Troca que muda `fenix/`.** A Fênix sobe uma Fênix nova no código novo,
-  entrega a ela os serviços (que ela já adota, ADR 0029) e sai.
-- **A nova não fica de pé.** Se ela não responder em 2 minutos, ou se cair 3 vezes
-  em 10 minutos, a ponte não a revive mais com o código da branch: chama
-  `ancora`.
+- **Troca que muda o código da Fênix.** Depois de uma troca, aprovação ou
+  atualização concluída que muda `fenix/` ou o `fenix.config.json`, ela derruba os
+  serviços e o canal, sobe uma Fênix nova no código novo e espera até 2 minutos
+  que ela responda com os serviços de pé.
+  - De pé: a antiga sai.
+  - Não ficou de pé: a antiga mata a nova e chama a âncora. Sem âncora instalada,
+    a antiga retoma o posto, com o código dela, e avisa.
 - **Fênix morta fora de uma troca.** O pacto de hoje segue valendo: a ponte a
-  revive, e depois de 3 vezes chama `ancora` em vez de só desistir.
+  revive. Depois de 3 vezes em 10 minutos, chama a âncora em vez de só desistir.
 
-Com isso, uma alteração em `fenix/` vai ao ar como as outras, inclusive de
-madrugada.
+O caminho da âncora vem do `fenix.config.json` (`ultimoRecurso`): a Fênix
+continua sem saber nada do A.P.O.L.O. (ADR 0025), e a ponte o recebe na receita
+do renascimento. Com isso, uma alteração em `fenix/` vai ao ar como as outras,
+inclusive de madrugada.
 
 ## Consequências
 
 - Existe um caminho de volta que não depende de nenhum código mutável. Ele é tão
-  bom quanto a última âncora: atualizar a âncora de tempos em tempos é tarefa do
-  Ricardo, e o bom dia pode lembrar quando ela ficar velha.
-- **O `.env.local` é copiado do repositório para a cópia ativa a cada pânico.** É
-  a única coisa que a âncora lê de fora dela. Se o `.env.local` estiver ruim, a
-  lista ✔/✖ mostra.
-- **Fica mais difícil:** a instalação pede `sudo` uma vez, e a cópia congelada
-  ocupa o tamanho do projeto com `node_modules` (cada âncora mais a anterior).
-- **Testes:**
-  - `scripts/ancora.test.mjs` roda o pânico numa pasta temporária, sem `root`:
-    desligar, guardar, manifesto que não bate, subir e a lista.
-  - O vigia é testado com a palavra certa, a errada e o limite de 10 minutos.
-  - `test:resiliencia` ganha a Fênix nova que não sobe e a ponte que chama a âncora.
-- O que não está aqui fica para depois: outra máquina com a âncora, e a âncora
-  como servidor (RNF de "servidor amanhã").
+  bom quanto a última âncora: o bom dia lembra quando ela passa de 30 dias.
+- O `.env.local` é a única coisa que o modo cópia lê de fora da âncora. Se ele
+  estiver ruim, a lista ✔/✖ mostra.
+- Fica mais difícil: a instalação pede `sudo` uma vez, e cada âncora (mais a
+  anterior) ocupa o tamanho do projeto com `node_modules`.
+- Testes: `scripts/ancora.test.mjs` cobre o manifesto, a escolha do que matar, o
+  guardar, os códigos do vigia e um pânico inteiro numa pasta temporária, sem
+  `root`. `fenix/test/renovar.test.mjs` cobre a Fênix que renasce e a que não
+  sobe, e `scripts/renascer.test.mjs`, a ponte que chama a âncora.
+- Fica para depois: a âncora em outra máquina, ou como servidor.

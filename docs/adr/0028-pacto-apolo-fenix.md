@@ -1,6 +1,6 @@
 # ADR 0028 — O pacto entre A.P.O.L.O. e F.Ê.N.I.X.: cada um revive o outro
 
-- **Status:** proposta
+- **Status:** proposta (revisada pela ADR 0041: a Fênix renasce no código novo, e o laço chama a âncora)
 - **Data:** 2026-11-12
 
 ## Contexto

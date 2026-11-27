@@ -21,6 +21,10 @@ export type AutodevEstado = {
   continuando?: boolean
   testeDesde?: number
   resumo?: string
+  /** De noite, os arquivos sensíveis que a alteração toca (docs/adr/0040). */
+  sensiveis?: string[]
+  /** O modo noturno, quando há um (bridge/autodev/noite.mjs). */
+  noite?: ResumoDaNoite | null
   resultado?: {
     id: string
     tipo: 'aprovado' | 'revertido' | 'revisao' | 'falhou' | 'cancelado' | 'recusado'
@@ -31,6 +35,17 @@ export type AutodevEstado = {
     /** O endereço do pull request, depois de aberto. */
     pr?: string
   }
+}
+
+/** O resumo do modo noturno que a ponte manda junto com o estado do autodev. */
+export type ResumoDaNoite = {
+  ativa: boolean
+  fase: 'planejada' | 'rodando' | 'encerrando' | 'terminada'
+  silencio: boolean
+  ate: number | null
+  itens: { n: number; titulo: string; status: string; tentativas: number }[]
+  /** O último passo, para a voz contar quando ele está acordado. */
+  evento: { id: string; texto: string; em: number } | null
 }
 
 /** "para" só nega sozinho, no começo ou no fim: "manda para a branch" confirma. */
@@ -91,5 +106,49 @@ export async function ouviuFala(
     if (ouvida.em > desde && teste(ouvida.texto)) return true
     if (Date.now() > limite) return false
     await new Promise((ok) => setTimeout(ok, 150))
+  }
+}
+
+/**
+ * O modo noturno pela voz (docs/adr/0040), igual no PC e no celular: o plano é lido,
+ * e só o "confirmo" dele depois da leitura, conferido na transcrição, começa a noite.
+ * O que o modelo diz não conta.
+ */
+export function criarModoNoturnoPelaVoz({
+  pedir,
+  ouviu,
+  agora = () => Date.now(),
+}: {
+  pedir: (etapa: string, extra: Record<string, unknown>) => Promise<{ ok: boolean; mensagem: string }>
+  ouviu: (desde: number) => Promise<boolean>
+  agora?: () => number
+}) {
+  let planoLidoEm: number | null = null
+  return {
+    async pedido(args: Record<string, unknown>): Promise<string> {
+      const acao = String(args.acao ?? '')
+      if (acao === 'planejar') {
+        const r = await pedir('planejar', {
+          itens: String(args.itens ?? ''),
+          acompanhar: String(args.acompanhar ?? 'dormir'),
+          ate: String(args.ate ?? ''),
+          maximo: String(args.maximo ?? ''),
+        })
+        planoLidoEm = r.ok ? agora() : null
+        return r.mensagem
+      }
+      if (acao === 'comecar') {
+        if (planoLidoEm === null) return 'Não há plano lido nesta conversa: chame modo_noturno com acao "planejar" primeiro. Nada começou.'
+        if (!(await ouviu(planoLidoEm))) {
+          return (
+            'O "confirmo" do Ricardo não foi ouvido. Pergunte uma vez se ele confirma o plano da noite; ' +
+            'se ele disser que sim, chame modo_noturno com acao "comecar" de novo. Nada começou.'
+          )
+        }
+        planoLidoEm = null
+        return (await pedir('comecar', {})).mensagem
+      }
+      return (await pedir(acao, {})).mensagem
+    },
   }
 }

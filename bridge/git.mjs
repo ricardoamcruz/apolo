@@ -72,7 +72,7 @@ export const repositorioGithub = (url) =>
  * Cria o pull request de verdade, pelo `gh`. Injetável porque é a única parte
  * que precisa de rede e de uma conta — os testes passam outra no lugar.
  */
-async function prPeloGh({ repo, branch, titulo, corpo }) {
+async function prPeloGh({ repo, branch, titulo, corpo, rascunho = false }) {
   try {
     // Sempre o `origin`, nomeado: sem `--repo`, o `gh` usa o repositório padrão
     // dele, que neste fork é o `upstream` — um projeto público de terceiros.
@@ -81,7 +81,7 @@ async function prPeloGh({ repo, branch, titulo, corpo }) {
     if (!destino) return { ok: false, motivo: 'O remoto origin não é um repositório do GitHub.' }
     const { stdout } = await exec(
       'gh',
-      ['pr', 'create', '--repo', destino, '--base', BASE, '--head', branch, '--title', titulo, '--body', corpo],
+      ['pr', 'create', '--repo', destino, '--base', BASE, '--head', branch, '--title', titulo, '--body', corpo, ...(rascunho ? ['--draft'] : [])],
       { cwd: repo, timeout: REDE_MS },
     )
     // O `gh` imprime a URL do pull request na última linha útil.
@@ -297,7 +297,8 @@ export function criarGit({ repo, ocupado = () => null, criarPr = prPeloGh }) {
     }
   }
 
-  async function pullRequest({ title, body, branch } = {}) {
+  /** `rascunho`: o PR do modo noturno (docs/adr/0040), que ninguém revisou ainda. */
+  async function pullRequest({ title, body, branch, rascunho = false } = {}) {
     const bloqueio = livre()
     if (bloqueio) return bloqueio
 
@@ -352,7 +353,7 @@ export function criarGit({ repo, ocupado = () => null, criarPr = prPeloGh }) {
       // Sem corpo, o histórico serve: é o que o revisor leria primeiro.
       (await git(['log', '--format=- %s', `${BASE}..${alvo}`]))
 
-    const pr = await criarPr({ repo, branch: alvo, titulo, corpo })
+    const pr = await criarPr({ repo, branch: alvo, titulo, corpo, rascunho: Boolean(rascunho) })
     if (pr.ok && pr.existente) {
       return {
         ok: true,

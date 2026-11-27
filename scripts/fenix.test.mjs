@@ -10,7 +10,7 @@ import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { WebSocketServer } from 'ws'
-import { PROIBIDOS, SENSIVEIS, classificar, gateIntacto } from '../bridge/autodev/politica.mjs'
+import { PROIBIDOS, SENSIVEIS, TRAVAS_DA_NOITE, classificar, gateIntacto } from '../bridge/autodev/politica.mjs'
 import { branchValida } from '../bridge/autodev/entrega.mjs'
 import { criarClienteFenix } from '../bridge/fenix.mjs'
 
@@ -25,6 +25,20 @@ test('a Fênix protege exatamente o que a política do autodesenvolvimento prote
   assert.deepEqual(config.protecao.liberados, ['.env.example'])
   // O que a política deixa passar, a Fênix também deixa.
   assert.deepEqual(classificar(['.env.example']), { proibidos: [], sensiveis: [] })
+})
+
+test('o que nem a noite muda é o mesmo na Fênix e na política (docs/adr/0040)', () => {
+  const nossos = TRAVAS_DA_NOITE.map((re) => `${re.source}/${re.flags}`).sort()
+  const dela = config.protecao.nuncaDeNoite.map(padrao).map((re) => `${re.source}/${re.flags}`).sort()
+  assert.deepEqual(dela, nossos)
+  // Toda trava da noite que é código também é sensível de dia.
+  for (const f of ['bridge/gate.mjs', 'bridge/autodev/noite.mjs', 'src/lib/ancora.ts', 'scripts/ancora/ancora.mjs', 'fenix.config.json']) {
+    assert.equal(classificar([f]).sensiveis.length, 1, f)
+  }
+})
+
+test('o último recurso da Fênix é a âncora (docs/adr/0041)', () => {
+  assert.deepEqual(config.ultimoRecurso, ['/usr/local/bin/ancora', '--panico'])
 })
 
 test('a invariante da Fênix sobre bridge/server.mjs é a mesma do gateIntacto', () => {

@@ -8,10 +8,13 @@ import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { freemem, loadavg, totalmem } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { criarAvisos, explicacaoDaRotina } from './avisos.mjs'
 import { criarCanal } from './canal.mjs'
+import { pedirAFenix } from './cliente.mjs'
+import { criarRenovacao } from './renovar.mjs'
 import { criarComandos, montar, rodar } from './rotinas.mjs'
 import { criarServicos } from './servicos.mjs'
 import { criarVersoes } from './versoes.mjs'
@@ -51,6 +54,8 @@ export function receitaDoRenascimento(config, { comando, cwd, tokenDoAmbiente = 
     saida: join(config.pasta, 'fenix.log'),
     registro: join(config.pasta, 'renascimentos.log'),
     limpar: [...limpar],
+    // Quando ela morre demais, quem a revive chama isto em vez de só desistir (docs/adr/0041).
+    ...(config.ultimoRecurso ? { ultimoRecurso: config.ultimoRecurso } : {}),
   }
 }
 
@@ -62,7 +67,17 @@ export function receitaDoRenascimento(config, { comando, cwd, tokenDoAmbiente = 
  */
 export function criarFenix(
   config,
-  { flags = [], token, log = console.log, saida, tempos = config.tempos ?? {}, renascer = null, renascida = false } = {},
+  {
+    flags = [],
+    token,
+    log = console.log,
+    saida,
+    tempos = config.tempos ?? {},
+    renascer = null,
+    renascida = false,
+    renovada = false,
+    sair = () => process.exit(0),
+  } = {},
 ) {
   mkdirSync(config.pasta, { recursive: true })
   const ativas = flags.filter((f) => f in config.flags).map((f) => config.flags[f])
@@ -165,6 +180,9 @@ export function criarFenix(
     notificar: (r) => {
       canal?.avisar({ type: 'versao:resultado', ...r, versao: versoes.estado() })
       avisarResultado(r)
+      // Aprovada uma alteração no código dela, ela renasce nele (docs/adr/0041), depois
+      // de a ponte ter tempo de gravar o resultado: a renovação a derruba.
+      if (r.tipo === 'aprovado') renovarDepois(5000)
     },
     protecao: config.protecao,
     versaoSegura: config.versaoSegura,
@@ -172,8 +190,56 @@ export function criarFenix(
     log,
     // A volta sozinha à versão segura, depois de quedas seguidas numa branch de fase.
     aoTrocar: (r) => avisarTroca(r),
+    versaoFixa: (config.ambiente ?? process.env).FENIX_VERSAO_FIXA === '1',
     ...tempos.versoes,
   })
+
+  /**
+   * A Fênix que renasce no código novo (docs/adr/0041). Ela sabe o que é o código
+   * dela pela própria pasta e pelo arquivo de configuração, relativos ao projeto.
+   */
+  let shaDaPartida = null
+  const caminhosDaFenix = [fileURLToPath(new URL('..', import.meta.url)), config.arquivo]
+    .filter(Boolean)
+    .map((c) => relative(config.repo, c))
+    .filter((c) => c && !c.startsWith('..') && !isAbsolute(c))
+  const ambienteDaNova = () => {
+    const env = { ...(config.ambiente ?? process.env) }
+    for (const k of ['FENIX_RENASCIDA', 'FENIX_RENOVADA', 'FENIX_URL', 'FENIX_PID', 'FENIX_RENASCER']) delete env[k]
+    return env
+  }
+  const renovacao = criarRenovacao({
+    git: async (...a) => (await exec('git', a, { cwd: config.repo, timeout: 30_000 })).stdout.trim(),
+    shaDaPartida: () => shaDaPartida,
+    caminhos: caminhosDaFenix,
+    // Numa porta pedida ao sistema (0), a nova não teria como ser achada.
+    receita: renascer && config.escuta.porta
+      ? { comando: renascer.comando, cwd: renascer.cwd, saida: join(config.pasta, 'fenix.log'), get env() { return ambienteDaNova() } }
+      : null,
+    ocupado: () => versoes.emTroca(),
+    encerrar: async () => {
+      await servicos.encerrar()
+      await canal.fechar()
+    },
+    retomar: async () => {
+      porta = await canal.ligar()
+      servicos.retomar()
+    },
+    respondeu: async () => {
+      const r = await pedirAFenix({ url: url(config.escuta.porta), token, ca: tls?.cert, msg: { type: 'estado' }, prazoMs: 5000 })
+      return Boolean(r.ok && r.servicos?.filter((x) => !x.opcional).every((x) => x.status === 'ligado'))
+    },
+    ultimoRecurso: config.ultimoRecurso,
+    anotar: (linha) => registrarEvento(linha),
+    avisar: (texto) => avisos.avisar({ titulo: `${config.nome}: a Fênix tentou renascer`, texto, prioridade: 'alta' }),
+    sair: () => {
+      avisos.fechar()
+      sair()
+    },
+    ...tempos.renovar,
+  })
+  /** Depois de uma troca, a voz precisa de um tempo para contar como foi antes de a ponte reiniciar. */
+  const renovarDepois = (ms) => setTimeout(() => void renovacao.talvez(), ms).unref?.()
 
   /**
    * O fim de uma troca de branch (docs/adr/0038). A ponte que pediu reiniciou no
@@ -192,6 +258,7 @@ export function criarFenix(
           ? 'A troca falhou antes de mexer em qualquer coisa. O motivo ficou no eventos.log da Fênix.'
           : `A ${r.para ?? 'branch nova'} não ficou de pé; voltei para a versão de antes, que segue no ar. O motivo ficou no eventos.log da Fênix.`
     avisos.avisar({ titulo: `${config.nome}: ${titulo}`, texto, prioridade: r.ok && !r.automatica ? 'normal' : 'alta' })
+    if (r.ok) renovarDepois(20_000)
   }
 
   servicos.definir({
@@ -216,8 +283,15 @@ export function criarFenix(
 
   const rodando = new Set()
 
+  /** As alterações do modo noturno: de madrugada, a central fica quieta (docs/adr/0040). */
+  const silenciosas = new Set()
+
   /** O resultado de uma troca de versão também vai para o celular e para o Mac. */
-  function avisarResultado({ tipo, mensagem, branch }) {
+  function avisarResultado({ id, tipo, mensagem, branch }) {
+    if (silenciosas.has(id)) {
+      if (['aprovado', 'revertido', 'falhou'].includes(tipo)) silenciosas.delete(id)
+      return
+    }
     const titulos = {
       em_teste: 'Alteração no ar para teste',
       aprovado: 'Alteração aprovada',
@@ -306,6 +380,7 @@ export function criarFenix(
         // A ponte que pediu reinicia no meio, e a resposta por ela se perde: o
         // resultado chega ao Ricardo também pela central (Mac e iPhone).
         avisos.avisar({ titulo: `${config.nome}: atualização`, texto: avisoDaAtualizacao(r), prioridade: r.ok ? 'normal' : 'alta' })
+        if (r.ok) renovarDepois(20_000)
         return r
       }
       if (nome === 'reiniciar') {
@@ -377,8 +452,11 @@ export function criarFenix(
       case 'estado':
         return { ok: true, ...estado() }
       case 'versao:aplicar':
+        if (msg.silencioso && msg.id) silenciosas.add(msg.id)
         void versoes.aplicar(msg)
         return
+      case 'versao:noite':
+        return versoes.noite(msg)
       case 'versao:aprovar':
         void versoes.aprovar(msg)
         return
@@ -442,6 +520,8 @@ export function criarFenix(
           prioridade: 'alta',
         })
       }
+      if (renovada) registrarEvento('[fenix] renasci no código novo, a pedido da Fênix anterior')
+      shaDaPartida = await exec('git', ['rev-parse', 'HEAD'], { cwd: config.repo, timeout: 30_000 }).then((r) => r.stdout.trim(), () => null)
       const interrompida = await versoes.recuperar()
       porta = await canal.ligar()
       await servicos.liberarPortas()
@@ -466,8 +546,11 @@ export function criarFenix(
               : 'Uma alteração em teste foi interrompida; a versão segura voltou ao ar.',
         })
       }
+      // A partida pode ter voltado a uma versão com outra Fênix: ela renasce nela.
+      renovarDepois(3000)
       return porta
     },
+    renovacao,
     avisos,
     async encerrar() {
       clearTimeout(avisarEstado)

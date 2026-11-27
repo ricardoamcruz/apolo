@@ -13,7 +13,7 @@ subiu: uma mudança em `fenix/` só vale depois de um reinício manual. E se o c
 novo da Fênix for ruim, a ponte a revive três vezes com o mesmo código quebrado e
 desiste.
 
-A V.I.G.Í.L.I.A. (ADR 0040) põe no ar, de madrugada, código que ninguém revisou.
+O modo noturno (ADR 0040) põe no ar, de madrugada, código que ninguém revisou.
 O Ricardo pediu, em 27/11/2026, uma saída que não dependa de nada que possa ter
 quebrado: nem da Fênix, nem da `main`, nem do repositório. Ela deve fazer três
 coisas:
@@ -43,7 +43,7 @@ Assim, ela já inclui o próprio protocolo.
 
 ### "Só o Ricardo muda" — a garantia técnica
 
-O A.P.O.L.O., o autodev, a V.I.G.Í.L.I.A. e qualquer agente rodam como o usuário
+O A.P.O.L.O., o autodev, o modo noturno e qualquer agente rodam como o usuário
 do Ricardo. Por isso, três coisas pertencem ao `root`, com permissão `755`:
 
 - o script (`/usr/local/bin/ancora`);
@@ -91,8 +91,9 @@ quebrou.
      anterior e diz isso.
    - Copia a âncora para `~/.apolo/ancora/ativa/`: a cópia congelada nunca roda
      direto, porque o Vite e a Fênix escrevem na pasta.
-   - Sobe a Fênix de lá, em **modo âncora**. Nele não há troca de versão,
-     atualização da `main`, autodev nem V.I.G.Í.L.I.A., e as extensões não carregam.
+   - Sobe a Fênix de lá, em **modo âncora**: um sistema completo, com troca de
+     versão, autodev e extensões (decisão do Ricardo). Só o modo noturno fica de
+     fora enquanto a âncora estiver no ar.
 4. **Fresh start conferido.**
    - Confere o `/saude` de cada serviço e a interface conectada.
    - Mostra no terminal uma lista com ✔ ou ✖.
@@ -100,9 +101,20 @@ quebrou.
      técnico (ADR 0027).
 
 O pânico sempre leva à âncora, decisão do Ricardo: num pânico não se sabe o que
-quebrou, e a `main` pode ser o problema. Para sair dela, há `ancora --sair`, a voz
-("sair da âncora", com o sim falado) ou o iPhone. A saída desliga a cópia da âncora
-e faz um `npm start` normal do repositório, na `main`.
+quebrou, e a `main` pode ser o problema.
+
+**Trocar de versão a partir da âncora é sair dela.** A cópia ativa nunca muda de
+branch: pedir a `main` ou uma `fase-x.y` (voz, `npm run trocar`, `ancora --sair`)
+desliga a cópia da âncora e sobe a Fênix do repositório na versão pedida, com a
+prévia e o sim de sempre (ADR 0038). Se essa versão não ficar de pé, a volta é
+para a âncora, e não para a `main`.
+
+**O autodev a partir da âncora** trabalha no repositório, numa worktree no commit
+da âncora, como na ADR 0031. Pôr a alteração em teste é a mesma saída: a Fênix do
+repositório sobe a branch de teste, e descartar ou quebrar volta à âncora.
+
+**As extensões** (ADR 0033) carregam de `extensoes/` do repositório, como sempre.
+Uma extensão quebrada já não derruba a ponte, porque ela não executa nada delas.
 
 ### Como acionar
 

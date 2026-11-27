@@ -1,4 +1,4 @@
-# ADR 0040 — V.I.G.Í.L.I.A., o trabalho da noite
+# ADR 0040 — O modo noturno
 
 - **Status:** proposta
 - **Data:** 2026-11-27
@@ -26,8 +26,9 @@ saiu de um brainstorming com o Ricardo, em 27/11/2026. As escolhas dele:
 
 ## Decisão
 
-**O nome.** V.I.G.Í.L.I.A. (ADR 0018): quem fica acordado cuidando enquanto o
-outro dorme. É um modo do autodesenvolvimento, e não um serviço à parte.
+**O nome.** "Modo noturno" (a voz também aceita "modo autônomo"), sem nome
+próprio, a pedido do Ricardo: não é um sistema plugável (ADR 0018), e sim um modo
+do autodesenvolvimento.
 
 **Começo.** Pela ferramenta `desenvolvimento`, com a ação `noite`, a voz recebe a
 lista de itens e o modo de acompanhar:

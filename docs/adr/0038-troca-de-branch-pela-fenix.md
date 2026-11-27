@@ -85,3 +85,33 @@ de versão depender de mão humana ou de um atalho que derruba a voz.
   branch, sem o Ricardo confirmar e aprovar cada um. Hoje cada alteração ainda pede o
   sim dele para começar e para ser aprovada (ADR 0011 e 0015), e tirar essa trava é uma
   decisão de segurança que precisa de ADR própria.
+
+## Revisão (27/11/2026): a branch presa, o registro e a troca contada passo a passo
+
+Pedida a `fase-3.5/aviso-e-escolha`, a troca não saía. Um registro de cópia de
+trabalho do Git (`git worktree`), de uma pasta em `/private/tmp` já apagada, dizia ao
+Git que a branch estava aberta lá, e o Git não abre a mesma branch em duas cópias. A
+prévia não via isso, a troca desligava tudo, falhava e voltava, e a voz só disse que a
+branch estava instável. Nenhuma prévia nem recusa ficava gravada, então o motivo teve de
+ser reconstruído à mão.
+
+1. **A Fênix esquece as cópias de trabalho sem pasta** (`git worktree prune`) antes de
+   planejar e antes de trocar, e anota o que esqueceu. Uma cópia de verdade, com
+   arquivos, nunca é apagada por ela.
+2. **A prévia recusa a branch aberta em outra cópia de verdade**, sem desligar nada, e
+   diz qual é e como fechá-la (`git worktree remove <pasta>`).
+3. **Toda prévia e toda recusa vão ao `eventos.log`**, com a frase dita. O que parou na
+   voz, sem chegar à Fênix (o sim que não apareceu na transcrição, a prévia vencida),
+   também vai, por `versao:voz`, só como código conhecido: o log nunca recebe texto
+   livre vindo de fora.
+4. **A voz conta a troca passo a passo**, com uma frase exata para cada desfecho
+   (`src/lib/trocaDeVersao.ts`): "Reiniciando o sistema na versão 3.5, aviso e
+   escolha. Já volto."; "Reinicialização concluída: estou rodando a versão ...";
+   "Erro de reinicialização: ... voltei automaticamente para a versão principal. Quer
+   que eu analise os logs para entender o que deu errado?"; "Estou de volta à versão
+   principal, como você pediu."; e ainda a volta sozinha depois de quedas seguidas, a
+   troca que não chegou a mudar nada, a que não subiu nem voltou, e a mesma branch
+   trazida para o commit mais novo. Com o sim para os logs, a voz pede a
+   `executar_tarefa` que leia o `eventos.log` e explique em duas frases. Para isso, o
+   fim da troca passa a levar `de` e `para`, e a volta sozinha fica marcada também no
+   estado da Fênix, não só no aviso.

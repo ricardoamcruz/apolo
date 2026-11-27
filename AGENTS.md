@@ -221,7 +221,9 @@ detalhe está em `docs/`.
   `trocar`, com a lógica do sim em `src/lib/trocaDeVersao.ts`, sensível) ou por
   `npm run trocar -- 3.4`. Para uma `fase-x.y` há prévia e o sim falado; para a `main`,
   não. Ela observa e volta sozinha se quebrar, nunca apaga branch, e volta à `main`
-  depois de 3 quedas da ponte em 5 min numa branch de fase. O gate nega ao agente de
+  depois de 3 quedas da ponte em 5 min numa branch de fase. Ela esquece sozinha as
+  cópias de trabalho (`git worktree`) sem pasta, e toda prévia e recusa vai ao
+  `eventos.log`. A voz conta cada passo com a frase de `textoDoFimDaTroca`. O gate nega ao agente de
   tarefas o Git que muda a cópia do A.P.O.L.O. (`comandoMexeNaCopia`): nunca troque
   de branch por `executar_tarefa`, `git_*` ou script.
 - **A voz que volta (ADR 0035, RF-71):** a interface religa a voz sempre, e percebe a

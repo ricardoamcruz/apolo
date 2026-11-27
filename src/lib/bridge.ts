@@ -242,7 +242,7 @@ export type EstadoDaFenix = {
   conectada: boolean
   propostas: PropostaDaFenix[]
   /** O fim da última troca de branch (docs/adr/0038), para anunciar uma vez. */
-  ultimaTroca?: { id: string; ok: boolean; mensagem: string; branch?: string; em?: number; automatica?: boolean } | null
+  ultimaTroca?: { id: string; ok: boolean; mensagem: string; branch?: string; de?: string; para?: string; em?: number; automatica?: boolean } | null
 }
 export type FenixResposta = { ok: boolean; mensagem: string; saida?: string; proposta?: PropostaDaFenix }
 

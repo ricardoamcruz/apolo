@@ -72,7 +72,8 @@ WebSocket em `/fenix`, com `Authorization: Bearer <token>`. O token vem de
 | `versao:aprovar` | `id`, `branch` | depois, aviso `versao:resultado` |
 | `versao:reverter` | `id` | depois, aviso `versao:resultado` |
 | `versao:previa` | `branch` (nome, "3.4" ou "main") | `ok`, `branch`, `sha`, `confirmar`, `sensiveis`, `mensagem` |
-| `versao:trocar` | `branch`, `sha` (o da prévia), `interfaces` | `ok`, `id`, `mensagem` já; depois, aviso `versao:troca` |
+| `versao:trocar` | `branch`, `sha` (o da prévia), `interfaces` | `ok`, `id`, `mensagem` já; depois, aviso `versao:troca` (com `de` e `para`) |
+| `versao:voz` | `codigo` (`sim-nao-ouvido`, `previa-vencida`), `branch` | `ok`; anota no `eventos.log` a troca que parou na voz (só códigos conhecidos) |
 | `avisar` | `titulo`, `texto`, `prioridade` | `ok`, `mensagem`, `entrega` (o que a central respondeu) |
 
 Pedido com `id` recebe `{ type: '<pedido>:resposta', resposta: id, ... }`. Avisos:

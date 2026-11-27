@@ -1107,7 +1107,7 @@ const PRAZO_DA_ROTINA_MS = 50 * 60_000
  * --writes, como o resto do gate, e a confirmação do Ricardo, conferida na
  * interface; a Fênix ainda recusa se houver uma versão sem revisão no ar.
  */
-async function pedirAFenix({ acao, nome, parametros, script, motivo, proposta, branch, sha }) {
+async function pedirAFenix({ acao, nome, parametros, script, motivo, proposta, branch, sha, codigo }) {
   if (!fenix) return { ok: false, mensagem: 'A Fênix não está rodando: suba o Apolo com npm start.' }
   if (!fenix.conectado()) return { ok: false, mensagem: 'A Fênix está fora do ar agora.' }
   const atualizar = async (r) => {
@@ -1143,6 +1143,9 @@ async function pedirAFenix({ acao, nome, parametros, script, motivo, proposta, b
       return fenix.pedir({ type: 'versao:previa', branch: String(branch ?? '') }, 30_000)
     case 'trocar':
       return fenix.pedir({ type: 'versao:trocar', branch: String(branch ?? ''), sha: String(sha ?? ''), interfaces: interfacesDoPc.size })
+    // A troca que parou na voz (o sim não ouvido) também vai ao eventos.log; só o código, nunca texto livre.
+    case 'registrar-troca':
+      return fenix.pedir({ type: 'versao:voz', codigo: String(codigo ?? ''), branch: String(branch ?? '') })
     case 'comando':
       if (!ALLOW_WRITES) {
         return { ok: false, mensagem: 'Comandos livres exigem o A.P.O.L.O. iniciado com npm start -- --writes.' }

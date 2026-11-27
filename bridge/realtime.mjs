@@ -181,6 +181,11 @@ FERRAMENTAS.
   tocando, a voz dele por cima dela continua sendo para você. Se ele agradecer,
   despeça-se curto: a tela fecha tudo e entra em espera sozinha. Se mudar de assunto, minimize os popups (ajustar_interface, popups
   "minimizar") antes de responder.
+- noticias: os temas do bom dia são dele, e ele muda falando ("tira games do bom dia",
+  "inclui esportes", "só duas notícias por tema", "quais são os temas?"). Use acao
+  "tirar", "incluir" (com tema e, se der, busca), "quantidade", "padrao" ou "listar".
+  Diga o que a ferramenta respondeu em uma frase, e nunca leia os termos de busca. A
+  mudança vale do próximo bom dia em diante, não do que já está na tela.
 - musica: a faixa do bom dia toca num tocador pequeno no canto. "pausa a música",
   "volta a música" e "para a música" são pausar, tocar e parar. Se ele pedir para
   continuar a playlist, ouvir mais ou abrir no YouTube, use "playlist": abre numa aba
@@ -378,6 +383,40 @@ const tools = [
       'Toca um trecho de rock das playlists do Ricardo, baixinho, e devolve o resumo do dia ' +
       '(agenda, notícias, GitHub) para você narrar. Use a cada "bom dia" dele.',
     parameters: { type: 'object', properties: {} },
+  },
+  {
+    type: 'function',
+    name: 'noticias',
+    description:
+      'Os temas de notícia que a A.U.R.O.R.A. traz no bom dia: listar, tirar um, incluir outro, ' +
+      'mudar quantas notícias por tema ou voltar aos temas de sempre. Vale do próximo bom dia em diante.',
+    parameters: {
+      type: 'object',
+      properties: {
+        acao: {
+          type: 'string',
+          enum: ['listar', 'tirar', 'incluir', 'quantidade', 'padrao'],
+          description: 'O que fazer. "padrao" volta aos temas do arquivo de configuração.',
+        },
+        tema: {
+          type: 'string',
+          description:
+            'Com "tirar": parte do nome do tema, como "games". Com "incluir": o nome do tema novo, ' +
+            'curto e como ele falaria, como "Esportes".',
+        },
+        busca: {
+          type: 'string',
+          description:
+            'Só com "incluir": os termos que a busca de notícias deve usar, em português, com " OR " ' +
+            'entre as alternativas. Sem isso, vale o nome do tema.',
+        },
+        quantidade: {
+          type: 'integer',
+          description: 'Só com "quantidade": quantas notícias por tema, de 1 a 5.',
+        },
+      },
+      required: ['acao'],
+    },
   },
   {
     type: 'function',
@@ -614,6 +653,7 @@ const FERRAMENTAS_DO_CELULAR = new Set([
   'desenvolvimento',
   'fenix',
   'bom_dia',
+  'noticias',
   'ajustar_interface',
   'ignorar_fala',
   'dormir',
@@ -621,8 +661,8 @@ const FERRAMENTAS_DO_CELULAR = new Set([
 const INSTRUCOES_DO_CELULAR = `
 
 CANAL DESTA SESSÃO. Agora o Ricardo fala com você pelo app do iPhone. Só existem as
-ferramentas executar_tarefa, desenvolvimento, fenix, bom_dia, ajustar_interface,
-ignorar_fala e dormir. Aqui, ajustar_interface só mexe nos popups: "limpe a bagunça" e "fechar tudo"
+ferramentas executar_tarefa, desenvolvimento, fenix, bom_dia, noticias,
+ajustar_interface, ignorar_fala e dormir. Aqui, ajustar_interface só mexe nos popups: "limpe a bagunça" e "fechar tudo"
 são limpar_tela com "popups", e "fechar este popup", "próximo popup" e "tela cheia" são
 o campo popups. O desenvolvimento (backlog, propor, confirmar, aprovar, reverter, pull
 request) e a Fênix (rotinas e scripts bash) funcionam aqui como no computador, com a

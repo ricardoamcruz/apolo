@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -342,4 +342,75 @@ test('a mesma branch, atrás do GitHub, avança no lugar; se quebrar, volta ao c
   const deNovo = await (await versoes.trocar({ branch: 'main', sha: mainNova })).concluida
   assert.equal(deNovo.ok, true, deNovo.mensagem)
   assert.equal(r.git('rev-parse', 'HEAD'), mainNova)
+})
+
+// ── a branch presa em outra cópia de trabalho e o eventos.log (27/11/2026) ────
+
+const eventosDe = (pasta) => (existsSync(join(pasta, 'eventos.log')) ? readFileSync(join(pasta, 'eventos.log'), 'utf8') : '')
+
+test('a cópia de trabalho órfã, cuja pasta sumiu, é esquecida e não trava mais a troca', async () => {
+  const r = cenario()
+  const orfa = join(r.raiz, 'apolo-35')
+  r.git('worktree', 'add', '-q', orfa, 'fase-3.4/aurora-no-bolso')
+  rmSync(orfa, { recursive: true, force: true })
+  const { versoes, eventos, pasta } = montar(r)
+  const previa = await versoes.previa({ branch: '3.4' })
+  assert.equal(previa.ok, true, previa.mensagem)
+  assert.doesNotMatch(r.git('worktree', 'list'), /apolo-35/)
+  assert.match(eventosDe(pasta), /esqueci 1 cópia de trabalho sem pasta/)
+  const inicio = await versoes.trocar({ id: 't1', branch: previa.branch, sha: previa.sha, interfaces: 1 })
+  const fim = await inicio.concluida
+  assert.equal(fim.ok, true, fim.mensagem)
+  assert.equal(naBranch(r), 'fase-3.4/aurora-no-bolso')
+  assert.deepEqual(eventos, ['desligar', 'ligar'])
+})
+
+test('a branch aberta em outra cópia de verdade é recusada já na prévia, sem desligar nada', async () => {
+  const r = cenario()
+  const outra = join(r.raiz, 'outra-copia')
+  r.git('worktree', 'add', '-q', outra, 'fase-3.4/aurora-no-bolso')
+  const { versoes, eventos, pasta } = montar(r)
+  const previa = await versoes.previa({ branch: '3.4' })
+  assert.equal(previa.ok, false)
+  assert.match(previa.mensagem, /está aberta em outra cópia de trabalho do Git \(.*outra-copia\).*git worktree remove .*Nada foi trocado\./)
+  const troca = await versoes.trocar({ id: 't1', branch: 'fase-3.4/aurora-no-bolso', sha: r.fase, interfaces: 1 })
+  assert.equal(troca.ok, false)
+  assert.deepEqual(eventos, [], 'nenhum serviço foi desligado à toa')
+  // A cópia de verdade, com arquivos, fica como estava.
+  assert.match(r.git('worktree', 'list'), /outra-copia/)
+  const log = eventosDe(pasta)
+  assert.match(log, /prévia da troca para "3\.4": recusada: A fase-3\.4\/aurora-no-bolso está aberta em outra cópia/)
+  assert.match(log, /troca para "fase-3\.4\/aurora-no-bolso" recusada: A fase-3\.4\/aurora-no-bolso está aberta/)
+})
+
+test('toda prévia fica no eventos.log, e o que parou na voz também, só por código', async () => {
+  const r = cenario()
+  const { versoes, pasta } = montar(r)
+  await versoes.previa({ branch: '3.4' })
+  await versoes.previa({ branch: '9.9' })
+  assert.deepEqual(versoes.registrarDaVoz({ codigo: 'sim-nao-ouvido', branch: 'fase-3.4/aurora-no-bolso' }).ok, true)
+  assert.equal(versoes.registrarDaVoz({ codigo: 'qualquer coisa', branch: 'x' }).ok, false)
+  versoes.registrarDaVoz({ codigo: 'sim-nao-ouvido', branch: 'rm -rf /' })
+  const log = eventosDe(pasta)
+  assert.match(log, /prévia da troca para "3\.4": Trocar da main para a fase-3\.4\/aurora-no-bolso/)
+  assert.match(log, /prévia da troca para "9\.9": recusada: Não há branch "9\.9"/)
+  assert.match(log, /troca para "fase-3\.4\/aurora-no-bolso" parada na voz: o sim do Ricardo não apareceu na transcrição/)
+  assert.match(log, /troca para "\?" parada na voz/)
+  assert.doesNotMatch(log, /qualquer coisa|rm -rf/)
+})
+
+test('o fim da troca leva de onde e para onde, e a volta sozinha fica no estado', async () => {
+  const r = cenario()
+  const { versoes } = montar(r)
+  const inicio = await versoes.trocar({ id: 't1', branch: 'fase-3.4', sha: r.fase, interfaces: 1 })
+  const fim = await inicio.concluida
+  assert.equal(fim.de, 'main')
+  assert.equal(fim.para, 'fase-3.4/aurora-no-bolso')
+  // Agora, as quedas seguidas: a volta sozinha também vai ao estado, com a marca.
+  for (let i = 0; i < 3; i++) versoes.servicoCaiu('ponte', 'encerrou (1)')
+  await esperar(() => versoes.estado().ultimaTroca?.automatica === true)
+  const e = versoes.estado().ultimaTroca
+  assert.equal(e.de, 'fase-3.4/aurora-no-bolso')
+  assert.equal(e.para, 'main')
+  assert.equal(e.ok, true)
 })

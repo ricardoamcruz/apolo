@@ -40,6 +40,7 @@
 | 0036 | A fala marcada do lado de cá | aceita |
 | 0037 | O bom dia também no celular, sem a música | proposta |
 | 0038 | A troca de branch é da Fênix, nos dois sentidos | aceita |
+| 0039 | Avisos de ida ao H.E.R.M.E.S., e os temas do bom dia por voz | aceita |
 
 ## Em aberto
 

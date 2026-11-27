@@ -387,9 +387,11 @@ export function criarFenix(
         return
       case 'versao:previa':
         return versoes.previa(msg)
+      case 'versao:voz':
+        return versoes.registrarDaVoz(msg)
       case 'versao:trocar': {
         const { concluida, ...resposta } = await versoes.trocar(msg)
-        concluida?.then((r) => avisarTroca({ ...r, para: msg.branch }))
+        concluida?.then((r) => avisarTroca({ para: msg.branch, ...r }))
         return resposta
       }
       case 'rotina':

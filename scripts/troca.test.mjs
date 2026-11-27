@@ -9,7 +9,7 @@ import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import { comandoMexeNaCopia, podeUsarFerramenta } from '../bridge/gate.mjs'
-import { criarTrocaDeVersao, trocaParaAnunciar, textoDoFimDaTroca } from '../src/lib/trocaDeVersao.ts'
+import { criarTrocaDeVersao, nomeDaVersao, trocaParaAnunciar, textoDoFimDaTroca } from '../src/lib/trocaDeVersao.ts'
 
 const SHA = 'a'.repeat(40)
 
@@ -45,7 +45,7 @@ test('com o sim ouvido depois da prévia, troca no commit que a prévia mostrou'
   await troca.pedido('3.4')
   agora += 5000
   const texto = await troca.pedido('3.4')
-  assert.match(texto, /^Trocando para a fase-3\.4\/aurora-no-bolso\. Avise em uma frase curta que vai sumir/)
+  assert.match(texto, /^Trocando para a fase-3\.4\/aurora-no-bolso\. Diga exatamente esta frase, e nada mais: "Reiniciando o sistema na versão 3\.4, aurora no bolso\. Já volto\."/)
   assert.deepEqual(f.pedidos.at(-1), { acao: 'trocar', branch: 'fase-3.4/aurora-no-bolso', sha: SHA })
   // O sim conta a partir de quando a prévia foi dita, não de antes.
   assert.deepEqual(desde, [1000])
@@ -58,6 +58,8 @@ test('sem o sim na transcrição, a segunda chamada não troca', async () => {
   const texto = await troca.pedido('3.4')
   assert.match(texto, /O sim do Ricardo não foi ouvido\. .*Nada foi trocado\./)
   assert.equal(f.pedidos.some((p) => p.acao === 'trocar'), false)
+  // E isso fica no eventos.log da Fênix, só como código: numa falha, o motivo está lá.
+  assert.deepEqual(f.pedidos.at(-1), { acao: 'registrar-troca', codigo: 'sim-nao-ouvido', branch: 'fase-3.4/aurora-no-bolso' })
 })
 
 test('a branch que andou desde a prévia pede uma prévia nova, e o sim velho não vale', async () => {
@@ -84,7 +86,7 @@ test('voltar à main não pergunta: é a saída de emergência', async () => {
   const f = fenixDeMentira({ confirmar: false, branch: 'main' })
   const troca = criarTrocaDeVersao({ pedir: f.pedir, ouviu: async () => false })
   const texto = await troca.pedido('main')
-  assert.match(texto, /^Trocando para a main\./)
+  assert.match(texto, /^Trocando para a main\. Diga exatamente esta frase, e nada mais: "Voltando para a versão principal\. Já volto\."/)
   assert.deepEqual(f.pedidos.map((p) => p.acao), ['previa', 'trocar'])
 })
 
@@ -105,9 +107,45 @@ test('o fim da troca é anunciado uma vez, e o velho não é notícia', () => {
   assert.equal(trocaParaAnunciar(fim, 't1', 2000), null)
   assert.equal(trocaParaAnunciar(fim, null, 1000 + 11 * 60_000), null)
   assert.equal(trocaParaAnunciar(null, null), null)
-  assert.match(textoDoFimDaTroca(fim), /já está na versão nova/)
-  assert.match(textoDoFimDaTroca({ ...fim, ok: false }), /não deu certo/)
-  assert.match(textoDoFimDaTroca({ ...fim, automatica: true }), /voltou sozinha para a versão segura/)
+})
+
+test('a branch como se fala: a main é a principal, a de fase vira número e nome', () => {
+  assert.equal(nomeDaVersao('main'), 'principal')
+  assert.equal(nomeDaVersao('fase-3.5/aviso-e-escolha'), '3.5, aviso e escolha')
+  assert.equal(nomeDaVersao('fase-4/nova-era'), '4, nova era')
+})
+
+test('cada desfecho da troca tem a sua frase, e o erro oferece analisar os logs', () => {
+  const base = { id: 't1', em: 1000 }
+  const frase = (fim) => textoDoFimDaTroca({ ...base, ...fim }).match(/Diga exatamente esta frase: "([^"]+)"/)[1]
+  // b — subiu na branch de fase
+  assert.equal(
+    frase({ ok: true, de: 'main', para: 'fase-3.5/aviso-e-escolha', branch: 'fase-3.5/aviso-e-escolha', mensagem: 'A fase-3.5/aviso-e-escolha está no ar.' }),
+    'Reinicialização concluída: estou rodando a versão 3.5, aviso e escolha.',
+  )
+  // c — não ficou de pé e voltou sozinha para a main
+  const erro = textoDoFimDaTroca({ ...base, ok: false, de: 'main', para: 'fase-3.5/aviso-e-escolha', branch: 'main', mensagem: 'A ponte não subiu. Voltei para a main.' })
+  assert.match(erro, /"Erro de reinicialização: a versão 3\.5, aviso e escolha não ficou de pé, e eu voltei automaticamente para a versão principal\. Quer que eu analise os logs para entender o que deu errado\?"/)
+  assert.match(erro, /executar_tarefa .*eventos\.log/)
+  assert.match(erro, /só se ele perguntar: A ponte não subiu/)
+  // d — de volta à main, como pedido
+  assert.equal(frase({ ok: true, de: 'fase-3.5/aviso-e-escolha', para: 'main', branch: 'main', mensagem: 'A main está no ar.' }), 'Estou de volta à versão principal, como você pediu.')
+  // a volta sozinha depois de quedas seguidas
+  assert.match(
+    frase({ ok: true, automatica: true, de: 'fase-3.5/aviso-e-escolha', para: 'main', mensagem: 'O serviço ponte caiu 3 vezes.' }),
+    /^Alerta: a versão 3\.5, aviso e escolha caiu várias vezes seguidas, e eu voltei sozinho para a versão principal/,
+  )
+  // nada chegou a mudar
+  assert.equal(
+    frase({ ok: false, de: 'main', para: 'fase-3.5/aviso-e-escolha', branch: 'main', mensagem: 'Não consegui trocar para a fase-3.5/aviso-e-escolha: x. Nada foi trocado.' }),
+    'Não consegui trocar para a versão 3.5, aviso e escolha; nada mudou, e eu continuo na versão principal.',
+  )
+  // não subiu nem voltou
+  assert.match(frase({ ok: false, de: 'main', para: 'fase-3.5/x', mensagem: 'Não consegui trocar para a fase-3.5/x (a) nem voltar para a main (b).' }), /^Erro grave:/)
+  // a mesma branch, trazida para o commit mais novo
+  assert.equal(frase({ ok: true, de: 'fase-3.5/x', para: 'fase-3.5/x', mensagem: 'ok' }), 'Atualização concluída: a versão 3.5, x já está no commit mais novo.')
+  // de uma fase para outra, a volta é para a de antes, não para a principal
+  assert.match(frase({ ok: false, de: 'fase-3.4/y', para: 'fase-3.5/x', mensagem: 'caiu' }), /voltei automaticamente para a versão 3\.4, y, a de antes/)
 })
 
 // ── o agente de tarefas e a cópia no ar ─────────────────────────────────────

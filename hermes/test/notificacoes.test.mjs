@@ -136,6 +136,35 @@ test('a porta dos serviços exige token, responde o pedido e devolve o botão s�
   await porta.fechar()
 })
 
+test('o aviso de ida entra por POST, com o mesmo token e sem botões (ADR 0039)', async () => {
+  const entregues = []
+  const central = criarCentral({ entregar: { mac: async (n) => (entregues.push(n), true) }, urlPublica: 'https://mac.ts.net' })
+  const porta = criarPortaDosServicos({ token: TOKEN, central, porta: 0, log() {} })
+  const p = await porta.ligar()
+  const avisar = (corpo, token = TOKEN) =>
+    fetch(`http://127.0.0.1:${p}/notificar`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: typeof corpo === 'string' ? corpo : JSON.stringify(corpo),
+    })
+
+  assert.equal((await avisar({ titulo: 'Oi', texto: 'x' }, 'errado')).status, 401)
+  assert.equal((await avisar({ titulo: 'Oi', texto: 'x' }, '')).status, 401)
+  assert.equal((await avisar('isto não é json')).status, 400)
+  assert.equal((await avisar({ titulo: '', texto: '' })).status, 400, 'sem título nem texto não é aviso')
+  assert.equal((await avisar({ titulo: 'a', texto: 'b'.repeat(9000) })).status, 413)
+
+  const r = await avisar({ titulo: 'A.P.O.L.O.: alteração em teste', texto: 'Está no ar.', prioridade: 'alta', botoes: [{ rotulo: 'Ok', acao: 'ok' }] })
+  assert.equal(r.status, 200)
+  const corpo = await r.json()
+  assert.equal(corpo.ok, true)
+  assert.equal(entregues.at(-1).prioridade, 'alta')
+  assert.deepEqual(entregues.at(-1).botoes, [], 'um aviso de ida não tem a quem devolver o toque')
+  assert.equal(central.botoesAbertos(), 0)
+  assert.equal((await fetch(`http://127.0.0.1:${p}/notificar`)).status, 404, 'só POST')
+  await porta.fechar()
+})
+
 test('o botão tocado pela porta do celular volta ao serviço que pediu', async () => {
   let botao
   const central = criarCentral({ entregar: { mac: async (n) => ((botao = n.botoes[0]), true) }, urlPublica: 'https://mac.ts.net' })

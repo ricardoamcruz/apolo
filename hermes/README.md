@@ -30,9 +30,14 @@ npm test   # dentro desta pasta: node --test test/
 - Sem `HERMES_APOLO_TOKEN`, o token é `HMAC-SHA256(token do celular, "hermes.apolo")`
   em base64url, que os dois lados calculam.
 
-## Notificações (docs/adr/0027)
+## Notificações (docs/adr/0027 e 0039)
 
-- Serviços conectam em `wss://127.0.0.1:8792/notificacoes` com `Authorization: Bearer
+- Quem só avisa, sem botão: `POST https://127.0.0.1:8792/notificar`, com o mesmo
+  token e `{ titulo, texto, prioridade }` em JSON (até 8 KB). Responde o que a
+  central fez. Botões pedidos aqui são ignorados: não há conexão para devolver o
+  toque. É por aqui que o A.P.O.L.O. e a A.U.R.O.R.A. avisam.
+- Serviços que também recebem o toque num botão conectam em
+  `wss://127.0.0.1:8792/notificacoes` com `Authorization: Bearer
   <APOLO_NOTIFICAR_TOKEN>` e mandam `{ type: 'notificar', id, titulo, texto,
   prioridade: 'baixa'|'normal'|'alta', botoes: [{ rotulo, acao }] }`. Recebem
   `notificar:resposta` e, se ele tocar num botão, `{ type: 'notificacao:acao',

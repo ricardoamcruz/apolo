@@ -20,8 +20,17 @@ npm run test:aurora
   vigia: a Fênix e a ponte, cada uma por conta própria (docs/adr/0029).
 - `GET /bom-dia` com `Authorization: Bearer <token>` →
   `{ ok, texto, musica: { id, titulo, canal, inicio, trechoSegundos, volume } | null, avisoDaMusica, pendencias }`.
+- `GET /noticias` com token → `{ ok, temas, porTema, padrao }`: os temas que valem
+  agora, que podem não ser os do arquivo (docs/adr/0039).
+- `POST /noticias` com token → uma edição por vez, que ele pede por voz:
+  `{ tirar }` (parte do nome do tema), `{ incluir: { nome, busca } }`, `{ porTema }`
+  (1 a 5) ou `{ restaurar: true }`. Responde `{ ok, mensagem, temas, porTema }`. A
+  escolha fica em `AURORA_PASTA/noticias.json`, nunca no `aurora.config.json`.
 
 ## Configuração (`aurora.config.json`)
+
+É o **padrão**: o que ele muda por voz fica fora daqui (docs/adr/0039), e
+"volta aos temas de sempre" apaga a escolha e faz este arquivo valer de novo.
 
 | Campo | Para quê |
 |---|---|
@@ -38,6 +47,11 @@ npm run test:aurora
 `TLS_CERT`, `TLS_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AGENDA_ICS`,
 `PASTA` (`~/.apolo/aurora`) e `CONFIG`. Sem `TLS_*`, usa `~/.apolo/tls` se existir;
 a porta também aceita `APOLO_AURORA_PORTA`.
+
+Para avisar o Ricardo pela central de notificações (docs/adr/0027 e 0039):
+`NOTIFICAR_TOKEN` (o `APOLO_NOTIFICAR_TOKEN` serve), `NOTIFICAR_URL`
+(`https://localhost:8792/notificar`), `NOTIFICAR_PORTA` e `NOTIFICAR_CA`. Sem token,
+nenhum aviso sai e o bom dia segue igual.
 
 `npm run aurora` sobe sem a F.Ê.N.I.X. e lê o `.env.local`. Se quem a subiu morre, ela
 continua servindo e escreve a saída em `PASTA/aurora.log`; a Fênix, ao voltar, a adota.

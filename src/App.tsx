@@ -28,6 +28,7 @@ import {
   autodev,
   fenix,
   bomDia,
+  noticias,
   bridgeServers,
   registrarVoz,
   assumirVoz,
@@ -43,6 +44,7 @@ import { foraDeHora, ouviuConfirmacao, ouviuFala, registrarFala } from './lib/au
 import { lerParametros, textoDaFenix } from './lib/fenix'
 import { criarTrocaDeVersao, textoDoFimDaTroca, trocaParaAnunciar, type FimDaTroca, type RespostaDaTroca } from './lib/trocaDeVersao'
 import { agradece, pedeModoMaos, vigiarCancelamento } from './lib/comandos'
+import { pedidoDosTemas } from './lib/noticias'
 import {
   INTERVALO_DOS_POPUPS_MS,
   LEITURA_DO_BOM_DIA_MS,
@@ -363,6 +365,15 @@ export default function App() {
       bomDiaNaTela.current = popups.length > 0
       bomDiaDesde.current = Date.now()
       return { output: instrucaoDoBomDia(r, popups, 'pc') }
+    }
+
+    // Os temas do bom dia são dele, e ele os muda falando (docs/adr/0039).
+    if (name === 'noticias') {
+      armIdle()
+      const pedido = pedidoDosTemas(args)
+      if (typeof pedido === 'string') return { output: pedido }
+      const { mensagem } = await noticias(pedido)
+      return { output: mensagem }
     }
 
     if (name === 'musica') {

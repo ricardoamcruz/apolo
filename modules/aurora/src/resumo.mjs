@@ -8,8 +8,14 @@ import { noticiasDoDia } from './noticias.mjs'
 
 export const PENDENCIAS = ['e-mails e Microsoft To Do: falta um app registrado na Microsoft (exige diretório no Azure)']
 
-export async function bomDia({ config, youtube, agendaIcs, fetcher = fetch, agora = new Date(), rodarGh }) {
+/**
+ * @param noticias temas e quantidade por tema; sem isso, os do aurora.config.json.
+ *                 É por aqui que entram os temas que o Ricardo mudou por voz
+ *                 (src/temas.mjs, docs/adr/0039).
+ */
+export async function bomDia({ config, youtube, agendaIcs, noticias: escolhidos, fetcher = fetch, agora = new Date(), rodarGh }) {
   const m = config.musica ?? {}
+  const n = escolhidos ?? config.noticias ?? {}
   const [musica, agenda, noticias, tarefas] = await Promise.all([
     youtube?.autorizado()
       ? youtube
@@ -18,7 +24,7 @@ export async function bomDia({ config, youtube, agendaIcs, fetcher = fetch, agor
           .catch((err) => ({ erro: err.message }))
       : Promise.resolve({ erro: 'o YouTube ainda não foi autorizado (npm run aurora:autorizar)' }),
     agendaDeHoje(agendaIcs, { fetcher, agora }).catch((err) => ({ disponivel: false, motivo: err.message })),
-    noticiasDoDia(config.noticias?.temas ?? [], { porTema: config.noticias?.porTema ?? 3, fetcher }),
+    noticiasDoDia(n.temas ?? [], { porTema: n.porTema ?? 3, fetcher }),
     tarefasDoGithub(config.tarefas?.github, rodarGh ? { rodar: rodarGh } : {}),
   ])
   return { musica: musica?.erro ? null : musica, avisoDaMusica: musica?.erro ?? null, agenda, noticias, tarefas, pendencias: PENDENCIAS }

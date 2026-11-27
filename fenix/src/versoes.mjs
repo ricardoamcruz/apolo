@@ -37,6 +37,12 @@ const dormir = (ms) => new Promise((r) => setTimeout(r, ms).unref())
 
 const FALHAS_SEGUIDAS = 3
 
+/** O que a voz pode registrar no eventos.log sobre uma troca que não chegou à Fênix. */
+const RECUSAS_DA_VOZ = {
+  'sim-nao-ouvido': 'o sim do Ricardo não apareceu na transcrição do microfone depois da prévia.',
+  'previa-vencida': 'a prévia passou de 3 minutos sem o sim; uma nova foi lida.',
+}
+
 /** Um `git fetch` preso num pedido de senha ou numa rede lenta não segura a Fênix. */
 export const PRAZO_GIT_MS = 30_000
 export const PRAZO_REDE_MS = 120_000
@@ -218,11 +224,42 @@ export function criarVersoes({
   }
 
   /**
+   * Esquece as cópias de trabalho (`git worktree`) cuja pasta já não existe. O Git
+   * guarda o registro delas e continua achando que a branch está aberta lá: foi o
+   * que travou a troca para a fase-3.5 em 27/11/2026. Só some o que não tem pasta;
+   * uma cópia de verdade, com arquivos, fica como está.
+   */
+  async function limparCopiasOrfas() {
+    // O `prune --verbose` fala no stderr; a lista em porcelana marca as órfãs com "prunable".
+    const orfas = []
+    let pasta = null
+    for (const linha of (await git('worktree', 'list', '--porcelain').catch(() => '')).split('\n')) {
+      if (linha.startsWith('worktree ')) pasta = linha.slice('worktree '.length)
+      else if (linha.startsWith('prunable') && pasta) orfas.push(pasta)
+    }
+    if (!orfas.length) return
+    await git('worktree', 'prune')
+    anotar(`[fenix] esqueci ${orfas.length} ${orfas.length === 1 ? 'cópia de trabalho' : 'cópias de trabalho'} sem pasta: ${orfas.join(', ')}`)
+  }
+
+  /** A pasta de outra cópia de trabalho com a branch aberta, ou null: o Git não deixa abrir a mesma branch em duas. */
+  async function copiaComABranch(branch) {
+    const linhas = (await git('worktree', 'list', '--porcelain').catch(() => '')).split('\n')
+    let pasta = null
+    for (const linha of linhas) {
+      if (linha.startsWith('worktree ')) pasta = linha.slice('worktree '.length)
+      else if (linha === `branch refs/heads/${branch}` && pasta && real(pasta) !== real(repo)) return pasta
+    }
+    return null
+  }
+
+  /**
    * Troca e confere: no fim, HEAD tem de estar na branch pedida (e no commit
    * pedido, com `conferirSha`). Branch que só existe no remoto vira uma local que
    * o acompanha; branch que não existe em lugar nenhum é erro, antes de mexer.
    */
   async function trocarPara({ ref, sha }, { conferirSha = true } = {}) {
+    await limparCopiasOrfas()
     if (ref === sha) {
       await git('switch', '--quiet', '--detach', sha)
     } else if (await existeLocal(ref)) {
@@ -457,6 +494,18 @@ export function criarVersoes({
     const { branch, motivo } = await resolverBranch(pedido, remoto)
     if (!branch) return { motivo }
     const atual = await versaoAtual()
+    if (atual.ref !== branch) {
+      // Antes de prometer a troca: o Git recusa abrir uma branch que outra cópia já abriu.
+      await limparCopiasOrfas()
+      const outra = await copiaComABranch(branch)
+      if (outra) {
+        return {
+          motivo:
+            `A ${branch} está aberta em outra cópia de trabalho do Git (${outra}), e o Git não abre a mesma branch em duas. ` +
+            `Feche essa cópia (git worktree remove ${outra}) e peça de novo. Nada foi trocado.`,
+        }
+      }
+    }
     const sha = async (ref) => git('rev-parse', '--verify', '--quiet', `${ref}^{commit}`).catch(() => '')
     const local = await sha(`refs/heads/${branch}`)
     const doRemoto = await sha(`refs/remotes/${remoto}/${branch}`)
@@ -539,7 +588,8 @@ export function criarVersoes({
     let reinstalar = false
     const fim = (ok, mensagem) => {
       ultimaTroca = { id, ok, mensagem, branch: ok ? branch : de.ref, de: de.ref, para: branch, em: Date.now() }
-      return { id, ok, mensagem, branch: ultimaTroca.branch }
+      // De onde e para onde vão junto: a voz diz uma frase diferente para cada caso.
+      return { ...ultimaTroca }
     }
     try {
       writeFileSync(arqTransicao, JSON.stringify(transicao, null, 2))
@@ -625,7 +675,10 @@ export function criarVersoes({
       ocupado = true
       try {
         const r = await executarTroca(`queda-${agora}`, plano, `${porque} Último motivo: ${motivo}`)
-        aoTrocar({ ...r, automatica: true, mensagem: r.ok ? `${porque} Voltei para a ${versaoSegura}; a ${ref} continua guardada.` : r.mensagem })
+        const aviso = { ...r, automatica: true, mensagem: r.ok ? `${porque} Voltei para a ${versaoSegura}; a ${ref} continua guardada.` : r.mensagem }
+        // O estado conta o mesmo que o aviso: a interface que reconectar depois anuncia a volta sozinha.
+        ultimaTroca = { ...ultimaTroca, automatica: true, mensagem: aviso.mensagem }
+        aoTrocar(aviso)
       } finally {
         ocupado = false
       }
@@ -638,20 +691,22 @@ export function criarVersoes({
      * se ela precisa do sim falado do Ricardo: só voltar à versão segura não precisa.
      */
     async previa({ branch } = {}) {
+      // Toda prévia fica no eventos.log, com o que foi dito: numa falha, o motivo está lá.
+      const registrar = (r) => (anotar(`[fenix] prévia da troca para "${branch ?? ''}": ${r.ok ? '' : 'recusada: '}${r.mensagem}`), r)
       try {
         const p = await planejarTroca(branch)
-        if (!p.branch) return { ok: false, mensagem: p.motivo }
-        if (p.mesma) return { ok: true, mesma: true, branch: p.branch, sha: p.sha, mensagem: `Já estou na ${p.branch}, no commit mais novo que conheço.` }
-        return {
+        if (!p.branch) return registrar({ ok: false, mensagem: p.motivo })
+        if (p.mesma) return registrar({ ok: true, mesma: true, branch: p.branch, sha: p.sha, mensagem: `Já estou na ${p.branch}, no commit mais novo que conheço.` })
+        return registrar({
           ok: true,
           branch: p.branch,
           sha: p.sha,
           sensiveis: p.sensiveis,
           confirmar: p.branch !== versaoSegura,
           mensagem: textoDoPlano(p),
-        }
+        })
       } catch (err) {
-        return { ok: false, mensagem: `Não consegui preparar a troca: ${err.message}. Nada foi trocado.` }
+        return registrar({ ok: false, mensagem: `Não consegui preparar a troca: ${err.message}. Nada foi trocado.` })
       }
     },
 
@@ -662,21 +717,38 @@ export function criarVersoes({
      * andou depois dela, a troca não acontece sem uma prévia nova.
      */
     async trocar({ id = `troca-${Date.now()}`, branch, sha, interfaces = 0 } = {}) {
+      const recusa = (mensagem) => {
+        anotar(`[fenix] troca para "${branch ?? ''}" recusada: ${mensagem}`)
+        return { ok: false, mensagem }
+      }
       let plano
       try {
         plano = await planejarTroca(branch, { buscar: false })
       } catch (err) {
-        return { ok: false, mensagem: `Não consegui preparar a troca: ${err.message}. Nada foi trocado.` }
+        return recusa(`Não consegui preparar a troca: ${err.message}. Nada foi trocado.`)
       }
-      if (!plano.branch) return { ok: false, mensagem: plano.motivo }
+      if (!plano.branch) return recusa(plano.motivo)
       if (sha && plano.sha !== sha) {
-        return { ok: false, mensagem: `A ${plano.branch} mudou desde a prévia (agora em ${curto(plano.sha)}); peça a troca de novo. Nada foi trocado.` }
+        return recusa(`A ${plano.branch} mudou desde a prévia (agora em ${curto(plano.sha)}); peça a troca de novo. Nada foi trocado.`)
       }
       if (plano.mesma) return { ok: true, mesma: true, mensagem: `Já estou na ${plano.branch}.` }
-      if (ocupado || emTeste) return { ok: false, mensagem: 'Já há uma troca em andamento.' }
+      if (ocupado || emTeste) return recusa('Já há uma troca em andamento.')
       ocupado = true
       const concluida = executarTroca(id, { ...plano, interfaces }).finally(() => (ocupado = false))
       return { ok: true, id, mensagem: `Trocando para a ${plano.branch}; a ponte reinicia e eu volto em instantes.`, concluida }
+    },
+
+    /**
+     * O que a voz decidiu sem chegar à Fênix (o sim que não foi ouvido), para o
+     * eventos.log contar a história inteira. Só códigos conhecidos viram frase: o
+     * log nunca recebe texto livre de fora.
+     */
+    registrarDaVoz({ codigo, branch } = {}) {
+      const frase = RECUSAS_DA_VOZ[codigo]
+      if (!frase) return { ok: false, mensagem: 'Código desconhecido; nada foi registrado.' }
+      const nome = branchValida(branch) || branch === versaoSegura ? branch : '?'
+      anotar(`[fenix] troca para "${nome}" parada na voz: ${frase}`)
+      return { ok: true, mensagem: 'Registrado.' }
     },
 
     /** Troca para o commit verificado, confere que subiu e deixa em teste. */

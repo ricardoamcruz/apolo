@@ -23,13 +23,14 @@
  *      foi junto com ela.
  *   3. A ponte sai logo depois. A Fênix nova sobe tudo de novo, inclusive uma
  *      ponte fresca, e volta à main se havia uma alteração sem aprovação no ar.
- *   4. Três renascimentos em dez minutos é um laço, não um acidente: a ponte
- *      desiste, continua de pé sozinha e avisa.
+ *   4. Três renascimentos em dez minutos é um laço, não um acidente. Se a receita
+ *      traz um último recurso (a âncora, docs/adr/0041), a ponte o chama, solto, e
+ *      ele põe a versão segura no ar. Sem ele, desiste e continua de pé sozinha.
  *
  * Arquivo sensível (bridge/autodev/politica.mjs): ele sobe processos.
  */
 import { spawn as spawnPadrao } from 'node:child_process'
-import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync } from 'node:fs'
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 /** Mais que isso em `JANELA_MS` e a ponte desiste. */
@@ -59,7 +60,10 @@ export function lerReceita(env = process.env) {
       Array.isArray(r.comando) && r.comando.length && r.comando.every((p) => typeof p === 'string') &&
       typeof r.cwd === 'string' && typeof r.registro === 'string' && typeof r.saida === 'string'
     if (!ok) return null
-    return { pid, ...r, limpar: Array.isArray(r.limpar) ? r.limpar.filter((v) => typeof v === 'string') : [] }
+    const ultimo = Array.isArray(r.ultimoRecurso) && r.ultimoRecurso.length && r.ultimoRecurso.every((p) => typeof p === 'string' && p)
+      ? r.ultimoRecurso
+      : null
+    return { pid, ...r, ultimoRecurso: ultimo, limpar: Array.isArray(r.limpar) ? r.limpar.filter((v) => typeof v === 'string') : [] }
   } catch {
     return null
   }
@@ -110,6 +114,7 @@ export function criarRenascimento({
   sair = () => process.exit(0),
   vivo = processoVivo,
   spawn = spawnPadrao,
+  existe = existsSync,
   agora = Date.now,
   intervaloMs = 1000,
   saidaMs = 800,
@@ -141,6 +146,7 @@ export function criarRenascimento({
     const recentes = renascimentosRecentes(receita.registro, agora())
     if (recentes >= LIMITE) {
       desistiu = true
+      if (receita.ultimoRecurso && existe(receita.ultimoRecurso[0])) return chamarUltimoRecurso(recentes + 1)
       log(`[apolo] a F.Ê.N.I.X. morreu ${recentes + 1} vezes em 10 minutos; não vou revivê-la de novo. Sigo sozinho: suba com npm start.`)
       return { ok: false, motivo: 'laço' }
     }
@@ -168,6 +174,32 @@ export function criarRenascimento({
     // A Fênix nova sobe uma ponte nova; esta, filha da morta, sai do caminho.
     setTimeout(sair, saidaMs).unref?.()
     return { ok: true }
+  }
+
+  /** O laço: em vez de desistir, a âncora põe a versão segura no ar, e esta ponte cai junto. */
+  function chamarUltimoRecurso(vezes) {
+    let fd
+    try {
+      mkdirSync(dirname(receita.saida), { recursive: true })
+      fd = openSync(receita.saida, 'a')
+      const [comando, ...args] = receita.ultimoRecurso
+      const motivo = `a Fênix morreu ${vezes} vezes em 10 minutos`
+      const filho = spawn(comando, [...args, '--origem', 'pacto', '--motivo', motivo], {
+        cwd: receita.cwd,
+        env: ambienteDoRenascimento(receita),
+        detached: true,
+        stdio: ['ignore', fd, fd],
+      })
+      filho.unref?.()
+      anotar(`laço: ${motivo}; chamei o último recurso (${receita.ultimoRecurso.join(' ')})`)
+      log(`[apolo] ${motivo}; chamei a âncora para pôr a versão segura no ar.`)
+      return { ok: true, ultimoRecurso: true }
+    } catch (err) {
+      log(`[apolo] não consegui chamar o último recurso: ${err.message}. Sigo sozinho: suba com npm start.`)
+      return { ok: false, motivo: err.message }
+    } finally {
+      if (fd !== undefined) closeSync(fd)
+    }
   }
 
   function checar() {

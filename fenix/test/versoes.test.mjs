@@ -352,3 +352,46 @@ test('fenix rollback volta direto à main e apaga a alteração', () => {
   assert.equal(autodevs(r), '')
   assert.equal(existsSync(join(pasta, 'transicao.json')), false)
 })
+
+test('de noite, com a noite autorizada, o sensível vai ao ar; sem ela, não (docs/adr/0040)', async () => {
+  const r = repositorio()
+  const { sup, avisos } = montar(r, async () => ({ ok: true, interfaces: 0 }))
+  // Sem a noite autorizada, o pedido noturno vale o mesmo que um de dia.
+  await sup.aplicar({ ...evolucao(r, 'package.json'), noturno: true })
+  assert.equal(avisos[0].tipo, 'recusado')
+  r.git('branch', '-D', 'autodev/1')
+  assert.equal(sup.noite({ acao: 'comecar', ate: Date.now() + 60_000 }).ok, true)
+  assert.equal(sup.noiteAtiva(), true)
+  await sup.aplicar({ ...evolucao(r, 'package.json'), noturno: true })
+  assert.equal(avisos[1].tipo, 'em_teste')
+  await sup.reverter({ id: 'r' })
+  sup.noite({ acao: 'terminar' })
+  assert.equal(sup.noiteAtiva(), false)
+})
+
+test('nem de noite: as travas da noite continuam barradas', async () => {
+  const r = repositorio()
+  const { sup, avisos } = montar(r, async () => ({ ok: true, interfaces: 0 }), {
+    protecao: { ...PROTECAO, nuncaDeNoite: [/^trava\.txt$/] },
+  })
+  sup.noite({ acao: 'comecar', ate: Date.now() + 60_000 })
+  await sup.aplicar({ ...evolucao(r, 'trava.txt'), noturno: true })
+  assert.equal(avisos[0].tipo, 'recusado')
+  assert.match(avisos[0].mensagem, /nem o modo noturno/)
+})
+
+test('a noite precisa de prazo no futuro, e até 14 horas', () => {
+  const { sup } = montar(repositorio(), async () => ({ ok: true }))
+  assert.equal(sup.noite({ acao: 'comecar', ate: Date.now() - 1 }).ok, false)
+  assert.equal(sup.noite({ acao: 'comecar', ate: Date.now() + 15 * 3600_000 }).ok, false)
+})
+
+test('rodando da cópia congelada da âncora, a Fênix não troca nada (docs/adr/0041)', async () => {
+  const r = repositorio()
+  const { sup, avisos } = montar(r, async () => ({ ok: true }), { versaoFixa: true })
+  assert.match((await sup.previa({ branch: 'main' })).mensagem, /cópia congelada/)
+  assert.equal((await sup.trocar({ branch: 'main', sha: 'abc1234' })).ok, false)
+  assert.equal((await sup.atualizar()).ok, false)
+  await sup.aplicar(evolucao(r))
+  assert.equal(avisos[0].tipo, 'recusado')
+})

@@ -381,6 +381,12 @@ export function criarServicos({
       encerrando = true
       await Promise.all([...estados.keys()].map((n) => desligar(n)))
     },
+    /** Depois de um encerrar, volta a guardar (a renovação que não deu certo, docs/adr/0041). */
+    retomar() {
+      encerrando = false
+      for (const nome of estados.keys()) ligar(nome)
+      void vigiar()
+    },
   }
 }
 

@@ -52,6 +52,11 @@ import {
 } from './realtime.mjs'
 import { fileURLToPath } from 'node:url'
 import { criarAutodev } from './autodev/index.mjs'
+import { OBSERVAR_MS, criarNoite } from './autodev/noite.mjs'
+import { PASTA_AUTODEV } from './autodev/politica.mjs'
+import { acionarAncora, estadoDaAncora, lembreteDaAncora, textoDaAncora } from './ancora.mjs'
+import { execFile as execFileCb } from 'node:child_process'
+import { promisify } from 'node:util'
 import { criarPreferencias } from './preferencias.mjs'
 import {
   CAMINHO_DA_MIDIA,
@@ -1018,6 +1023,14 @@ const avisos = criarAvisos({
 
 /** O estado anterior do autodesenvolvimento: é a mudança que vira aviso, não o estado. */
 let autodevAntes = null
+/** O modo noturno (docs/adr/0040), criado logo abaixo do autodev, que ele conduz. */
+let noite = null
+/** O estado do autodev como a interface o recebe: com o resumo da noite junto. */
+const comNoite = (estado) => ({ ...estado, noite: noite?.resumo() ?? null })
+const execGit = promisify(execFileCb)
+const gitNoAr = (...a) => execGit('git', a, { cwd: REPO, timeout: 10_000 }).then((r) => r.stdout.trim(), () => '')
+const shaNoAr = () => gitNoAr('rev-parse', 'HEAD')
+const branchNoAr = () => gitNoAr('symbolic-ref', '--short', '-q', 'HEAD')
 const avisarDoAutodev = (estado) => {
   const aviso = avisoDoAutodev(autodevAntes, estado)
   autodevAntes = estado
@@ -1029,10 +1042,18 @@ const autodev = criarAutodev({
   ligado: process.env.APOLO_AUTODEV === '1',
   supervisor: fenix ? (msg) => fenix.enviar(msg) : null,
   avisar: (estado) => {
-    avisarDoAutodev(estado)
-    avisarTodos({ type: 'autodev', estado })
+    // De noite, um aviso por item acordaria o Ricardo: o relatório sai de manhã.
+    if (noite?.rodando()) autodevAntes = estado
+    else avisarDoAutodev(estado)
+    avisarTodos({ type: 'autodev', estado: comNoite(estado) })
+    void noite?.aoAutodev(estado)
   },
   interfaces: () => interfacesDoPc.size,
+  noite: {
+    deNoite: () => Boolean(noite?.deNoite()),
+    silencio: () => Boolean(noite?.silencio()),
+    observarMs: OBSERVAR_MS,
+  },
   // Abrir o PR de uma alteração aprovada é efeito no mundo: só com --writes (ADR 0014).
   abrirPr: ALLOW_WRITES ? (pedido) => criarGit({ repo: REPO }).pullRequest(pedido) : null,
 })
@@ -1045,7 +1066,9 @@ const lerBacklog = () => readFile(join(REPO, 'docs/05-roadmap.md'), 'utf8').then
  * abertos; "propor" com `tarefa` ("1.3") pega o item inteiro do roadmap como
  * pedido, do jeito que o Ricardo pede no chat (docs/adr/0028).
  */
-async function acaoDoAutodev({ acao, pedido, tarefa, titulo, detalhe }) {
+async function acaoDoAutodev({ acao, pedido, tarefa, titulo, detalhe, etapa, itens, acompanhar, ate, maximo }) {
+  // O modo noturno (docs/adr/0040). Quem confere o "confirmo" do começo é a interface.
+  if (acao === 'noite') return noite.acao(String(etapa ?? ''), { itens, acompanhar, ate, maximo })
   if (acao === 'backlog') return { ok: true, mensagem: textoDoBacklog(await lerBacklog()) }
   // Registrar um bug é commit no repositório: só com o autodesenvolvimento ligado.
   if (acao === 'registrar') {
@@ -1059,6 +1082,31 @@ async function acaoDoAutodev({ acao, pedido, tarefa, titulo, detalhe }) {
     return autodev.acao('propor', { pedido: pedidoDaTarefa(item) })
   }
   return autodev.acao(acao, { pedido })
+}
+
+noite = criarNoite({
+  arquivo: join(PASTA_AUTODEV, 'noite.json'),
+  autodev,
+  backlog: lerBacklog,
+  pedidoDaTarefa,
+  fenix: (msg) => (fenix?.conectado() ? fenix.pedir(msg, 30_000) : Promise.resolve({ ok: false, mensagem: 'A Fênix está fora do ar.' })),
+  fenixConectada: () => Boolean(fenix?.conectado()),
+  branchNoAr,
+  shaNoAr,
+  ancoraNoAr: async () => estadoDaAncora({ shaNoAr: await shaNoAr() }).noAr,
+  podeEnviar: ALLOW_WRITES,
+  abrirPr: ALLOW_WRITES ? (pedido) => criarGit({ repo: REPO }).pullRequest(pedido) : null,
+  conferir: (ref) => autodev.conferir(ref),
+  avisar: (aviso) => avisos.avisar(aviso),
+  aoMudar: () => avisarTodos({ type: 'autodev', estado: comNoite(autodev.estado()) }),
+})
+// A ponte reinicia a cada item que vai ao ar: a noite continua de onde parou.
+void autodev.pronto.then(() => noite.retomar())
+
+/** O que o bom dia avisa além do dia: o relatório da noite e a âncora velha (docs/adr/0040 e 0041). */
+async function avisosDoSistema() {
+  const ancora = estadoDaAncora({ shaNoAr: await shaNoAr() })
+  return [noite.relatorioDoBomDia(), lembreteDaAncora(ancora)].filter(Boolean)
 }
 
 /**
@@ -1107,7 +1155,13 @@ const PRAZO_DA_ROTINA_MS = 50 * 60_000
  * --writes, como o resto do gate, e a confirmação do Ricardo, conferida na
  * interface; a Fênix ainda recusa se houver uma versão sem revisão no ar.
  */
-async function pedirAFenix({ acao, nome, parametros, script, motivo, proposta, branch, sha, codigo }) {
+async function pedirAFenix({ acao, nome, parametros, script, motivo, proposta, branch, sha, codigo, celular = false }) {
+  // A âncora (docs/adr/0041) não depende da Fênix: ela existe justamente para quando a Fênix quebra.
+  if (acao === 'ancora-estado') {
+    const e = estadoDaAncora({ shaNoAr: await shaNoAr() })
+    return { ok: true, instalada: e.instalada, noAr: e.noAr, mensagem: textoDaAncora(e) }
+  }
+  if (acao === 'ancora-acionar') return acionarAncora({ origem: celular ? 'voz-celular' : 'voz' })
   if (!fenix) return { ok: false, mensagem: 'A Fênix não está rodando: suba o Apolo com npm start.' }
   if (!fenix.conectado()) return { ok: false, mensagem: 'A Fênix está fora do ar agora.' }
   const atualizar = async (r) => {
@@ -1691,14 +1745,14 @@ const atender = (socket, { celular = false } = {}) => {
     if (msg.type === 'aurora') {
       void Promise.all([
         aurora ? aurora.bomDia() : Promise.resolve({ ok: false, mensagem: 'falta APOLO_AURORA_TOKEN no .env.local' }),
-        estadoDoDesenvolvimento({ repo: REPO, autodev: autodev.estado() }),
+        estadoDoDesenvolvimento({ repo: REPO, autodev: autodev.estado() }).then(async (d) => ({ ...d, avisos: await avisosDoSistema() })),
       ]).then(([r, desenvolvimento]) =>
         send({ ...(celular ? semAMusica(r) : r), desenvolvimento, type: 'aurora', resposta: msg.id }),
       )
     }
 
     if (msg.type === 'fenix' && typeof msg.acao === 'string') {
-      void pedirAFenix(msg)
+      void pedirAFenix({ ...msg, celular })
         .catch((err) => ({ ok: false, mensagem: err.message }))
         // O id e o tipo da interface vêm por último: os da Fênix não podem cobri-los.
         .then((r) => send({ ...r, type: 'fenix', resposta: msg.id }))

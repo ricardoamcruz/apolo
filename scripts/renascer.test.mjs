@@ -166,3 +166,39 @@ test('se o spawn falhar, a ponte não sai: sem Fênix, mas de pé', async () => 
   assert.equal(saiu, false)
   assert.match(logs.at(-1), /não consegui reviver/)
 })
+
+test('no laço, com a âncora na receita, a ponte a chama em vez de desistir (docs/adr/0041)', async () => {
+  const r = { ...receita(), ultimoRecurso: ['/usr/local/bin/ancora', '--panico'] }
+  const agora = Date.now()
+  writeFileSync(r.registro, [3, 2, 1].map((min) => `${new Date(agora - min * 60_000).toISOString()} renascida\n`).join(''))
+  const chamadas = []
+  const ren = criarRenascimento({
+    receita: r,
+    conectado: () => false,
+    vivo: () => false,
+    log: () => {},
+    sair: () => {},
+    existe: (c) => c === '/usr/local/bin/ancora',
+    spawn: (comando, args, opcoes) => {
+      chamadas.push({ comando, args, opcoes })
+      return { pid: 778, unref() {} }
+    },
+    intervaloMs: 5,
+    saidaMs: 5,
+  })
+  ren.vigiar()
+  await esperar(() => ren.estado().desistiu)
+  assert.equal(chamadas.length, 1)
+  assert.equal(chamadas[0].comando, '/usr/local/bin/ancora')
+  assert.deepEqual(chamadas[0].args.slice(0, 3), ['--panico', '--origem', 'pacto'])
+  assert.equal(chamadas[0].opcoes.detached, true)
+  assert.match(readFileSync(r.registro, 'utf8'), /último recurso/)
+})
+
+test('a receita só aceita um último recurso feito de textos', () => {
+  const base = { comando: ['node'], cwd: '/x', saida: '/x/s', registro: '/x/r' }
+  const env = (extra) => ({ FENIX_PID: '10', FENIX_RENASCER: JSON.stringify({ ...base, ...extra }) })
+  assert.deepEqual(lerReceita(env({ ultimoRecurso: ['/a', '--b'] })).ultimoRecurso, ['/a', '--b'])
+  assert.equal(lerReceita(env({ ultimoRecurso: ['/a', 3] })).ultimoRecurso, null)
+  assert.equal(lerReceita(env({})).ultimoRecurso, null)
+})

@@ -10,6 +10,7 @@
     "key": "${APOLO_TLS_KEY:-~/.apolo/tls/apolo-chave.pem}"
   },
   "preparar": [["node", "scripts/preparar.mjs"]],
+  "ultimoRecurso": ["/usr/local/bin/ancora", "--panico"],
   "notificacoes": {
     "url": "wss://localhost:${APOLO_NOTIFICAR_PORTA:-8792}/notificacoes",
     "token": "${APOLO_NOTIFICAR_TOKEN}",
@@ -97,6 +98,7 @@
       "^bridge\\/hermes\\.mjs$",
       "^bridge\\/fenix\\.mjs$",
       "^bridge\\/renascer\\.mjs$",
+      "^bridge\\/ancora\\.mjs$",
       "^bridge\\/tls\\.mjs$",
       "^bridge\\/extensoes\\.mjs$",
       "^bridge\\/plugaveis\\.mjs$",
@@ -108,6 +110,7 @@
       "^src\\/ui\\/sanitise\\.ts$",
       "^src\\/lib\\/autodev\\.ts$",
       "^src\\/lib\\/trocaDeVersao\\.ts$",
+      "^src\\/lib\\/ancora\\.ts$",
       "^index\\.html$",
       "^vite\\.config\\.ts$",
       "^vite\\.popups\\.config\\.ts$",
@@ -120,6 +123,18 @@
       "^hermes\\/",
       "^modules\\/",
       "^fenix\\.config\\.json$"
+    ],
+    "nuncaDeNoite": [
+      "^bridge\\/gate\\.mjs$",
+      "^bridge\\/autodev\\/politica\\.mjs$",
+      "^bridge\\/autodev\\/noite\\.mjs$",
+      "^fenix\\.config\\.json$",
+      "^src\\/lib\\/autodev\\.ts$",
+      "^src\\/lib\\/trocaDeVersao\\.ts$",
+      "^src\\/lib\\/ancora\\.ts$",
+      "^scripts\\/ancora\\/",
+      "^docs\\/adr\\/0040-",
+      "^docs\\/adr\\/0041-"
     ],
     "liberados": [".env.example"],
     "invariantes": [

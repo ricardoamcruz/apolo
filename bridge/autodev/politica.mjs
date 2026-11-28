@@ -53,6 +53,8 @@ export const SENSIVEIS = [
   /^bridge\/fenix\.mjs$/,
   // Revive a Fênix: sobe processos soltos com o ambiente do terminal (docs/adr/0028).
   /^bridge\/renascer\.mjs$/,
+  // Chama a âncora, que desliga tudo (docs/adr/0041).
+  /^bridge\/ancora\.mjs$/,
   // O gate, a proteção SSRF e o saneamento do HTML.
   /^bridge\/gate\.mjs$/,
   // O celular: quem muda isto decide quem fala com o agente de fora.
@@ -77,6 +79,8 @@ export const SENSIVEIS = [
   /^src\/lib\/autodev\.ts$/,
   // O sim falado que põe uma branch de fase no ar (docs/adr/0038).
   /^src\/lib\/trocaDeVersao\.ts$/,
+  // O sim falado que aciona a âncora (docs/adr/0041).
+  /^src\/lib\/ancora\.ts$/,
   // CSP e o que roda como código de configuração, fora do navegador.
   /^index\.html$/,
   /^vite\.config\.ts$/,
@@ -90,6 +94,27 @@ export const SENSIVEIS = [
   /^\.claude\//,
   /^\.gitignore$/,
 ]
+
+/**
+ * O que nem o modo noturno muda, mesmo com os sensíveis liberados (docs/adr/0040):
+ * uma noite não pode afrouxar as próprias travas. A F.Ê.N.I.X. confere a mesma lista
+ * ("nuncaDeNoite" no fenix.config.json), e scripts/fenix.test.mjs cobra que batam.
+ */
+export const TRAVAS_DA_NOITE = [
+  /^bridge\/gate\.mjs$/,
+  /^bridge\/autodev\/politica\.mjs$/,
+  /^bridge\/autodev\/noite\.mjs$/,
+  /^fenix\.config\.json$/,
+  /^src\/lib\/autodev\.ts$/,
+  /^src\/lib\/trocaDeVersao\.ts$/,
+  /^src\/lib\/ancora\.ts$/,
+  /^scripts\/ancora\//,
+  /^docs\/adr\/0040-/,
+  /^docs\/adr\/0041-/,
+]
+
+/** Os arquivos que uma alteração da noite não pode tocar. */
+export const travasTocadas = (arquivos) => arquivos.filter((f) => TRAVAS_DA_NOITE.some((re) => re.test(f)))
 
 const proibido = (rel) => !LIBERADOS.has(rel) && PROIBIDOS.some((re) => re.test(rel))
 

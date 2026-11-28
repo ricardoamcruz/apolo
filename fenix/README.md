@@ -68,12 +68,13 @@ WebSocket em `/fenix`, com `Authorization: Bearer <token>`. O token vem de
 | `comando:propor` | `script`, `motivo` | `ok`, `proposta { id, script, motivo, expiraEm }` |
 | `comando:confirmar` | `proposta` (id) | como `rotina` |
 | `comando:cancelar` | `proposta` (id) | `ok` |
-| `versao:aplicar` | `id`, `sha`, `branch`, `interfaces` | depois, aviso `versao:resultado` |
+| `versao:aplicar` | `id`, `sha`, `branch`, `interfaces`; de noite, `noturno`, `observarMs` (até 10 min) e `silencioso` | depois, aviso `versao:resultado` |
 | `versao:aprovar` | `id`, `branch` | depois, aviso `versao:resultado` |
 | `versao:reverter` | `id` | depois, aviso `versao:resultado` |
 | `versao:previa` | `branch` (nome, "3.4" ou "main") | `ok`, `branch`, `sha`, `confirmar`, `sensiveis`, `mensagem` |
 | `versao:trocar` | `branch`, `sha` (o da prévia), `interfaces` | `ok`, `id`, `mensagem` já; depois, aviso `versao:troca` (com `de` e `para`) |
 | `versao:voz` | `codigo` (`sim-nao-ouvido`, `previa-vencida`), `branch` | `ok`; anota no `eventos.log` a troca que parou na voz (só códigos conhecidos) |
+| `versao:noite` | `acao` (`comecar` com `ate`, ou `terminar`) | `ok`; com a noite autorizada, `noturno` aceita arquivo de `revisao`, nunca de `nuncaDeNoite` (docs/adr/0040) |
 | `avisar` | `titulo`, `texto`, `prioridade` | `ok`, `mensagem`, `entrega` (o que a central respondeu) |
 
 Pedido com `id` recebe `{ type: '<pedido>:resposta', resposta: id, ... }`. Avisos:
@@ -105,3 +106,19 @@ do usuário; os `arquivosDeAmbiente` valem para as variáveis e para os serviço
 | `instalar` | comando de dependências e quando rodar numa atualização |
 | `rotinas[]` | `nome`, `descricao`, `comando`, `parametros { formato, descricao, padrao }`, `prazoMs` |
 | `comandos` | `prazoMs` e `validadeMs` dos comandos livres |
+
+
+## Renascer no código novo e o último recurso (docs/adr/0041)
+
+A Fênix troca a versão do projeto, mas roda com o código de quando subiu. Quando
+uma troca, aprovação ou atualização concluída muda a pasta dela ou o arquivo de
+configuração, ela derruba os serviços e o canal, sobe uma Fênix nova (com
+`FENIX_RENOVADA=1`) e sai quando a nova responde com os serviços de pé
+(`src/renovar.mjs`). Se a nova não ficar de pé em 2 minutos, ela a mata e chama o
+`ultimoRecurso` do config (no A.P.O.L.O., a âncora); sem ele, retoma o posto.
+
+O `ultimoRecurso` também vai na receita do renascimento (ADR 0028): quem revive a
+Fênix e chega ao limite de 3 vezes em 10 minutos o chama em vez de só desistir.
+
+Com `FENIX_VERSAO_FIXA=1` (a âncora rodando da cópia congelada), ela recusa
+prévia, troca, aplicação, atualização e noite: não há repositório para trocar.

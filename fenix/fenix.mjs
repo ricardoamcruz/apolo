@@ -204,10 +204,14 @@ const renascer = {
   cwd: process.cwd(),
 }
 const renascida = process.env.FENIX_RENASCIDA === '1'
-// A marca é desta partida: os serviços e uma próxima Fênix não a herdam.
-delete process.env.FENIX_RENASCIDA
-delete config.ambiente.FENIX_RENASCIDA
-const fenix = criarFenix(config, { flags: args, token: garantirToken(config.pasta), renascer, renascida })
+// Subida pela Fênix anterior, no código novo (docs/adr/0041).
+const renovada = process.env.FENIX_RENOVADA === '1'
+// As marcas são desta partida: os serviços e uma próxima Fênix não as herdam.
+for (const marca of ['FENIX_RENASCIDA', 'FENIX_RENOVADA']) {
+  delete process.env[marca]
+  delete config.ambiente[marca]
+}
+const fenix = criarFenix(config, { flags: args, token: garantirToken(config.pasta), renascer, renascida, renovada })
 
 let saindo = false
 async function sair(codigo) {

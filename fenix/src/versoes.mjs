@@ -125,6 +125,8 @@ export function criarVersoes({
   aoTrocar = () => {},
   quedasParaVoltar = 3,
   janelaDeQuedasMs = 5 * 60_000,
+  // Rodando da cópia congelada da âncora (docs/adr/0041): não há repositório para trocar.
+  versaoFixa = false,
 }) {
   mkdirSync(pasta, { recursive: true })
   const arqTransicao = join(pasta, 'transicao.json')
@@ -141,6 +143,22 @@ export function criarVersoes({
   }
 
   const branchValida = (nome) => protecao.branch.test(String(nome ?? ''))
+
+  const FIXA =
+    'Estou rodando da cópia congelada da âncora, porque o repositório não estava utilizável: daqui não troco ' +
+    'de versão. Conserte o repositório e rode ancora --sair.'
+
+  /**
+   * A noite autorizada pelo Ricardo (docs/adr/0040): até quando a Fênix aceita pôr
+   * no ar, sem revisão, alteração que toca arquivo sensível. O que está em
+   * `nuncaDeNoite` continua barrado. Em disco, porque ela pode renascer no meio.
+   */
+  const arqNoite = join(pasta, 'noite.json')
+  const FOLGA_DA_NOITE_MS = 30 * 60_000
+  const noiteAtiva = () => {
+    const n = lerJson(arqNoite, null)
+    return Boolean(n && Number(n.ate) > 0 && Date.now() < Number(n.ate) + FOLGA_DA_NOITE_MS)
+  }
 
   /**
    * Todo comando do Git roda na pasta do projeto, com prazo e sem perguntar nada
@@ -299,7 +317,7 @@ export function criarVersoes({
 
   const apagarBranch = (ref) => git('branch', '-D', ref).catch(() => {})
 
-  async function recusaAplicar({ sha, branch }) {
+  async function recusaAplicar({ sha, branch, noturno = false }) {
     // Nome que o Git leria como opção (começando por "-") nunca chega à linha de comando.
     if (!/^\w[\w./-]*$/.test(String(branch ?? '')) || String(branch).includes('..')) {
       return `Branch inválida: ${branch}; nada foi trocado.`
@@ -323,7 +341,12 @@ export function criarVersoes({
     // precisa ser verificado, e o projeto é parte do que muda.
     const nomes = (await git('diff', '--name-only', atual, sha)).split('\n').filter(Boolean)
     const { revisao, quebrados } = await barrados(protecao, nomes, (f) => git('show', `${sha}:${f}`))
-    if (revisao.length) {
+    const deNoite = noturno && noiteAtiva()
+    if (deNoite) {
+      const travas = nomes.filter((f) => (protecao.nuncaDeNoite ?? []).some((re) => re.test(f)))
+      if (travas.length) return `A alteração toca o que nem o modo noturno muda (${travas.join(', ')}); exige o Ricardo.`
+    }
+    if (revisao.length && !deNoite) {
       return `A alteração toca arquivos protegidos (${revisao.join(', ')}); exige revisão.`
     }
     if (quebrados.length) {
@@ -347,12 +370,12 @@ export function criarVersoes({
   }
 
   /** Espera a versão subir e continuar de pé. Devolve o motivo da falha, ou null. */
-  async function observar(exigirInterface) {
+  async function observar(exigirInterface, duracaoMs = estabilidadeMs) {
     const naoSubiu = await esperarSubida()
     if (naoSubiu) return naoSubiu
     let interfaceVoltou = false
     let falhas = 0
-    const fim = Date.now() + estabilidadeMs
+    const fim = Date.now() + duracaoMs
     while (Date.now() < fim) {
       if (queda) return queda
       const s = await saude().catch((err) => ({ ok: false, motivo: err.message }))
@@ -693,6 +716,7 @@ export function criarVersoes({
     async previa({ branch } = {}) {
       // Toda prévia fica no eventos.log, com o que foi dito: numa falha, o motivo está lá.
       const registrar = (r) => (anotar(`[fenix] prévia da troca para "${branch ?? ''}": ${r.ok ? '' : 'recusada: '}${r.mensagem}`), r)
+      if (versaoFixa) return registrar({ ok: false, mensagem: FIXA })
       try {
         const p = await planejarTroca(branch)
         if (!p.branch) return registrar({ ok: false, mensagem: p.motivo })
@@ -721,6 +745,7 @@ export function criarVersoes({
         anotar(`[fenix] troca para "${branch ?? ''}" recusada: ${mensagem}`)
         return { ok: false, mensagem }
       }
+      if (versaoFixa) return recusa(FIXA)
       let plano
       try {
         plano = await planejarTroca(branch, { buscar: false })
@@ -752,11 +777,12 @@ export function criarVersoes({
     },
 
     /** Troca para o commit verificado, confere que subiu e deixa em teste. */
-    async aplicar({ id, sha, branch, interfaces = 0 }) {
+    async aplicar({ id, sha, branch, interfaces = 0, noturno = false, observarMs = 0 }) {
+      if (versaoFixa) return notificar({ id, tipo: 'recusado', mensagem: FIXA })
       if (ocupado || emTeste) return notificar({ id, tipo: 'recusado', mensagem: 'Já há uma troca em andamento.' })
       ocupado = true
       try {
-        const recusa = await recusaAplicar({ sha, branch }).catch((err) => err.message)
+        const recusa = await recusaAplicar({ sha, branch, noturno }).catch((err) => err.message)
         if (recusa) return notificar({ id, tipo: 'recusado', mensagem: recusa })
 
         const transicao = { id, de: await versaoAtual(), para: { ref: branch, sha } }
@@ -768,7 +794,9 @@ export function criarVersoes({
         await trocarPara(transicao.para)
         ligar()
 
-        const motivo = await observar(interfaces > 0)
+        // De noite ninguém testa: a observação vale mais (docs/adr/0040), até 10 min.
+        const duracao = Math.min(Math.max(Number(observarMs) || 0, estabilidadeMs), 10 * 60_000)
+        const motivo = await observar(interfaces > 0, duracao)
         if (motivo) {
           await descartar(transicao, motivo)
           return notificar({
@@ -919,6 +947,28 @@ export function criarVersoes({
     /** Há uma alteração no ar que ninguém revisou? */
     emTeste: () => Boolean(emTeste),
 
+    /**
+     * A noite começa ou termina (docs/adr/0040). Quem autoriza é o "confirmo" falado
+     * do Ricardo, conferido na interface; aqui fica o prazo, com teto de 14 horas.
+     */
+    noite({ acao, ate } = {}) {
+      if (acao === 'terminar') {
+        rmSync(arqNoite, { force: true })
+        anotar('[fenix] a noite terminou')
+        return { ok: true, mensagem: 'A noite terminou.' }
+      }
+      if (acao !== 'comecar') return { ok: false, mensagem: `Ação desconhecida da noite: ${acao}.` }
+      if (versaoFixa) return { ok: false, mensagem: FIXA }
+      const limite = Number(ate)
+      if (!(limite > Date.now()) || limite - Date.now() > 14 * 60 * 60_000) {
+        return { ok: false, mensagem: 'A noite precisa terminar no futuro, em até 14 horas.' }
+      }
+      writeFileSync(arqNoite, JSON.stringify({ ate: limite, desde: Date.now() }, null, 2))
+      anotar(`[fenix] noite autorizada até ${new Date(limite).toISOString()}`)
+      return { ok: true, mensagem: 'A noite está autorizada.' }
+    },
+    noiteAtiva,
+
     estado() {
       const t = emTeste ?? lerJson(arqTransicao, null)
       return {
@@ -944,6 +994,7 @@ export function criarVersoes({
      * religa os serviços: a cópia nunca fica no meio, e a resposta diz o motivo exato.
      */
     async atualizar() {
+      if (versaoFixa) return { ok: false, mensagem: FIXA }
       if (ocupado || emTeste) return { ok: false, mensagem: 'Há uma troca em andamento ou uma alteração em teste.' }
       ocupado = true
       /** Onde a cópia estava (branch e commit): é para lá que uma falha volta. */

@@ -41,6 +41,8 @@
 | 0037 | O bom dia também no celular, sem a música | proposta |
 | 0038 | A troca de branch é da Fênix, nos dois sentidos | aceita |
 | 0039 | Avisos de ida ao H.E.R.M.E.S., e os temas do bom dia por voz | aceita |
+| 0040 | O modo noturno | aceita |
+| 0041 | Protocolo Â.N.C.O.R.A., e a Fênix que renasce no código novo | aceita |
 
 ## Em aberto
 

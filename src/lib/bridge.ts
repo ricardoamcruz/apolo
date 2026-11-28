@@ -57,6 +57,7 @@ type Frame = {
   mensagem?: string
   saida?: string
   proposta?: PropostaDaFenix
+  instalada?: boolean
   action?: string
   url?: string
   as?: string
@@ -167,7 +168,7 @@ const respostas = new Map<string, (r: AutodevResposta) => void>()
  */
 export async function autodev(
   acao: string,
-  extra?: { pedido?: string; tarefa?: string; titulo?: string; detalhe?: string },
+  extra?: Record<string, unknown>,
 ): Promise<AutodevResposta> {
   const ws = await connect()
   const id = `d${++askSeq}`
@@ -244,7 +245,7 @@ export type EstadoDaFenix = {
   /** O fim da última troca de branch (docs/adr/0038), para anunciar uma vez. */
   ultimaTroca?: { id: string; ok: boolean; mensagem: string; branch?: string; de?: string; para?: string; em?: number; automatica?: boolean } | null
 }
-export type FenixResposta = { ok: boolean; mensagem: string; saida?: string; proposta?: PropostaDaFenix }
+export type FenixResposta = { ok: boolean; mensagem: string; saida?: string; proposta?: PropostaDaFenix; instalada?: boolean }
 
 let onFenix: ((estado: EstadoDaFenix) => void) | null = null
 export function watchFenix(fn: (estado: EstadoDaFenix) => void) {
@@ -439,6 +440,8 @@ function dispatch(ws: WebSocket) {
           mensagem: msg.mensagem ?? '',
           saida: msg.saida,
           proposta: msg.proposta,
+          // A âncora (docs/adr/0041): sem ela instalada, a voz explica em vez de perguntar.
+          instalada: msg.instalada === true,
         })
         respostasDaFenix.delete(msg.resposta)
       }

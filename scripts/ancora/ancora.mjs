@@ -8,6 +8,8 @@
  * repositório, a Fênix e a `main` quebrados.
  *
  *   ancora                        o pânico (também --panico)
+ *   ancora --ajuda                estes comandos; qualquer outro argumento é recusado,
+ *                                 nunca vira pânico (os comandos também valem sem "--")
  *   ancora --origem voz --motivo "..."   quem pediu e por quê, para o registro
  *   ancora --sair                 desliga a âncora e sobe a main do repositório
  *   ancora --estado               qual âncora está instalada e se está no ar
@@ -23,9 +25,11 @@
 import { execFile as execFileCb, execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
+  accessSync,
   appendFileSync,
   chmodSync,
   closeSync,
+  constants,
   copyFileSync,
   cpSync,
   existsSync,
@@ -399,13 +403,24 @@ function subirFenix(conf, pasta, opcoes, extra = {}) {
   }
 }
 
+/** Por que a âncora não pôde ser lida: não existe, ou existe e o usuário não lê. */
+export function faltaDaAncora(n, pasta) {
+  if (!existsSync(pasta)) return `a âncora ${n} não existe em ${pasta}`
+  try {
+    accessSync(join(pasta, 'ANCORA.json'), constants.R_OK)
+  } catch (err) {
+    if (err.code === 'EACCES') return `não consigo ler a âncora ${n} em ${pasta} (permissão); conserte com: sudo chmod -R go+rX ${pasta}`
+  }
+  return `a âncora ${n} em ${pasta} não tem um ANCORA.json válido`
+}
+
 /** A âncora que confere: a atual ou, se ela não bater com o manifesto, a anterior. */
 export function escolherAncora(conf, log = console.log) {
   for (const n of [conf.atual, conf.anterior].filter((x) => Number.isInteger(x))) {
     const pasta = join(conf.raiz, String(n))
     const id = lerAncora(pasta)
     if (!id) {
-      log(`✖ a âncora ${n} não existe em ${pasta}`)
+      log(`✖ ${faltaDaAncora(n, pasta)}`)
       continue
     }
     const c = conferirManifesto(pasta)
@@ -554,18 +569,20 @@ export async function panico(conf, { origem = 'terminal', motivo = '', saida = c
   }
   try {
     log(`Â.N.C.O.R.A. acionada (${origem}${motivo ? `: ${motivo}` : ''})`)
+
+    // Primeiro a âncora, depois o resto: sem uma que confira, não há para onde
+    // voltar, e derrubar o que está no ar só deixaria o Mac sem nada.
+    const ancora = escolherAncora(conf, log)
+    if (!ancora) {
+      log('✖ nenhuma âncora conferiu: não desliguei nada, o que estava no ar continua.')
+      await avisar(conf, { titulo: 'A.P.O.L.O.: a âncora não foi acionada', texto: 'Nenhuma versão de segurança conferiu, então não desliguei nada. Preciso que você olhe o Mac.' })
+      return { ok: false, motivo: 'sem âncora' }
+    }
+    log(`✔ âncora ${ancora.n} conferida (${ancora.sha.slice(0, 7)})`)
     await avisar(conf, { titulo: 'A.P.O.L.O.: protocolo âncora', texto: 'Desligando tudo para subir a versão de segurança.' })
 
     const opcoes = await desligarTudo(conf, log)
     await guardar({ repo: conf.repo, dados: conf.dados, home: conf.home, log: (l) => log(`✔ ${l}`) })
-
-    const ancora = escolherAncora(conf, log)
-    if (!ancora) {
-      log('✖ nenhuma âncora conferiu com o manifesto: não subi nada.')
-      await avisar(conf, { titulo: 'A.P.O.L.O.: a âncora não subiu', texto: 'Nenhuma versão de segurança conferiu. Preciso que você olhe o Mac.' })
-      return { ok: false, motivo: 'sem âncora' }
-    }
-    log(`✔ âncora ${ancora.n} conferida (${ancora.sha.slice(0, 7)})`)
 
     let modo = 'repositorio'
     let pasta = conf.repo
@@ -815,7 +832,9 @@ export function atualizar(conf, alvo, { saida = console.log, conferirGithub = tr
   writeFileSync(join(destino, 'ANCORA.json'), JSON.stringify({ n, sha, em: new Date().toISOString() }, null, 2))
   if (process.getuid?.() === 0) {
     execFileSync('chown', ['-R', 'root:wheel', destino])
-    execFileSync('chmod', ['-R', 'go-w', destino])
+    // Só o root escreve; todos leem. O pânico roda como o usuário e precisa ler
+    // a cópia (o mktemp a criou com 700).
+    execFileSync('chmod', ['-R', 'u+rwX,go+rX,go-w', destino])
   }
   log('… gerando o manifesto')
   writeFileSync(join(destino, 'MANIFESTO'), gerarManifesto(destino))
@@ -829,6 +848,17 @@ export function atualizar(conf, alvo, { saida = console.log, conferirGithub = tr
   const anterior = Number.isInteger(conf.atual) ? conf.atual : null
   for (const item of readdirSync(conf.raiz)) {
     if (/^\d+$/.test(item) && ![n, anterior].includes(Number(item))) rmSync(join(conf.raiz, item), { recursive: true, force: true })
+  }
+  if (process.getuid?.() === 0 && conf.usuario) {
+    // A reserva também: as congeladas antes desta correção ficaram com 700.
+    if (anterior !== null && existsSync(join(conf.raiz, String(anterior)))) {
+      execFileSync('chmod', ['-R', 'u+rwX,go+rX,go-w', join(conf.raiz, String(anterior))])
+    }
+    try {
+      comoUsuario(conf, 'test', ['-r', join(destino, 'ANCORA.json')])
+    } catch {
+      throw new Error(`a âncora ${n} ficou sem leitura para ${conf.usuario}: o pânico não a acharia.`)
+    }
   }
   const { raiz: _r, dados: _d, ...gravar } = conf
   writeFileSync(join(conf.raiz, 'ancora.conf'), JSON.stringify({ ...gravar, atual: n, anterior }, null, 2))
@@ -939,38 +969,86 @@ export async function instalar({ repo, saida = console.log }) {
 
 // ---------------------------------------------------------------- linha de comando
 
-async function principal(argv) {
-  const opc = (nome) => {
-    const i = argv.indexOf(nome)
-    return i >= 0 ? (argv[i + 1] ?? '') : null
+const COMANDOS = ['panico', 'estado', 'sair', 'testar-atalho', 'atualizar', 'instalar', 'vigia', 'ajuda']
+
+export const AJUDA = `Â.N.C.O.R.A. — o pânico do A.P.O.L.O. (scripts/ancora/README.md)
+
+  ancora                      o pânico: desliga tudo e sobe a versão de segurança
+  ancora --estado             qual âncora está instalada e se está no ar
+  ancora --sair               desliga a âncora e sobe a main do repositório
+  ancora --testar-atalho      o código que o Atalho do iPhone deve mandar agora
+  sudo ancora --atualizar [<commit>|main]   congela uma âncora nova
+  ancora --ajuda              esta lista
+
+Os comandos também valem sem "--" (ancora estado).`
+
+/**
+ * Lê a linha de comando. Nada que ela não conheça vira pânico: só sem argumento,
+ * com "panico" ou só com --origem/--motivo. `{ comando, origem, motivo, alvo }` ou `{ erro }`.
+ */
+export function lerArgumentos(argv) {
+  const r = { comando: null, origem: '', motivo: '', alvo: null }
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a === '--origem' || a === '--motivo') {
+      const valor = argv[i + 1]
+      if (valor === undefined) return { erro: `falta o valor de ${a}` }
+      r[a.slice(2)] = valor
+      i++
+      continue
+    }
+    const nome = a.replace(/^--?/, '')
+    const comando = ['h', 'help'].includes(nome) ? 'ajuda' : nome
+    if (!COMANDOS.includes(comando)) return { erro: `não conheço "${a}"` }
+    if (r.comando && r.comando !== comando) return { erro: `dois comandos de uma vez: ${r.comando} e ${comando}` }
+    r.comando = comando
+    if (comando === 'atualizar' && argv[i + 1] && !argv[i + 1].startsWith('-')) r.alvo = argv[++i]
   }
-  if (argv[0] === 'instalar') {
+  r.comando ??= 'panico'
+  return r
+}
+
+async function principal(argv) {
+  const args = lerArgumentos(argv)
+  if (args.erro) {
+    console.error(`✖ ${args.erro}. Nada foi feito.\n\n${AJUDA}`)
+    return 2
+  }
+  if (args.comando === 'ajuda') {
+    console.log(AJUDA)
+    return 0
+  }
+  if (args.comando === 'instalar') {
     const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
     await instalar({ repo })
     return 0
   }
   const conf = lerConf()
-  if (argv[0] === 'vigia') {
+  if (args.comando === 'vigia') {
     await vigia(conf)
     return 0
   }
-  if (argv.includes('--atualizar')) {
-    atualizar(conf, opc('--atualizar'))
+  if (args.comando === 'atualizar') {
+    atualizar(conf, args.alvo)
     return 0
   }
-  if (argv.includes('--estado')) {
-    const ids = [conf.atual, conf.anterior].filter(Number.isInteger).map((n) => ({ n, ...lerAncora(join(conf.raiz, String(n))) }))
-    for (const a of ids) console.log(`âncora ${a.n}: commit ${String(a.sha ?? '?').slice(0, 7)}, congelada em ${a.em ?? '?'}${a.n === conf.atual ? ' (atual)' : ' (reserva)'}`)
+  if (args.comando === 'estado') {
+    for (const n of [conf.atual, conf.anterior].filter(Number.isInteger)) {
+      const pasta = join(conf.raiz, String(n))
+      const a = lerAncora(pasta)
+      const papel = n === conf.atual ? 'atual' : 'reserva'
+      console.log(a ? `âncora ${n} (${papel}): commit ${String(a.sha ?? '?').slice(0, 7)}, congelada em ${a.em ?? '?'}` : `✖ âncora ${n} (${papel}): ${faltaDaAncora(n, pasta)}`)
+    }
     const noAr = await ancoraNoAr(conf)
     console.log(noAr ? `no ar: âncora ${noAr.n} (${noAr.modo}), desde ${noAr.em}` : 'a âncora não está no ar.')
     return 0
   }
-  if (argv.includes('--testar-atalho')) {
+  if (args.comando === 'testar-atalho') {
     console.log(`código deste minuto (${minutoLocal(new Date())}): ${codigoDaAncora(conf.segredo, new Date())}`)
     return 0
   }
-  if (argv.includes('--sair')) return (await sairDaAncora(conf)).ok ? 0 : 1
-  const r = await panico(conf, { origem: opc('--origem') || 'terminal', motivo: opc('--motivo') || '' })
+  if (args.comando === 'sair') return (await sairDaAncora(conf)).ok ? 0 : 1
+  const r = await panico(conf, { origem: args.origem || 'terminal', motivo: args.motivo })
   return r.ok ? 0 : 1
 }
 

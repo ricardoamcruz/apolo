@@ -126,7 +126,16 @@ ancora                  # o pânico
 ancora --estado         # qual âncora está instalada e se está no ar
 ancora --sair           # desliga a âncora e sobe a main do repositório
 ancora --testar-atalho  # o código que o Atalho do iPhone deve mandar agora
+ancora --ajuda          # estes comandos
 ```
+
+Os comandos também valem sem `--`, como `ancora estado`. Um argumento que o
+programa não conhece é recusado e nada acontece: só `ancora` sozinho aciona o
+pânico.
+
+Antes de desligar qualquer coisa, o pânico confere a âncora. Se nenhuma conferir,
+ele não desliga nada e diz por quê. Por exemplo: "não consigo ler a âncora 2
+(permissão)", com o comando que conserta.
 
 Também dá para acionar:
 - pela voz, no PC e no app do iPhone: "protocolo âncora", e o sim conferido no

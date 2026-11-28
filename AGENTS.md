@@ -324,6 +324,8 @@ Ao concluir uma tarefa, atualize **no mesmo commit**:
 - `docs/adr/` — crie uma ADR nova (copie `docs/adr/0000-modelo.md`) para toda
   decisão de arquitetura, biblioteca ou provedor;
 - este arquivo — se mudar comando, estrutura de pastas ou regra.
+- `README.md` — todo README novo ganha uma linha na tabela "Cada parte com README
+  próprio", na seção Documentação.
 
 ## Comandos
 

@@ -220,10 +220,20 @@ processando, lilás executando script, vermelho codificando e azul claro em espe
 | [`docs/04-base-jarvis.md`](docs/04-base-jarvis.md) | o código herdado do JARVIS |
 | [`docs/05-roadmap.md`](docs/05-roadmap.md) | fases e backlog da próxima versão |
 | [`docs/06-ambiente-mobile.md`](docs/06-ambiente-mobile.md) | Xcode, iPhone, Tailscale e o app |
-| [`docs/adr/`](docs/adr/README.md) | as 27 decisões de arquitetura (ADRs) |
+| [`docs/adr/`](docs/adr/README.md) | as 41 decisões de arquitetura (ADRs) |
 | [`docs/poc/`](docs/poc/) | provas de conceito a testar, como avisos pelo WhatsApp |
-| [`fenix/README.md`](fenix/README.md) · [`hermes/README.md`](hermes/README.md) · [`modules/aurora/README.md`](modules/aurora/README.md) | o protocolo e o config de cada serviço |
 | [`AGENTS.md`](AGENTS.md) | regras para agentes de IA que trabalham neste repositório |
+
+Cada parte com README próprio:
+
+| README | Conteúdo |
+|---|---|
+| [`fenix/README.md`](fenix/README.md) | F.Ê.N.I.X.: protocolo, `fenix.config.json`, troca de versão e renascimento |
+| [`hermes/README.md`](hermes/README.md) | H.E.R.M.E.S.: o canal do celular e a central de notificações |
+| [`modules/aurora/README.md`](modules/aurora/README.md) | A.U.R.O.R.A.: o bom dia, playlists e temas de notícias |
+| [`extensoes/atlas/README.md`](extensoes/atlas/README.md) | A.T.L.A.S.: o mapa, a primeira extensão plugável |
+| [`scripts/ancora/README.md`](scripts/ancora/README.md) | Â.N.C.O.R.A.: o pânico, a instalação, a palavra-senha e o Atalho do iPhone |
+| [`docs/adr/README.md`](docs/adr/README.md) | o índice das ADRs, com o status de cada uma |
 
 ## Histórico de versões
 

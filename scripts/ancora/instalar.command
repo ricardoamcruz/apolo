@@ -34,40 +34,36 @@ else
   [ "$resposta" = "s" ] || falha "Ponha o APOLO_NTFY_TOPICO no .env.local e rode de novo."
 fi
 
-if [ -f /usr/local/ancora/ancora.conf ]; then
-  echo "  ✔ já instalada antes: as âncoras congeladas ficam; a palavra-senha será trocada pela nova"
+if [ -f /usr/local/etc/ancora.conf ] || [ -f /usr/local/ancora/ancora.conf ]; then
+  echo "  ✔ já instalada antes: a âncora será congelada de novo, e Enter mantém a palavra-senha"
 fi
 
-# ------------------------------------------------------------ 1. instalar
+# ------------------------------------------------------------ 1. instalar e congelar
 cat <<'TEXTO'
 
-[1/3] Instalar o programa, o vigia do iPhone e o Âncora.command
+[1/2] Instalar e congelar a âncora
 
   Primeiro o macOS pede a SUA senha do Mac (sudo): a âncora fica com o root,
   para que nenhum programa seu, nem o próprio A.P.O.L.O., consiga mudá-la.
 
-  Depois vem a PALAVRA-SENHA DO ATALHO. Ela é nova, inventada agora, e não é a
-  senha do Mac:
+  Depois vem a PALAVRA-SENHA DO ATALHO. Ela não é a senha do Mac:
     • só serve para o Atalho do iPhone provar que o pedido é seu;
     • fica guardada em dois lugares: neste Mac e dentro do Atalho;
     • nunca é enviada pela internet (vai só um código que muda a cada minuto);
     • mínimo de 8 caracteres; não aparece enquanto você digita;
-    • não use uma senha que você usa em outro lugar.
+    • já instalada antes? Enter mantém a de antes.
   Anote-a: você vai digitá-la de novo ao criar o Atalho.
+
+  Por fim, ele congela a âncora a partir da main do GitHub em /usr/local/ancora
+  (clona, roda npm ci e gera o manifesto; leva alguns minutos). O que havia lá
+  antes, inclusive as âncoras numeradas, é substituído.
 
 TEXTO
 sudo "$NODE" scripts/ancora/ancora.mjs instalar || falha "A instalação parou (o motivo está acima)."
 
-# ------------------------------------------------------------ 2. congelar
-echo
-echo "[2/3] Congelar a âncora a partir da main do GitHub"
-echo "  Clona a main, roda npm ci e gera o manifesto. Leva alguns minutos."
-echo
-sudo /usr/local/bin/ancora --atualizar main || falha "Não consegui congelar a âncora (o motivo está acima). O programa já está instalado: rode 'sudo ancora --atualizar main' depois."
-
 # ------------------------------------------------------------ 3. conferir
 echo
-echo "[3/3] Conferindo"
+echo "[2/2] Conferindo"
 /usr/local/bin/ancora --estado
 
 cat <<'TEXTO'

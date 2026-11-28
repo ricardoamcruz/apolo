@@ -178,13 +178,13 @@ async function cenario() {
     node: process.execPath,
     portas: [porta],
     servicos: [{ nome: 'ponte', url: `http://127.0.0.1:${porta}/health` }],
+    pasta: join(R, 'ancora'),
     opcoes: [],
   }
   writeFileSync(join(R, 'ancora.conf'), JSON.stringify(conf))
   process.env.ANCORA_SEM_ROOT = '1'
   process.env.ANCORA_SEM_NPM = '1'
-  const congelada = atualizar(lerConf(R), shaA, { saida: () => {}, conferirGithub: false })
-  assert.equal(congelada.n, 1)
+  const congelada = atualizar(lerConf(join(R, 'ancora.conf')), shaA, { saida: () => {}, conferirGithub: false })
   assert.equal(congelada.sha, shaA)
   // A versão B vai ao ar e quebra; alguém deixa coisa sem commit.
   git(repo, 'switch', '-q', '-c', 'fase-9.1/quebrada')
@@ -202,7 +202,7 @@ test('o pânico inteiro: desliga a B, guarda o rascunho, põe a âncora A no ar 
   t.after(() => matarNaPorta(porta))
   process.env.TESTE_PORTA = String(porta)
   const linhas = []
-  const conf = lerConf(R)
+  const conf = lerConf(join(R, 'ancora.conf'))
   const r = await panico(conf, { origem: 'teste', saida: (l) => linhas.push(l), prazos: { prazoMs: 15_000, intervaloMs: 200 }, comInterface: false })
   assert.equal(r.ok, true, linhas.join('\n'))
   assert.equal(r.modo, 'repositorio')
@@ -214,8 +214,8 @@ test('o pânico inteiro: desliga a B, guarda o rascunho, põe a âncora A no ar 
   assert.ok(panicos, 'a branch panico existe')
   assert.equal(git(repo, 'show', `${panicos.replace(/^[*\s]+/, '')}:rascunho.txt`), 'trabalho sem commit')
   assert.ok(git(repo, 'branch', '--list', 'fase-9.1/quebrada'), 'a branch quebrada continua guardada')
-  assert.equal((await ancoraNoAr(conf))?.n, 1)
-  assert.match(readFileSync(join(conf.dados, 'registro.log'), 'utf8'), /a âncora 1 está no ar/)
+  assert.equal((await ancoraNoAr(conf))?.sha, shaA)
+  assert.match(readFileSync(join(conf.dados, 'registro.log'), 'utf8'), /a âncora está no ar/)
 })
 
 test('com o repositório inutilizável, o pânico sobe a cópia congelada, presa nesta versão', async (t) => {
@@ -224,7 +224,7 @@ test('com o repositório inutilizável, o pânico sobe a cópia congelada, presa
   process.env.TESTE_PORTA = String(porta)
   renameSync(join(repo, '.git'), join(repo, '.git-estragado'))
   const linhas = []
-  const conf = lerConf(R)
+  const conf = lerConf(join(R, 'ancora.conf'))
   const r = await panico(conf, { origem: 'teste', saida: (l) => linhas.push(l), prazos: { prazoMs: 15_000, intervaloMs: 200 }, comInterface: false })
   assert.equal(r.ok, true, linhas.join('\n'))
   assert.equal(r.modo, 'copia')
@@ -234,14 +234,31 @@ test('com o repositório inutilizável, o pânico sobe a cópia congelada, presa
   assert.equal((await ancoraNoAr(conf))?.modo, 'copia')
 })
 
-test('uma âncora adulterada não sobe: o pânico usa a anterior ou para', async () => {
+test('uma âncora adulterada não sobe, e o pânico para sem desligar nada', async () => {
   const { R, porta } = await cenario()
   matarNaPorta(porta)
-  writeFileSync(join(R, '1', 'fenix', 'fenix.mjs'), 'process.exit(1)\n')
+  writeFileSync(join(R, 'ancora', 'fenix', 'fenix.mjs'), 'process.exit(1)\n')
   const linhas = []
-  const r = await panico(lerConf(R), { origem: 'teste', saida: (l) => linhas.push(l), prazos: { prazoMs: 2000, intervaloMs: 200 }, comInterface: false })
+  const r = await panico(lerConf(join(R, 'ancora.conf')), { origem: 'teste', saida: (l) => linhas.push(l), prazos: { prazoMs: 2000, intervaloMs: 200 }, comInterface: false })
   assert.equal(r.ok, false)
   assert.ok(linhas.some((l) => /não confere com o manifesto/.test(l)))
+})
+
+test('a âncora é uma só: congelar de novo substitui a de antes, sem número, e move a tag ancora', async (t) => {
+  const { repo, R, porta, shaA } = await cenario()
+  t.after(() => matarNaPorta(porta))
+  const conf = lerConf(join(R, 'ancora.conf'))
+  const shaB = git(repo, 'rev-parse', 'HEAD')
+  git(repo, 'tag', 'ancora-7', shaA)
+  const r = atualizar(conf, shaB, { saida: () => {}, conferirGithub: false })
+  assert.equal(r.sha, shaB)
+  assert.equal(JSON.parse(readFileSync(join(R, 'ancora', 'ANCORA.json'), 'utf8')).sha, shaB)
+  assert.equal(conferirManifesto(join(R, 'ancora')).ok, true)
+  assert.equal(existsSync(join(R, 'ancora.nova')), false, 'sem pasta pela metade')
+  assert.equal(git(repo, 'rev-parse', 'ancora^{commit}'), shaB)
+  assert.equal(git(repo, 'tag', '--list', 'ancora-*'), '', 'as tags numeradas somem')
+  const gravada = JSON.parse(readFileSync(join(R, 'ancora.conf'), 'utf8'))
+  assert.equal('atual' in gravada || 'anterior' in gravada, false)
 })
 
 test('a linha de comando: só sem argumento, "panico" ou --origem/--motivo viram pânico', () => {
@@ -261,14 +278,14 @@ test('a linha de comando: só sem argumento, "panico" ou --origem/--motivo viram
 test('uma âncora sem leitura diz por quê, e o pânico não desliga nada sem âncora', async (t) => {
   const { R, porta } = await cenario()
   t.after(() => {
-    chmodSync(join(R, '1'), 0o755)
+    chmodSync(join(R, 'ancora'), 0o755)
     matarNaPorta(porta)
   })
-  chmodSync(join(R, '1'), 0o000)
-  assert.match(faltaDaAncora(1, join(R, '1')), /permissão.*chmod/)
-  assert.match(faltaDaAncora(7, join(R, '7')), /não existe/)
+  chmodSync(join(R, 'ancora'), 0o000)
+  assert.match(faltaDaAncora(join(R, 'ancora')), /permissão.*chmod/)
+  assert.match(faltaDaAncora(join(R, 'outra')), /não há âncora/)
   const linhas = []
-  const r = await panico(lerConf(R), { origem: 'teste', saida: (l) => linhas.push(l), comInterface: false })
+  const r = await panico(lerConf(join(R, 'ancora.conf')), { origem: 'teste', saida: (l) => linhas.push(l), comInterface: false })
   assert.equal(r.ok, false)
   assert.ok(linhas.some((l) => /não desliguei nada/.test(l)), linhas.join('\n'))
   assert.ok((await obter(`http://127.0.0.1:${porta}/`)).ok, 'a versão no ar continua de pé')
@@ -318,13 +335,14 @@ test('a ponte sabe se a âncora está no ar, lembra a velha e a chama solta', ()
   const bin = join(raiz, 'ancora')
   writeFileSync(bin, '#!/bin/sh\n')
   const agora = Date.parse('2026-12-31T12:00:00Z')
-  writeFileSync(join(raiz, 'atual.json'), JSON.stringify({ n: 2, sha: 'abc1234def', em: '2026-11-28T12:00:00Z' }))
-  writeFileSync(join(dados, 'no-ar.json'), JSON.stringify({ n: 2, sha: 'abc1234def', modo: 'repositorio' }))
+  writeFileSync(join(raiz, 'ANCORA.json'), JSON.stringify({ sha: 'abc1234def', em: '2026-11-28T12:00:00Z' }))
+  writeFileSync(join(dados, 'no-ar.json'), JSON.stringify({ sha: 'abc1234def', modo: 'repositorio' }))
   const e = estadoDaAncora({ shaNoAr: 'abc1234def', bin, raiz, dados, agora })
   assert.equal(e.instalada, true)
   assert.equal(e.noAr, true)
   assert.equal(e.dias, 33)
   assert.match(lembreteDaAncora(e), /33 dias/)
+  assert.match(textoDaAncora(e), /^A âncora é o commit abc1234/)
   assert.equal(estadoDaAncora({ shaNoAr: 'outro', bin, raiz, dados, agora }).noAr, false, 'trocou de versão: a âncora saiu do ar')
   assert.equal(lembreteDaAncora({ ...e, dias: 3 }), null)
   const chamadas = []

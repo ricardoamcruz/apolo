@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,8 +18,10 @@ import {
   codigoValido,
   conferirManifesto,
   escolherAlvos,
+  faltaDaAncora,
   gerarManifesto,
   guardar,
+  lerArgumentos,
   lerConf,
   obter,
   opcoesDaFenixNoAr,
@@ -240,6 +242,36 @@ test('uma âncora adulterada não sobe: o pânico usa a anterior ou para', async
   const r = await panico(lerConf(R), { origem: 'teste', saida: (l) => linhas.push(l), prazos: { prazoMs: 2000, intervaloMs: 200 }, comInterface: false })
   assert.equal(r.ok, false)
   assert.ok(linhas.some((l) => /não confere com o manifesto/.test(l)))
+})
+
+test('a linha de comando: só sem argumento, "panico" ou --origem/--motivo viram pânico', () => {
+  assert.equal(lerArgumentos([]).comando, 'panico')
+  assert.equal(lerArgumentos(['--panico', '--origem', 'fenix', '--motivo', 'caiu']).comando, 'panico')
+  assert.deepEqual(lerArgumentos(['--origem', 'iphone']), { comando: 'panico', origem: 'iphone', motivo: '', alvo: null })
+  assert.equal(lerArgumentos(['estado']).comando, 'estado', 'sem "--" também vale')
+  assert.equal(lerArgumentos(['--estado']).comando, 'estado')
+  assert.equal(lerArgumentos(['-h']).comando, 'ajuda')
+  assert.equal(lerArgumentos(['--atualizar', 'main']).alvo, 'main')
+  assert.equal(lerArgumentos(['--atualizar']).alvo, null)
+  for (const errado of [['estdo'], ['status'], ['--estado', '--sair'], ['--origem']]) {
+    assert.ok(lerArgumentos(errado).erro, `${errado.join(' ')} não pode virar pânico`)
+  }
+})
+
+test('uma âncora sem leitura diz por quê, e o pânico não desliga nada sem âncora', async (t) => {
+  const { R, porta } = await cenario()
+  t.after(() => {
+    chmodSync(join(R, '1'), 0o755)
+    matarNaPorta(porta)
+  })
+  chmodSync(join(R, '1'), 0o000)
+  assert.match(faltaDaAncora(1, join(R, '1')), /permissão.*chmod/)
+  assert.match(faltaDaAncora(7, join(R, '7')), /não existe/)
+  const linhas = []
+  const r = await panico(lerConf(R), { origem: 'teste', saida: (l) => linhas.push(l), comInterface: false })
+  assert.equal(r.ok, false)
+  assert.ok(linhas.some((l) => /não desliguei nada/.test(l)), linhas.join('\n'))
+  assert.ok((await obter(`http://127.0.0.1:${porta}/`)).ok, 'a versão no ar continua de pé')
 })
 
 // ---------------------------------------------------------------- a voz e a ponte

@@ -63,7 +63,7 @@ sudo ancora --atualizar <commit>               # congela uma nova âncora
 1. confere que o commit está na `main` do GitHub;
 2. clona e instala as dependências, como o usuário do Ricardo, numa pasta
    temporária;
-3. passa a pasta para o `root` e gera o manifesto;
+3. passa a pasta para o `root`, legível por todos, e gera o manifesto;
 4. troca o script instalado pelo daquele commit;
 5. guarda a âncora anterior (`N-1`), para voltar a ela se a nova não conferir.
 
@@ -76,6 +76,14 @@ arquivo do repositório não muda o que está instalado: só um novo `sudo` o fa
 O pânico não pergunta nada à Fênix nem à ponte. Pode ser justamente uma delas que
 quebrou.
 
+0. **Conferir a âncora antes de tudo** (revisão de 27/11/2026, depois do primeiro
+   pânico real). O script lê a âncora atual e, se ela não conferir, a anterior. Sem
+   nenhuma que confira, ele **não desliga nada**: sem para onde voltar, derrubar o
+   que está no ar só deixaria o Mac sem A.P.O.L.O. Ele avisa e para. As pastas das
+   âncoras são do `root`, mas legíveis por todos (`go+rX`), porque o pânico roda
+   como o usuário. A linha de comando só aciona o pânico sem argumento, com
+   `panico` ou só com `--origem`/`--motivo`; qualquer argumento desconhecido é
+   recusado (`ancora estado`, sem `--`, chegou a acionar o pânico).
 1. **Desligar tudo.**
    - Encerra o que escuta nas portas do A.P.O.L.O., os processos dos serviços
      (Fênix, ponte, interface, H.E.R.M.E.S., A.U.R.O.R.A.) que rodam das pastas do
@@ -93,8 +101,7 @@ quebrou.
    - Nada é apagado de vez.
 3. **Subir da âncora, sempre** (decisão do Ricardo: num pânico não se sabe o que
    quebrou, e a `main` pode ser o problema).
-   - O script confere o manifesto da cópia congelada. Se não bater, usa a âncora
-     anterior e diz isso.
+   - A âncora usada é a que conferiu no passo 0.
    - **Modo repositório** (o normal): põe o repositório no commit da âncora
      (`git switch --detach <sha>`, pelo sha do manifesto, nunca pela tag, que
      alguém pode mover), confere que a cópia ficou limpa nesse commit e copia as

@@ -28,12 +28,15 @@ O nome é dele: **Â.N.C.O.R.A.** — *Agora Nós Conheceremos O Retrocesso Auto
 
 ### A âncora
 
-A versão de segurança é um commit escolhido pelo Ricardo, guardado de duas formas:
+A versão de segurança é um commit escolhido pelo Ricardo. **Há uma âncora só**, sem
+número e sem reserva (revisão de 28/11/2026, decisão do Ricardo: "âncora é âncora").
+Congelar outra a substitui, e a de antes deixa de existir. Ela fica guardada de duas
+formas:
 
-- **A tag `ancora-N` no Git**, para saber de onde ela veio.
-- **Uma cópia congelada fora do repositório**, em `/usr/local/ancora/<N>/`. É um
-  clone naquele commit, com as dependências já instaladas e um `MANIFESTO` com o
-  SHA-256 de cada arquivo.
+- **A tag `ancora` no Git**, para saber de onde ela veio.
+- **A pasta `/usr/local/ancora`**, que é a própria âncora: um clone naquele commit,
+  fora do repositório, com as dependências já instaladas, um `ANCORA.json` (commit e
+  data) e um `MANIFESTO` com o SHA-256 de cada arquivo.
   - Ela roda mesmo se a `main`, a branch no ar ou o próprio `.git` estiverem
     estragados.
   - Pertence ao `root` e não aceita escrita de mais ninguém.
@@ -46,26 +49,28 @@ Assim, ela já inclui o próprio protocolo.
 O A.P.O.L.O., o autodev, o modo noturno e qualquer agente rodam como o usuário do
 Ricardo. Por isso, três coisas pertencem ao `root`:
 
-- o script (`/usr/local/bin/ancora` e `/usr/local/ancora/bin/ancora.mjs`);
-- as cópias congeladas;
-- a configuração (`/usr/local/ancora/ancora.conf`).
+- o comando (`/usr/local/bin/ancora`), que roda o programa da própria âncora
+  (`/usr/local/ancora/scripts/ancora/ancora.mjs`);
+- a âncora (`/usr/local/ancora`);
+- a configuração (`/usr/local/etc/ancora.conf`).
 
 Nenhum deles consegue alterá-los. Instalar e trocar a âncora pedem `sudo`, ou
 seja, a senha dele:
 
 ```bash
-sudo node scripts/ancora/ancora.mjs instalar   # uma vez (ou scripts/ancora/instalar.command)
-sudo ancora --atualizar <commit>               # congela uma nova âncora
+sudo node scripts/ancora/ancora.mjs instalar   # uma vez, e já congela a main (ou scripts/ancora/instalar.command)
+sudo ancora --atualizar <commit>               # congela a âncora nesse commit, no lugar da de antes
 ```
 
-`--atualizar` faz cinco coisas:
+`--atualizar` faz quatro coisas:
 
 1. confere que o commit está na `main` do GitHub;
 2. clona e instala as dependências, como o usuário do Ricardo, numa pasta
    temporária;
 3. passa a pasta para o `root`, legível por todos, e gera o manifesto;
-4. troca o script instalado pelo daquele commit;
-5. guarda a âncora anterior (`N-1`), para voltar a ela se a nova não conferir.
+4. troca `/usr/local/ancora` por ela de uma vez (monta em `/usr/local/ancora.nova`
+   e só então substitui: se algo falhar no meio, a de antes fica), move a tag
+   `ancora` e reinicia o vigia no programa novo.
 
 No repositório, `scripts/ancora/` é a fonte do que se instala, e é sensível
 (`bridge/autodev/politica.mjs`) e uma das travas da noite (ADR 0040). Mudar o
@@ -77,8 +82,8 @@ O pânico não pergunta nada à Fênix nem à ponte. Pode ser justamente uma del
 quebrou.
 
 0. **Conferir a âncora antes de tudo** (revisão de 27/11/2026, depois do primeiro
-   pânico real). O script lê a âncora atual e, se ela não conferir, a anterior. Sem
-   nenhuma que confira, ele **não desliga nada**: sem para onde voltar, derrubar o
+   pânico real). O script lê a âncora e confere o manifesto. Se ela não conferir,
+   ele **não desliga nada**: sem para onde voltar, derrubar o
    que está no ar só deixaria o Mac sem A.P.O.L.O. Ele avisa e para. As pastas das
    âncoras são do `root`, mas legíveis por todos (`go+rX`), porque o pânico roda
    como o usuário. A linha de comando só aciona o pânico sem argumento, com
@@ -101,7 +106,7 @@ quebrou.
    - Nada é apagado de vez.
 3. **Subir da âncora, sempre** (decisão do Ricardo: num pânico não se sabe o que
    quebrou, e a `main` pode ser o problema).
-   - A âncora usada é a que conferiu no passo 0.
+   - A âncora é a que conferiu no passo 0.
    - **Modo repositório** (o normal): põe o repositório no commit da âncora
      (`git switch --detach <sha>`, pelo sha do manifesto, nunca pela tag, que
      alguém pode mover), confere que a cópia ficou limpa nesse commit e copia as
@@ -152,7 +157,7 @@ o dela.
     escuta o tópico do ntfy `<tópico>-ancora`.
   - O tópico sozinho não basta, e a palavra-senha nunca passa pelo ntfy. O Atalho
     manda um código que vale um minuto: o SHA-256 de `<palavra>:<AAAAMMDDhhmm>`. A
-    palavra fica em `ancora.conf`, que só o `root` altera. Um código já usado não
+    palavra fica em `/usr/local/etc/ancora.conf`, que só o `root` altera. Um código já usado não
     vale de novo.
   - Uma vez a cada 10 minutos, no máximo. Cada pedido, aceito ou recusado, vai ao
     registro.
@@ -186,8 +191,10 @@ inclusive de madrugada.
   bom quanto a última âncora: o bom dia lembra quando ela passa de 30 dias.
 - O `.env.local` é a única coisa que o modo cópia lê de fora da âncora. Se ele
   estiver ruim, a lista ✔/✖ mostra.
-- Fica mais difícil: a instalação pede `sudo` uma vez, e cada âncora (mais a
-  anterior) ocupa o tamanho do projeto com `node_modules`.
+- Fica mais difícil: a instalação pede `sudo` uma vez, e a âncora ocupa o tamanho
+  do projeto com `node_modules`.
+- Sem reserva: uma âncora adulterada não sobe, e o pânico para sem desligar nada.
+  O conserto é congelar de novo.
 - Testes: `scripts/ancora.test.mjs` cobre o manifesto, a escolha do que matar, o
   guardar, os códigos do vigia e um pânico inteiro numa pasta temporária, sem
   `root`. `fenix/test/renovar.test.mjs` cobre a Fênix que renasce e a que não

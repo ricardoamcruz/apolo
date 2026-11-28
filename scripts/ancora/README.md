@@ -14,7 +14,7 @@ lá.
 - **Ela é sua e nova.** Você a inventa na instalação, com pelo menos 8 caracteres.
   Ela não é a senha do Mac e não deve ser uma senha que você usa em outro lugar.
 - **Ela fica guardada em só dois lugares:**
-  - no Mac, em `/usr/local/ancora/ancora.conf`, que só o root altera;
+  - no Mac, em `/usr/local/etc/ancora.conf`, que só o root altera;
   - dentro do Atalho, no seu iPhone.
 - **Ela nunca passa pela internet.** A cada minuto, o Atalho junta a palavra com a
   hora e calcula um código, que é um hash SHA-256 dos dois. O Atalho manda só o
@@ -64,8 +64,9 @@ congeladas continuam; só a palavra muda. Depois, atualize o texto no Atalho.
    - **a palavra-senha do Atalho**, nova, como explicado acima. Anote-a, porque você
      vai precisar dela no passo 4.
 
-   Em seguida, ele congela a âncora 1 a partir da `main` do GitHub, o que leva
-   alguns minutos (clone, `npm ci` e o manifesto), e mostra `ancora --estado`.
+   Em seguida, ele congela a âncora a partir da `main` do GitHub, em
+   `/usr/local/ancora`, o que leva alguns minutos (clone, `npm ci` e o manifesto),
+   e mostra `ancora --estado`. O que havia antes nessa pasta é substituído.
 
    Se o macOS perguntar se o Terminal pode acessar a Mesa (Área de Trabalho),
    permita. É lá que fica o `Âncora.command`.
@@ -75,10 +76,9 @@ O que fica instalado, tudo do `root`:
 
 | Onde | O quê |
 |---|---|
-| `/usr/local/bin/ancora` | o comando |
-| `/usr/local/ancora/bin/ancora.mjs` | o programa (este arquivo, na versão da âncora) |
-| `/usr/local/ancora/ancora.conf` | portas, saúde dos serviços, tópico do ntfy, palavra-senha |
-| `/usr/local/ancora/<N>/` | a âncora congelada, com `ANCORA.json` e `MANIFESTO` |
+| `/usr/local/ancora` | **a âncora**: a cópia congelada do commit, com `ANCORA.json` e `MANIFESTO` |
+| `/usr/local/bin/ancora` | o comando, que roda o programa da âncora (`/usr/local/ancora/scripts/ancora/ancora.mjs`) |
+| `/usr/local/etc/ancora.conf` | portas, saúde dos serviços, tópico do ntfy, palavra-senha |
 | `/Library/LaunchAgents/com.apolo.ancora.vigia.plist` | o vigia do iPhone (sobe sozinho a cada login) |
 | `~/Desktop/Âncora.command` | dois cliques para o pânico |
 
@@ -134,7 +134,7 @@ programa não conhece é recusado e nada acontece: só `ancora` sozinho aciona o
 pânico.
 
 Antes de desligar qualquer coisa, o pânico confere a âncora. Se nenhuma conferir,
-ele não desliga nada e diz por quê. Por exemplo: "não consigo ler a âncora 2
+ele não desliga nada e diz por quê. Por exemplo: "não consigo ler a âncora
 (permissão)", com o comando que conserta.
 
 Também dá para acionar:
@@ -147,15 +147,16 @@ Tudo vai para `~/.apolo/ancora/registro.log`.
 
 ## Atualizar a âncora
 
-Mudar `scripts/ancora/` no repositório não muda o que está instalado. Só este
-comando troca a âncora e o próprio programa pelos daquele commit:
+Há uma âncora só. Mudar `scripts/ancora/` no repositório não muda o que está
+instalado. Só este comando troca a âncora, e com ela o programa, pela daquele
+commit:
 
 ```bash
 sudo ancora --atualizar main        # ou um commit que já esteja na main do GitHub
 ```
 
-A anterior fica de reserva, para o caso de a nova estar adulterada. O bom dia lembra
-quando a âncora passa de 30 dias.
+A de antes deixa de existir: não há número nem reserva. O bom dia lembra quando a
+âncora passa de 30 dias.
 
 ## Testes
 

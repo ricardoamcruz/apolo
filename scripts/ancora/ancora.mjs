@@ -14,13 +14,14 @@
  *   ancora --sair                 desliga a âncora e sobe a main do repositório
  *   ancora --estado               qual âncora está instalada e se está no ar
  *   ancora --testar-atalho        mostra o código que o Atalho do iPhone deve mandar agora
- *   sudo ancora --atualizar <commit|main>   congela uma âncora nova (só o root)
+ *   sudo ancora --atualizar <commit|main>   congela a âncora nesse commit, no lugar da que havia (só o root)
  *   sudo node scripts/ancora/ancora.mjs instalar   instala tudo (uma vez)
  *   ancora vigia                  escuta o pedido do iPhone (o LaunchAgent roda isto)
  *
- * Instalado, este arquivo fica em /usr/local/ancora/bin/ancora.mjs, do root, com a
- * configuração em /usr/local/ancora/ancora.conf. Os testes apontam ANCORA_RAIZ para
- * uma pasta temporária.
+ * Instalada, a âncora é a pasta /usr/local/ancora: a cópia congelada de um commit
+ * da main, do root, e este programa é o dela (scripts/ancora/ancora.mjs lá dentro).
+ * A configuração fica em /usr/local/etc/ancora.conf. Os testes apontam ANCORA_CONF
+ * para um arquivo temporário, e o campo "pasta" dele para uma pasta temporária.
  */
 import { execFile as execFileCb, execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -53,8 +54,11 @@ import { promisify } from 'node:util'
 
 const execFile = promisify(execFileCb)
 
-export const RAIZ_PADRAO = '/usr/local/ancora'
-const raiz = () => process.env.ANCORA_RAIZ?.trim() || RAIZ_PADRAO
+/** A âncora: uma pasta só, sem número. Congelar outra a substitui. */
+export const PASTA_PADRAO = '/usr/local/ancora'
+export const CONF_PADRAO = '/usr/local/etc/ancora.conf'
+const arquivoDaConf = () => process.env.ANCORA_CONF?.trim() || CONF_PADRAO
+const VIGIA = 'com.apolo.ancora.vigia'
 
 /** Os serviços do A.P.O.L.O. que o pânico encerra pelo comando (o resto sai pelas portas). */
 export const PROGRAMAS = [
@@ -73,10 +77,10 @@ export const INTERVALO_DO_IPHONE_MS = 10 * 60_000
 
 // ---------------------------------------------------------------- configuração
 
-export function lerConf(pasta = raiz()) {
-  const conf = JSON.parse(readFileSync(join(pasta, 'ancora.conf'), 'utf8'))
+export function lerConf(arquivo = arquivoDaConf()) {
+  const conf = JSON.parse(readFileSync(arquivo, 'utf8'))
   const dados = conf.dados ?? join(conf.home, '.apolo', 'ancora')
-  return { ...conf, raiz: pasta, dados }
+  return { ...conf, arquivo, pasta: conf.pasta ?? PASTA_PADRAO, dados }
 }
 
 /** A identidade de uma âncora congelada: número, commit e quando. */
@@ -403,30 +407,30 @@ function subirFenix(conf, pasta, opcoes, extra = {}) {
   }
 }
 
+export const pastaDaAncora = (conf) => conf.pasta
+
 /** Por que a âncora não pôde ser lida: não existe, ou existe e o usuário não lê. */
-export function faltaDaAncora(n, pasta) {
-  if (!existsSync(pasta)) return `a âncora ${n} não existe em ${pasta}`
+export function faltaDaAncora(pasta) {
+  if (!existsSync(pasta)) return `não há âncora congelada em ${pasta}; congele com: sudo ancora --atualizar main`
   try {
     accessSync(join(pasta, 'ANCORA.json'), constants.R_OK)
   } catch (err) {
-    if (err.code === 'EACCES') return `não consigo ler a âncora ${n} em ${pasta} (permissão); conserte com: sudo chmod -R go+rX ${pasta}`
+    if (err.code === 'EACCES') return `não consigo ler a âncora em ${pasta} (permissão); conserte com: sudo chmod -R go+rX ${pasta}`
   }
-  return `a âncora ${n} em ${pasta} não tem um ANCORA.json válido`
+  return `a âncora em ${pasta} não tem um ANCORA.json válido`
 }
 
-/** A âncora que confere: a atual ou, se ela não bater com o manifesto, a anterior. */
+/** A âncora, se ela existe e confere com o manifesto; senão null, dito no log. */
 export function escolherAncora(conf, log = console.log) {
-  for (const n of [conf.atual, conf.anterior].filter((x) => Number.isInteger(x))) {
-    const pasta = join(conf.raiz, String(n))
-    const id = lerAncora(pasta)
-    if (!id) {
-      log(`✖ ${faltaDaAncora(n, pasta)}`)
-      continue
-    }
-    const c = conferirManifesto(pasta)
-    if (c.ok) return { n, pasta, ...id }
-    log(`✖ a âncora ${n} não confere com o manifesto: ${c.motivo}`)
+  const pasta = pastaDaAncora(conf)
+  const id = lerAncora(pasta)
+  if (!id) {
+    log(`✖ ${faltaDaAncora(pasta)}`)
+    return null
   }
+  const c = conferirManifesto(pasta)
+  if (c.ok) return { pasta, ...id }
+  log(`✖ a âncora não confere com o manifesto: ${c.motivo}`)
   return null
 }
 
@@ -445,7 +449,7 @@ async function repositorioNaAncora(conf, ancora, log) {
     const r = spawnSync('rsync', ['-a', '--delete', `${join(ancora.pasta, 'node_modules')}/`, `${join(conf.repo, 'node_modules')}/`], { encoding: 'utf8' })
     if (r.status !== 0) return { ok: false, motivo: `não consegui copiar as dependências: ${(r.stderr ?? '').trim().split('\n').pop()}` }
   }
-  log(`✔ repositório no commit da âncora ${ancora.n} (${ancora.sha.slice(0, 7)})`)
+  log(`✔ repositório no commit da âncora (${ancora.sha.slice(0, 7)})`)
   return { ok: true }
 }
 
@@ -457,7 +461,7 @@ function prepararCopiaAtiva(conf, ancora, log) {
   // A única coisa de fora: as chaves, que nunca ficam no repositório nem na âncora.
   const env = join(conf.repo, '.env.local')
   if (existsSync(env)) copyFileSync(env, join(ativa, '.env.local'))
-  log(`✔ cópia da âncora ${ancora.n} pronta em ${ativa}`)
+  log(`✔ cópia da âncora pronta em ${ativa}`)
   return { ok: true, pasta: ativa }
 }
 
@@ -578,7 +582,7 @@ export async function panico(conf, { origem = 'terminal', motivo = '', saida = c
       await avisar(conf, { titulo: 'A.P.O.L.O.: a âncora não foi acionada', texto: 'Nenhuma versão de segurança conferiu, então não desliguei nada. Preciso que você olhe o Mac.' })
       return { ok: false, motivo: 'sem âncora' }
     }
-    log(`✔ âncora ${ancora.n} conferida (${ancora.sha.slice(0, 7)})`)
+    log(`✔ âncora conferida (${ancora.sha.slice(0, 7)})`)
     await avisar(conf, { titulo: 'A.P.O.L.O.: protocolo âncora', texto: 'Desligando tudo para subir a versão de segurança.' })
 
     const opcoes = await desligarTudo(conf, log)
@@ -609,9 +613,9 @@ export async function panico(conf, { origem = 'terminal', motivo = '', saida = c
     }
 
     if (r.ok) {
-      writeFileSync(join(conf.dados, 'no-ar.json'), JSON.stringify({ n: ancora.n, sha: ancora.sha, modo, origem, motivo, em: new Date().toISOString() }, null, 2))
+      writeFileSync(join(conf.dados, 'no-ar.json'), JSON.stringify({ sha: ancora.sha, modo, origem, motivo, em: new Date().toISOString() }, null, 2))
       if (comInterface) await abrirInterface(conf, pasta, log)
-      log(`✔ a âncora ${ancora.n} está no ar (${modo === 'copia' ? 'da cópia congelada' : 'no repositório'})`)
+      log(`✔ a âncora está no ar (${modo === 'copia' ? 'da cópia congelada' : 'no repositório'})`)
       await avisar(conf, {
         titulo: 'A.P.O.L.O.: a âncora está no ar',
         texto: modo === 'copia'
@@ -623,7 +627,7 @@ export async function panico(conf, { origem = 'terminal', motivo = '', saida = c
       log('✖ a âncora não ficou de pé. O detalhe está no registro e no fenix.log.')
       await avisar(conf, { titulo: 'A.P.O.L.O.: a âncora não subiu', texto: 'A versão de segurança não ficou de pé. Preciso que você olhe o Mac.' })
     }
-    return { ok: Boolean(r.ok), modo, ancora: ancora.n }
+    return { ok: Boolean(r.ok), modo, sha: ancora.sha }
   } finally {
     soltar()
   }
@@ -820,58 +824,59 @@ export function atualizar(conf, alvo, { saida = console.log, conferirGithub = tr
     const npm = join(dirname(conf.node ?? process.execPath), 'npm')
     comoUsuario(conf, existsSync(npm) ? npm : 'npm', ['ci', '--no-audit', '--no-fund'], { cwd: temporaria, timeout: 20 * 60_000 })
   }
-  const n = (Number.isInteger(conf.atual) ? conf.atual : 0) + 1
-  const destino = join(conf.raiz, String(n))
-  rmSync(destino, { recursive: true, force: true })
+  // Monta ao lado e só troca no fim: se algo falhar no meio, a âncora de antes fica.
+  const destino = pastaDaAncora(conf)
+  const nova = `${destino}.nova`
+  rmSync(nova, { recursive: true, force: true })
   try {
-    renameSync(temporaria, destino)
+    renameSync(temporaria, nova)
   } catch {
-    cpSync(temporaria, destino, { recursive: true, verbatimSymlinks: true })
+    cpSync(temporaria, nova, { recursive: true, verbatimSymlinks: true })
     rmSync(temporaria, { recursive: true, force: true })
   }
-  writeFileSync(join(destino, 'ANCORA.json'), JSON.stringify({ n, sha, em: new Date().toISOString() }, null, 2))
+  const id = { sha, em: new Date().toISOString() }
+  selar(conf, nova, id, log)
+  rmSync(destino, { recursive: true, force: true })
+  renameSync(nova, destino)
+  registrarAncora(conf, id, git)
+  // O vigia passa a rodar o programa da âncora nova.
+  if (process.getuid?.() === 0 && conf.uid) spawnSync('launchctl', ['kickstart', '-k', `gui/${conf.uid}/${VIGIA}`])
+  log(`✔ âncora congelada no commit ${sha.slice(0, 7)}`)
+  return id
+}
+
+/** Dono root, leitura para todos, ANCORA.json e o manifesto; confere a leitura como o usuário. */
+function selar(conf, pasta, id, log) {
+  writeFileSync(join(pasta, 'ANCORA.json'), JSON.stringify(id, null, 2))
   if (process.getuid?.() === 0) {
-    execFileSync('chown', ['-R', 'root:wheel', destino])
+    execFileSync('chown', ['-R', 'root:wheel', pasta])
     // Só o root escreve; todos leem. O pânico roda como o usuário e precisa ler
-    // a cópia (o mktemp a criou com 700).
-    execFileSync('chmod', ['-R', 'u+rwX,go+rX,go-w', destino])
+    // a cópia (o mktemp a cria com 700).
+    execFileSync('chmod', ['-R', 'u+rwX,go+rX,go-w', pasta])
   }
   log('… gerando o manifesto')
-  writeFileSync(join(destino, 'MANIFESTO'), gerarManifesto(destino))
-  // O próprio script passa a ser o deste commit: revisado, como o resto.
-  const novoScript = join(destino, 'scripts', 'ancora', 'ancora.mjs')
-  if (existsSync(novoScript)) {
-    mkdirSync(join(conf.raiz, 'bin'), { recursive: true })
-    copyFileSync(novoScript, join(conf.raiz, 'bin', 'ancora.mjs'))
-    chmodSync(join(conf.raiz, 'bin', 'ancora.mjs'), 0o644)
-  }
-  const anterior = Number.isInteger(conf.atual) ? conf.atual : null
-  for (const item of readdirSync(conf.raiz)) {
-    if (/^\d+$/.test(item) && ![n, anterior].includes(Number(item))) rmSync(join(conf.raiz, item), { recursive: true, force: true })
-  }
+  writeFileSync(join(pasta, 'MANIFESTO'), gerarManifesto(pasta))
   if (process.getuid?.() === 0 && conf.usuario) {
-    // A reserva também: as congeladas antes desta correção ficaram com 700.
-    if (anterior !== null && existsSync(join(conf.raiz, String(anterior)))) {
-      execFileSync('chmod', ['-R', 'u+rwX,go+rX,go-w', join(conf.raiz, String(anterior))])
-    }
     try {
-      comoUsuario(conf, 'test', ['-r', join(destino, 'ANCORA.json')])
+      comoUsuario(conf, 'test', ['-r', join(pasta, 'ANCORA.json')])
     } catch {
-      throw new Error(`a âncora ${n} ficou sem leitura para ${conf.usuario}: o pânico não a acharia.`)
+      throw new Error(`a âncora ficou sem leitura para ${conf.usuario}: o pânico não a acharia.`)
     }
   }
-  const { raiz: _r, dados: _d, ...gravar } = conf
-  writeFileSync(join(conf.raiz, 'ancora.conf'), JSON.stringify({ ...gravar, atual: n, anterior }, null, 2))
-  chmodSync(join(conf.raiz, 'ancora.conf'), 0o644)
+}
+
+/** Grava a configuração sem os campos das âncoras numeradas e põe a tag `ancora` no commit. */
+function registrarAncora(conf, id, git) {
+  const { arquivo, dados: _d, raiz: _r, atual: _a, anterior: _n, ...gravar } = conf
+  writeFileSync(arquivo, JSON.stringify(gravar, null, 2))
+  chmodSync(arquivo, 0o644)
   try {
-    git('tag', '-f', `ancora-${n}`, sha)
+    const velhas = git('tag', '--list', 'ancora-*').split('\n').filter((t) => /^ancora-\d+$/.test(t))
+    if (velhas.length) git('tag', '-d', ...velhas)
+    git('tag', '-f', 'ancora', id.sha)
   } catch {
     /* a tag é só para saber de onde veio */
   }
-  writeFileSync(join(conf.raiz, 'atual.json'), JSON.stringify({ n, sha, em: new Date().toISOString() }, null, 2))
-  chmodSync(join(conf.raiz, 'atual.json'), 0o644)
-  log(`✔ âncora ${n} congelada no commit ${sha.slice(0, 7)}${anterior ? ` (a ${anterior} fica de reserva)` : ''}`)
-  return { n, sha }
 }
 
 /** Pergunta sem mostrar o que se digita (a palavra-senha). */
@@ -906,23 +911,34 @@ export async function instalar({ repo, saida = console.log }) {
   const portas = [...new Set([cfg.escuta.porta, ...cfg.servicos.flatMap((s) => s.portas)])].filter(Boolean)
   const servicos = cfg.servicos.filter((s) => s.saude?.urls?.length).map((s) => ({ nome: s.nome, url: s.saude.urls[0], opcional: s.opcional }))
   const ponte = cfg.servicos.find((s) => s.saude?.clientes === 'interfaces')
-  const palavra = process.env.ANCORA_PALAVRA?.trim() || (await perguntarEscondido('Palavra-senha do Atalho do iPhone (não aparece ao digitar): '))
-  if (palavra.length < 8) throw new Error('a palavra-senha precisa de pelo menos 8 caracteres.')
-  const R = raiz()
-  mkdirSync(join(R, 'bin'), { recursive: true, mode: 0o755 })
+  // A configuração de antes: a de agora ou a das âncoras numeradas (/usr/local/ancora/ancora.conf).
   let antiga = {}
-  try {
-    antiga = JSON.parse(readFileSync(join(R, 'ancora.conf'), 'utf8'))
-  } catch {
-    /* primeira instalação */
+  for (const arquivo of [CONF_PADRAO, join(PASTA_PADRAO, 'ancora.conf')]) {
+    try {
+      antiga = JSON.parse(readFileSync(arquivo, 'utf8'))
+      break
+    } catch {
+      /* não há */
+    }
   }
+  const digitada =
+    process.env.ANCORA_PALAVRA?.trim() ||
+    (await perguntarEscondido(
+      antiga.segredo
+        ? 'Palavra-senha do Atalho do iPhone (Enter mantém a de antes; não aparece ao digitar): '
+        : 'Palavra-senha do Atalho do iPhone (não aparece ao digitar): ',
+    ))
+  const palavra = digitada || antiga.segredo || ''
+  if (palavra.length < 8) throw new Error('a palavra-senha precisa de pelo menos 8 caracteres.')
+  const { atual: _a, anterior: _n, ...resto } = antiga
   const conf = {
-    ...antiga,
+    ...resto,
     usuario,
     uid,
     home,
     repo,
     node: process.execPath,
+    pasta: PASTA_PADRAO,
     portas,
     servicos,
     ca: cfg.tls?.cert ?? null,
@@ -931,22 +947,28 @@ export async function instalar({ repo, saida = console.log }) {
     segredo: palavra,
     opcoes: OPCOES_DA_FENIX,
   }
-  writeFileSync(join(R, 'ancora.conf'), JSON.stringify(conf, null, 2), { mode: 0o644 })
-  copyFileSync(fileURLToPath(import.meta.url), join(R, 'bin', 'ancora.mjs'))
-  chmodSync(join(R, 'bin', 'ancora.mjs'), 0o644)
-  writeFileSync('/usr/local/bin/ancora', `#!/bin/bash\nexec "${process.execPath}" "${join(R, 'bin', 'ancora.mjs')}" "$@"\n`, { mode: 0o755 })
-  execFileSync('chown', ['-R', 'root:wheel', R, '/usr/local/bin/ancora'])
+  mkdirSync(dirname(CONF_PADRAO), { recursive: true, mode: 0o755 })
+  writeFileSync(CONF_PADRAO, JSON.stringify(conf, null, 2), { mode: 0o644 })
+  execFileSync('chown', ['root:wheel', CONF_PADRAO])
+  // O programa é o da âncora: o comando e o vigia apontam para dentro dela.
+  const programa = join(PASTA_PADRAO, 'scripts', 'ancora', 'ancora.mjs')
+  writeFileSync('/usr/local/bin/ancora', `#!/bin/bash\nexec "${process.execPath}" "${programa}" "$@"\n`, { mode: 0o755 })
+  execFileSync('chown', ['root:wheel', '/usr/local/bin/ancora'])
+  // Congela a âncora já aqui: sem ela, o comando não tem programa para rodar.
+  // Isto também apaga o que havia em /usr/local/ancora (as âncoras numeradas).
+  saida('… congelando a âncora a partir da main do GitHub (clona e roda npm ci; leva alguns minutos)')
+  atualizar(lerConf(CONF_PADRAO), 'main', { saida })
   // O vigia: do root, mas roda como o usuário, a cada sessão.
   const dados = join(home, '.apolo', 'ancora')
   comoUsuario({ usuario }, 'mkdir', ['-p', dados])
-  const plist = '/Library/LaunchAgents/com.apolo.ancora.vigia.plist'
+  const plist = `/Library/LaunchAgents/${VIGIA}.plist`
   writeFileSync(
     plist,
     `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>Label</key><string>com.apolo.ancora.vigia</string>
-  <key>ProgramArguments</key><array><string>${process.execPath}</string><string>${join(R, 'bin', 'ancora.mjs')}</string><string>vigia</string></array>
+  <key>Label</key><string>${VIGIA}</string>
+  <key>ProgramArguments</key><array><string>${process.execPath}</string><string>${programa}</string><string>vigia</string></array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>${join(dados, 'vigia.log')}</string>
@@ -962,8 +984,7 @@ export async function instalar({ repo, saida = console.log }) {
   const atalho = join(home, 'Desktop', 'Âncora.command')
   writeFileSync(atalho, '#!/bin/bash\n# Protocolo Â.N.C.O.R.A. (docs/adr/0041): desliga tudo e sobe a versão de segurança.\n/usr/local/bin/ancora --origem area-de-trabalho\nread -n 1 -s -r -p "Pressione uma tecla para fechar."\n', { mode: 0o755 })
   execFileSync('chown', ['root:wheel', atalho])
-  saida('✔ instalado: /usr/local/bin/ancora, /usr/local/ancora, o vigia do iPhone e o Âncora.command na Área de Trabalho')
-  saida('Agora congele a primeira âncora: sudo ancora --atualizar main')
+  saida('✔ instalado: a âncora em /usr/local/ancora, o comando ancora, o vigia do iPhone e o Âncora.command na Área de Trabalho')
   return conf
 }
 
@@ -977,7 +998,7 @@ export const AJUDA = `Â.N.C.O.R.A. — o pânico do A.P.O.L.O. (scripts/ancora/
   ancora --estado             qual âncora está instalada e se está no ar
   ancora --sair               desliga a âncora e sobe a main do repositório
   ancora --testar-atalho      o código que o Atalho do iPhone deve mandar agora
-  sudo ancora --atualizar [<commit>|main]   congela uma âncora nova
+  sudo ancora --atualizar [<commit>|main]   congela a âncora nesse commit, no lugar da que havia
   ancora --ajuda              esta lista
 
 Os comandos também valem sem "--" (ancora estado).`
@@ -1033,14 +1054,11 @@ async function principal(argv) {
     return 0
   }
   if (args.comando === 'estado') {
-    for (const n of [conf.atual, conf.anterior].filter(Number.isInteger)) {
-      const pasta = join(conf.raiz, String(n))
-      const a = lerAncora(pasta)
-      const papel = n === conf.atual ? 'atual' : 'reserva'
-      console.log(a ? `âncora ${n} (${papel}): commit ${String(a.sha ?? '?').slice(0, 7)}, congelada em ${a.em ?? '?'}` : `✖ âncora ${n} (${papel}): ${faltaDaAncora(n, pasta)}`)
-    }
+    const pasta = pastaDaAncora(conf)
+    const a = lerAncora(pasta)
+    console.log(a ? `âncora: commit ${String(a.sha ?? '?').slice(0, 7)}, congelada em ${a.em ?? '?'}` : `✖ ${faltaDaAncora(pasta)}`)
     const noAr = await ancoraNoAr(conf)
-    console.log(noAr ? `no ar: âncora ${noAr.n} (${noAr.modo}), desde ${noAr.em}` : 'a âncora não está no ar.')
+    console.log(noAr ? `no ar: a âncora (${noAr.modo}), desde ${noAr.em}` : 'a âncora não está no ar.')
     return 0
   }
   if (args.comando === 'testar-atalho') {

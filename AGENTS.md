@@ -250,8 +250,10 @@ detalhe está em `docs/`.
   pânico, sem dependências e sem importar o projeto: desliga tudo, guarda o que estava
   sem commit em `panico/<data>`, sobe a âncora (o repositório no commit dela ou, se ele
   estiver quebrado, a cópia congelada com `FENIX_VERSAO_FIXA=1`) e confere os
-  serviços. Instalado, é do root (`/usr/local/bin/ancora`, `/usr/local/ancora/`): mudar
-  `scripts/ancora/` não muda o instalado; só `sudo ancora --atualizar <commit da main>`.
+  serviços. Há **uma âncora só**, sem número nem reserva: a pasta `/usr/local/ancora`
+  (do root, com o programa dela dentro; configuração em `/usr/local/etc/ancora.conf`).
+  Mudar `scripts/ancora/` não muda o instalado; só `sudo ancora --atualizar <commit da
+  main>`, que a substitui.
   A voz (`ancora`, `src/lib/ancora.ts`) passa por `fenix` com acao `ancora-*`, que a
   ponte atende sem a Fênix (`bridge/ancora.mjs`). O vigia do iPhone escuta
   `<tópico>-ancora` e só aceita o código de um minuto da palavra-senha.
